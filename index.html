@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>limbrow.zip</title>
+    <meta name="description" content="Creative experiments by limbrow.">
+    <link rel="icon" href="favicon.png" type="image/png">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+
+    <meta property="og:title" content="limbrow.zip">
+    <meta property="og:description" content="Creative experiments by limbrow.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://limbrow.zip">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #0a0a0a;
+            --card: #0f0f0f;
+            --card-hover: #161616;
+            --line: #1a1a1a;
+            --text: #e8e8e8;
+            --muted: #888;
+            --dim: #555;
+        }
+
+        html, body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            min-height: 100vh;
+            min-height: 100dvh;
+        }
+
+        header {
+            padding: 32px 32px 24px;
+            display: flex;
+            align-items: baseline;
+            gap: 12px;
+        }
+        header .root { font-size: 13px; color: var(--muted); }
+        header .name { font-size: 18px; font-weight: 500; letter-spacing: 0.02em; }
+        header .tag  { font-size: 11px; color: var(--dim); margin-left: auto; letter-spacing: 0.1em; text-transform: uppercase; }
+
+        main {
+            padding: 0 24px 64px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 8px;
+            overflow: hidden;
+            text-decoration: none;
+            color: inherit;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.2s ease, background 0.2s ease;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .card:hover { background: var(--card-hover); }
+        .card:hover .preview-frame { opacity: 1; }
+        .card:hover .preview-static { opacity: 0; }
+        .card:hover .arrow { color: var(--text); transform: translateX(2px); }
+
+        .preview {
+            position: relative;
+            aspect-ratio: 4 / 3;
+            background: #000;
+            overflow: hidden;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .preview-frame {
+            position: absolute;
+            top: 0; left: 0;
+            width: 250%;
+            height: 250%;
+            transform: scale(0.4);
+            transform-origin: top left;
+            border: 0;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+            background: #000;
+        }
+
+        .preview-static {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--dim);
+            font-size: 13px;
+            transition: opacity 0.3s ease;
+            background: var(--card);
+            background-image:
+                linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        .preview-static .glyph {
+            font-size: 32px;
+            color: var(--muted);
+            opacity: 0.5;
+        }
+
+        .preview-loading-static {
+            background-image: none;
+        }
+
+        /* Image-based static preview (fallback / fast load) */
+        .preview-static.with-image {
+            background-image: var(--preview-img);
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        .meta {
+            padding: 14px 16px;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 8px;
+            align-items: start;
+        }
+
+        .meta .name {
+            font-size: 14px;
+            font-weight: 500;
+            letter-spacing: 0.01em;
+        }
+        .meta .name .slash { color: var(--dim); font-weight: 400; }
+
+        .meta .desc {
+            font-size: 11px;
+            color: var(--muted);
+            margin-top: 4px;
+            letter-spacing: 0.02em;
+            line-height: 1.5;
+        }
+
+        .meta .right {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 4px;
+        }
+
+        .meta .date {
+            font-size: 10px;
+            color: var(--dim);
+            white-space: nowrap;
+        }
+
+        .arrow {
+            font-size: 14px;
+            color: var(--dim);
+            transition: color 0.15s ease, transform 0.15s ease;
+        }
+
+        footer {
+            padding: 32px;
+            color: var(--dim);
+            font-size: 11px;
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        footer a {
+            color: var(--muted);
+            text-decoration: none;
+            transition: color 0.15s ease;
+        }
+        footer a:hover { color: var(--text); }
+
+        @media (max-width: 600px) {
+            header { padding: 24px 20px 20px; }
+            main { padding: 0 16px 40px; }
+            .grid { gap: 12px; grid-template-columns: 1fr; }
+            .preview-frame { width: 333%; height: 333%; transform: scale(0.3); }
+        }
+
+        /* On touch devices, show iframes always (no hover) */
+        @media (hover: none) {
+            .preview-frame { opacity: 1; }
+            .preview-static { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <span class="root">~/</span>
+        <span class="name">limbrow.zip</span>
+        <span class="tag">archive</span>
+    </header>
+
+    <main>
+        <div class="grid" id="grid"></div>
+    </main>
+
+    <footer>
+        <a href="https://github.com/Limbrow" target="_blank" rel="noopener">github</a>
+        <span>·</span>
+        <a href="https://limbrow.com" target="_blank" rel="noopener">limbrow.com</a>
+    </footer>
+
+    <script type="module">
+        import { posts } from './posts.js';
+
+        const grid = document.getElementById('grid');
+
+        function formatDate(iso) {
+            return iso.replace(/-/g, '.');
+        }
+
+        function makeCard(post) {
+            const card = document.createElement('a');
+            card.className = 'card';
+            card.href = `/p/${post.slug}/`;
+            card.setAttribute('aria-label', `Open ${post.name}`);
+
+            // Static preview shown by default; iframe lazy-loaded on intersect/hover
+            const staticHtml = post.cover
+                ? `<div class="preview-static with-image" style="--preview-img: url('${post.cover}')"></div>`
+                : `<div class="preview-static"><span class="glyph">${post.glyph || '·'}</span></div>`;
+
+            card.innerHTML = `
+                <div class="preview">
+                    <iframe class="preview-frame" loading="lazy" tabindex="-1" aria-hidden="true"></iframe>
+                    ${staticHtml}
+                </div>
+                <div class="meta">
+                    <div>
+                        <div class="name">${post.name}<span class="slash">/</span></div>
+                        <div class="desc">${post.desc}</div>
+                    </div>
+                    <div class="right">
+                        <span class="date">${formatDate(post.date)}</span>
+                        <span class="arrow" aria-hidden="true">→</span>
+                    </div>
+                </div>
+            `;
+
+            // Lazy-load iframe when card scrolls into view
+            const iframe = card.querySelector('iframe');
+            const io = new IntersectionObserver((entries) => {
+                entries.forEach(e => {
+                    if (e.isIntersecting && !iframe.src) {
+                        iframe.src = `/p/${post.slug}/`;
+                        io.disconnect();
+                    }
+                });
+            }, { rootMargin: '200px' });
+            io.observe(card);
+
+            return card;
+        }
+
+        // Sort by date descending (newest first)
+        posts
+            .slice()
+            .sort((a, b) => b.date.localeCompare(a.date))
+            .forEach(post => grid.appendChild(makeCard(post)));
+    </script>
+</body>
+</html>

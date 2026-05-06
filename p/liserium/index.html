@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
+    <title>Liserium</title>
+    <meta name="description" content="An interactive music creation tool.">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&family=Silkscreen:wght@400;700&display=swap');
+
+        :root {
+            --lis-bg: #E2E8E4;
+            --lis-body: #A8B4A8;
+            --lis-screen-bg: #C4CFA1;
+            --lis-screen-glow: #9bbc0f;
+            --lis-pixel-on: #2A3230;
+            --lis-pixel-dim: #6B7A6C;
+            --lis-accent: #D9263D;
+            --lis-accent-dark: #A31D2E;
+            --lis-grid: rgba(155, 188, 15, 0.18);
+            --lis-step-enabled: #3A4740;
+            --lis-panel-shadow: rgba(0,0,0,0.25);
+            --lis-bevel-light: #CDD6CE;
+            --lis-bevel-dark: #7A8A7C;
+            --lis-deep-panel: #1a2420;
+        }
+
+        html, body {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden;
+            background-color: var(--lis-body);
+            font-family: 'Silkscreen', 'VT323', monospace;
+            user-select: none; -webkit-user-select: none;
+            touch-action: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
+            position: fixed;
+            inset: 0;
+        }
+
+        .console-body {
+            width: 100%;
+            height: 100vh;
+            height: 100dvh;
+            height: calc(var(--app-height, 100vh));
+            background: linear-gradient(175deg, #E8EEE9 0%, #D2DCD4 50%, #C4CEC6 100%);
+            display: flex;
+            flex-direction: column;
+            padding: clamp(8px, 3vw, 16px);
+            padding-top: max(clamp(8px, 3vw, 16px), env(safe-area-inset-top));
+            padding-bottom: max(clamp(8px, 3vw, 16px), env(safe-area-inset-bottom));
+            padding-left: max(clamp(8px, 3vw, 16px), env(safe-area-inset-left));
+            padding-right: max(clamp(8px, 3vw, 16px), env(safe-area-inset-right));
+            box-sizing: border-box;
+            gap: clamp(6px, 1.8vh, 12px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .console-body::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg width='4' height='4' viewBox='0 0 4 4' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 3h1v1H1V3zm2-2h1v1H3V1z' fill='%23000' fill-opacity='0.03'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .console-body > * { position: relative; z-index: 1; }
+
+        #brand-title {
+            font-family: 'Silkscreen', monospace;
+            font-size: clamp(2.2em, 8vw, 3.2em);
+            font-weight: 700;
+            color: var(--lis-bevel-dark);
+            text-align: center;
+            flex-shrink: 0;
+            letter-spacing: 0.15em;
+            text-shadow: 1px 1px 0px var(--lis-bevel-light);
+            padding: clamp(4px, 1vh, 10px) 0;
+        }
+
+        .screen-area {
+            background: var(--lis-deep-panel);
+            border-radius: 8px 8px 16px 8px;
+            padding: 8px;
+            flex-shrink: 0;
+            border: 3px solid var(--lis-bevel-dark);
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5), 0 2px 4px var(--lis-panel-shadow);
+        }
+
+        #screen {
+            background: var(--lis-screen-bg);
+            height: clamp(90px, 15vh, 150px);
+            position: relative;
+            border-radius: 2px;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.12);
+            overflow: hidden;
+        }
+
+        #screen::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: repeating-linear-gradient(
+                0deg, transparent, transparent 2px,
+                rgba(0,0,0,0.04) 2px, rgba(0,0,0,0.04) 4px
+            );
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        #oscilloscope { width: 100%; height: 100%; display: block; }
+
+        #status {
+            position: absolute; bottom: 4px; left: 8px;
+            color: var(--lis-pixel-on);
+            font-family: 'VT323', monospace;
+            font-size: clamp(0.9em, 2.5vw, 1.2em);
+            text-shadow: 1px 1px 0px var(--lis-screen-glow);
+            z-index: 3;
+        }
+
+        #mode-indicator {
+            position: absolute; top: 4px; right: 8px;
+            color: var(--lis-pixel-dim);
+            font-family: 'VT323', monospace;
+            font-size: clamp(0.8em, 2vw, 1em);
+            text-shadow: 1px 1px 0px var(--lis-screen-glow);
+            z-index: 3;
+        }
+
+        #bpm-display {
+            position: absolute; top: 4px; left: 8px;
+            color: var(--lis-pixel-dim);
+            font-family: 'VT323', monospace;
+            font-size: clamp(0.8em, 2vw, 1em);
+            text-shadow: 1px 1px 0px var(--lis-screen-glow);
+            z-index: 3;
+        }
+
+        #sequencer {
+            display: flex; gap: 2px; justify-content: center; flex-shrink: 0;
+        }
+
+        .step {
+            flex: 1; max-width: 28px;
+            height: clamp(14px, 2.5vh, 20px);
+            background-color: var(--lis-bg);
+            border: 1px solid var(--lis-bevel-dark);
+            border-radius: 2px;
+            box-shadow: inset 1px 1px 1px rgba(255,255,255,0.4), inset -1px -1px 1px rgba(0,0,0,0.12);
+            cursor: pointer;
+            transition: background-color 0.08s, box-shadow 0.08s;
+        }
+        .step.enabled { background-color: var(--lis-step-enabled); box-shadow: inset 0 0 2px rgba(0,0,0,0.4); }
+        .step.active {
+            background-color: var(--lis-screen-glow);
+            box-shadow: 0 0 6px var(--lis-screen-glow), 0 0 2px var(--lis-screen-glow);
+        }
+        .step.beat-marker { border-bottom: 2px solid var(--lis-screen-glow); }
+
+        #scale-row {
+            display: flex; gap: 4px; flex-shrink: 0;
+        }
+
+        .scale-btn {
+            flex: 1;
+            font-family: 'VT323', monospace;
+            font-size: clamp(0.8em, 2.3vw, 1em);
+            background: var(--lis-deep-panel);
+            border: 1px solid #3A4740;
+            color: #667;
+            border-radius: 4px;
+            cursor: pointer;
+            padding: 4px 2px;
+            transition: all 0.08s;
+        }
+        .scale-btn.active {
+            color: var(--lis-screen-glow);
+            border-color: var(--lis-screen-glow);
+            box-shadow: 0 0 6px rgba(155,188,15,0.3);
+        }
+
+        #controls-row {
+            display: flex;
+            gap: clamp(6px, 2vw, 10px);
+            flex-shrink: 0;
+        }
+
+        #synth-controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px;
+            flex: 1;
+        }
+
+        .synth-button {
+            padding: 6px 4px;
+            font-family: 'Silkscreen', monospace;
+            font-size: clamp(0.6em, 2vw, 0.75em);
+            background: linear-gradient(180deg, #2A3430 0%, var(--lis-deep-panel) 100%);
+            border: 2px solid #3A4740;
+            border-top-color: #4A5A4C;
+            border-left-color: #4A5A4C;
+            color: var(--lis-screen-glow);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.08s ease;
+            box-shadow: 0 2px 0 #0d1410;
+            letter-spacing: 0.05em;
+        }
+        .synth-button:active {
+            transform: translateY(1px);
+            box-shadow: 0 1px 0 #0d1410;
+        }
+        .synth-button.active {
+            background: linear-gradient(180deg, #3A4A38 0%, #2A3A28 100%);
+            color: #C4CFA1;
+            border-color: var(--lis-screen-glow);
+            box-shadow: 0 2px 0 #1a3a18, 0 0 8px rgba(155,188,15,0.25);
+        }
+
+        #rhythm-controls {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            gap: 4px;
+            flex: 1;
+        }
+
+        .rhythm-button {
+            padding: 6px 4px;
+            font-family: 'Silkscreen', monospace;
+            font-size: clamp(0.65em, 2.2vw, 0.8em);
+            background: linear-gradient(180deg, #D8DED9 0%, #C4CCC6 100%);
+            border: 2px solid var(--lis-bevel-dark);
+            border-top-color: var(--lis-bevel-light);
+            border-left-color: var(--lis-bevel-light);
+            color: var(--lis-pixel-on);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.08s ease;
+            box-shadow: 0 2px 0 var(--lis-bevel-dark);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            position: relative;
+        }
+        .rhythm-button:active {
+            transform: translateY(1px);
+            box-shadow: 0 1px 0 var(--lis-bevel-dark);
+        }
+        .rhythm-button.active {
+            background: linear-gradient(180deg, #E83A50 0%, var(--lis-accent) 100%);
+            color: white;
+            border-color: var(--lis-accent-dark);
+            box-shadow: 0 2px 0 var(--lis-accent-dark), 0 0 8px rgba(217,38,61,0.3);
+        }
+
+        /* Variant label (tiny sub-text on button) */
+        .variant-label {
+            display: block;
+            font-size: 0.7em;
+            opacity: 0.6;
+            margin-top: 1px;
+            letter-spacing: 0;
+        }
+
+        #touch-pad {
+            flex: 1 1 0;
+            min-height: 60px;
+            background-color: #080C0A;
+            border-radius: 8px;
+            cursor: crosshair;
+            position: relative;
+            border: 2px solid var(--lis-bevel-dark);
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.5), 0 2px 4px var(--lis-panel-shadow);
+            overflow: hidden;
+        }
+
+        #touch-pad-grid { position: absolute; inset: 0; pointer-events: none; }
+
+        .touch-indicator {
+            position: absolute; width: 30px; height: 30px;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            display: none;
+        }
+
+        #touch-indicator-1 {
+            border: 2px solid rgba(155, 188, 15, 0.6);
+            background: radial-gradient(circle, rgba(155,188,15,0.25) 0%, transparent 70%);
+            box-shadow: 0 0 15px rgba(155,188,15,0.2);
+        }
+        #touch-indicator-2 {
+            border: 2px solid rgba(217, 38, 61, 0.6);
+            background: radial-gradient(circle, rgba(217,38,61,0.25) 0%, transparent 70%);
+            box-shadow: 0 0 15px rgba(217,38,61,0.2);
+        }
+
+        .pad-label {
+            position: absolute;
+            font-family: 'VT323', monospace;
+            font-size: 0.75em;
+            color: rgba(155, 188, 15, 0.25);
+            pointer-events: none;
+            z-index: 2;
+        }
+        .pad-label.y-top { top: 4px; left: 4px; }
+        .pad-label.y-bottom { bottom: 4px; left: 4px; }
+        .pad-label.x-right { bottom: 4px; right: 4px; }
+
+        #transport-controls {
+            display: flex;
+            gap: 6px;
+            align-items: stretch;
+            flex-shrink: 0;
+        }
+
+        #play-button {
+            flex: 2;
+            font-family: 'Silkscreen', monospace;
+            font-size: clamp(1em, 3.5vw, 1.4em);
+            font-weight: 700;
+            color: white;
+            background: linear-gradient(180deg, #E83A50 0%, var(--lis-accent) 50%, var(--lis-accent-dark) 100%);
+            border: 2px solid var(--lis-accent-dark);
+            border-radius: 8px;
+            padding: 8px 12px;
+            cursor: pointer;
+            box-shadow: 0 3px 0 var(--lis-accent-dark), 0 4px 8px rgba(0,0,0,0.2);
+            letter-spacing: 0.1em;
+            transition: all 0.08s;
+        }
+        #play-button:active {
+            transform: translateY(2px);
+            box-shadow: 0 1px 0 var(--lis-accent-dark);
+        }
+
+        .transport-btn {
+            flex: 1;
+            font-family: 'Silkscreen', monospace;
+            font-size: clamp(0.6em, 2vw, 0.75em);
+            background: linear-gradient(180deg, #D8DED9 0%, #C4CCC6 100%);
+            border: 2px solid var(--lis-bevel-dark);
+            border-top-color: var(--lis-bevel-light);
+            border-left-color: var(--lis-bevel-light);
+            color: var(--lis-pixel-on);
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 3px 0 var(--lis-bevel-dark);
+            transition: all 0.08s;
+            padding: 6px 4px;
+        }
+        .transport-btn:active {
+            transform: translateY(2px);
+            box-shadow: 0 1px 0 var(--lis-bevel-dark);
+        }
+
+        #power-button {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 30px 60px;
+            font-family: 'Silkscreen', monospace;
+            font-size: 2em;
+            cursor: pointer;
+            border: 3px solid var(--lis-pixel-on);
+            background: linear-gradient(180deg, var(--lis-bg) 0%, var(--lis-body) 100%);
+            color: var(--lis-pixel-on);
+            border-radius: 12px;
+            z-index: 1000;
+            text-align: center;
+            line-height: 1.3;
+            box-shadow: 0 4px 0 var(--lis-bevel-dark), 0 6px 20px rgba(0,0,0,0.3);
+            letter-spacing: 0.1em;
+            animation: pulse-power 2s ease-in-out infinite;
+        }
+        @keyframes pulse-power {
+            0%, 100% { box-shadow: 0 4px 0 var(--lis-bevel-dark), 0 6px 20px rgba(0,0,0,0.3); }
+            50% { box-shadow: 0 4px 0 var(--lis-bevel-dark), 0 6px 30px rgba(155,188,15,0.3); }
+        }
+        #power-button:active {
+            transform: translate(-50%, -50%) translateY(2px);
+            box-shadow: 0 2px 0 var(--lis-bevel-dark);
+        }
+
+        #power-led {
+            position: absolute;
+            top: clamp(8px, 2vw, 14px);
+            right: clamp(10px, 3vw, 18px);
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: #455;
+            border: 1px solid #333;
+            z-index: 2;
+            transition: all 0.3s;
+        }
+        #power-led.on {
+            background: var(--lis-screen-glow);
+            box-shadow: 0 0 6px var(--lis-screen-glow), 0 0 12px rgba(155,188,15,0.4);
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: max(20px, env(safe-area-inset-bottom));
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--lis-deep-panel);
+            color: var(--lis-screen-glow);
+            border: 2px solid var(--lis-screen-glow);
+            padding: 10px 18px;
+            border-radius: 6px;
+            font-family: 'Silkscreen', monospace;
+            font-size: 0.8em;
+            letter-spacing: 0.1em;
+            z-index: 3000;
+            opacity: 0;
+            transition: opacity 0.3s, transform 0.3s;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+            pointer-events: none;
+            max-width: 90vw;
+            text-align: center;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(-6px);
+        }
+        .toast.error {
+            color: white;
+            background: var(--lis-accent-dark);
+            border-color: var(--lis-accent);
+        }
+    </style>
+</head>
+<body>
+    <div class="console-body">
+        <div id="power-led"></div>
+        <div id="brand-title">LISERIUM</div>
+
+        <div class="screen-area">
+            <div id="screen">
+                <canvas id="oscilloscope"></canvas>
+                <div id="bpm-display">130 BPM</div>
+                <div id="mode-indicator">DEEP</div>
+                <div id="status">OFF</div>
+            </div>
+        </div>
+
+        <div id="sequencer"></div>
+
+        <div id="scale-row">
+            <button class="scale-btn" data-scale="chromatic">CHR</button>
+            <button class="scale-btn active" data-scale="minor">MIN</button>
+            <button class="scale-btn" data-scale="major">MAJ</button>
+            <button class="scale-btn" data-scale="pentatonic">PEN</button>
+            <button class="scale-btn" data-scale="blues">BLU</button>
+            <button class="scale-btn" data-scale="dorian">DOR</button>
+        </div>
+
+        <div id="controls-row">
+            <div id="synth-controls">
+                <button class="synth-button" id="lead-btn">LEAD</button>
+                <button class="synth-button" id="pad-btn">PAD</button>
+                <button class="synth-button active" id="deep-btn">DEEP</button>
+                <button class="synth-button" id="arp-btn">ARP</button>
+            </div>
+            <div id="rhythm-controls">
+                <button class="rhythm-button" id="kick-btn">KICK<span class="variant-label" id="kick-variant">SUB</span></button>
+                <button class="rhythm-button" id="snare-btn">SNARE</button>
+                <button class="rhythm-button" id="bass-btn">BASS</button>
+                <button class="rhythm-button" id="hats-btn">HATS</button>
+            </div>
+        </div>
+
+        <div id="touch-pad">
+            <canvas id="touch-pad-grid"></canvas>
+            <span class="pad-label y-top" id="label-y-top">HIGH</span>
+            <span class="pad-label y-bottom" id="label-y-bottom">LOW</span>
+            <span class="pad-label x-right" id="label-x-right">VIBRATO ▸</span>
+            <div id="touch-indicator-1" class="touch-indicator"></div>
+            <div id="touch-indicator-2" class="touch-indicator"></div>
+        </div>
+
+        <div id="transport-controls">
+            <button class="transport-btn" id="bpm-down">BPM-</button>
+            <button id="play-button">▶ PLAY</button>
+            <button class="transport-btn" id="bpm-up">BPM+</button>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <button id="power-button">TOUCH<br>ME</button>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <script>
+    (function() {
+        // ====== VIEWPORT HEIGHT (iOS Safari / Instagram in-app) ======
+        function setAppHeight() {
+            document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px');
+        }
+        setAppHeight();
+        window.addEventListener('resize', setAppHeight);
+        window.addEventListener('orientationchange', () => setTimeout(setAppHeight, 100));
+
+        const $ = id => document.getElementById(id);
+
+        // ====== DOM ======
+        const powerButton = $('power-button');
+        const powerLed = $('power-led');
+        const touchPad = $('touch-pad');
+        const indicators = [$('touch-indicator-1'), $('touch-indicator-2')];
+        const statusDiv = $('status');
+        const modeIndicator = $('mode-indicator');
+        const bpmDisplay = $('bpm-display');
+        const canvas = $('oscilloscope');
+        const ctx = canvas.getContext('2d');
+        const padCanvas = $('touch-pad-grid');
+        const padCtx = padCanvas.getContext('2d');
+        const playButton = $('play-button');
+        const toastEl = $('toast');
+
+        const rhythmButtons = {
+            kick: $('kick-btn'), snare: $('snare-btn'), bass: $('bass-btn'), hats: $('hats-btn')
+        };
+        const synthButtons = {
+            lead: $('lead-btn'), pad: $('pad-btn'), deep: $('deep-btn'), arp: $('arp-btn')
+        };
+
+        // ====== CONSTANTS ======
+        const SCALES = {
+            chromatic: [0,1,2,3,4,5,6,7,8,9,10,11],
+            minor: [0,2,3,5,7,8,10],
+            major: [0,2,4,5,7,9,11],
+            pentatonic: [0,3,5,7,10],
+            blues: [0,3,5,6,7,10],
+            dorian: [0,2,3,5,7,9,10],
+        };
+        const SYNTH_MODES = ['lead', 'pad', 'deep', 'arp'];
+        const DRUM_MODES = ['kick', 'snare', 'bass', 'hats'];
+
+        // ====== STATE ======
+        let isInitialized = false;
+        let activeControl = 'deep';
+        let currentScale = 'minor';
+        let bpm = 130;
+        let steps = [];
+        let patterns = {
+            kick: Array(16).fill(null),
+            snare: Array(16).fill(null),
+            bass: Array(16).fill(null),
+            hats: Array(16).fill(null)
+        };
+        let activeTouches = new Map();
+        let sustainedNotes = [];
+
+        // Kick has 3 variants now
+        let kickVariant = 0; // 0=SUB, 1=PUNCH, 2=DEEP
+        const KICK_VARIANTS = ['SUB', 'PUNCH', 'DEEP'];
+
+        // ====== AUDIO NODES ======
+        let leadSynth, padSynth, deepSynth, arpSynth;
+        let analyser, kick, snare, bass, hats, snareNoise, snareBody;
+        let delay, reverb, chorus, compressor, limiter;
+        let masterGain, saturation, stereoWidener;
+        let kickFilter, kickDist;
+
+        // ====== HELPERS ======
+        function quantizeToScale(freq) {
+            const midi = Tone.Frequency(freq).toMidi();
+            const noteInOctave = ((midi % 12) + 12) % 12;
+            const octave = Math.floor(midi / 12);
+            const sc = SCALES[currentScale];
+            let closest = sc[0], minD = 99;
+            for (const n of sc) {
+                const d = Math.min(Math.abs(noteInOctave - n), 12 - Math.abs(noteInOctave - n));
+                if (d < minD) { minD = d; closest = n; }
+            }
+            return Tone.Frequency(octave * 12 + closest, 'midi').toFrequency();
+        }
+
+        function freqFromPad(yr, minF, maxF) {
+            return Math.exp(Math.log(minF) + (Math.log(maxF) - Math.log(minF)) * yr);
+        }
+
+        function getFreqRange(type) {
+            return { lead: [220,1760], pad: [130,880], deep: [30,300], arp: [220,880] }[type] || [220,880];
+        }
+
+        function getSynth(type) {
+            return { lead: leadSynth, pad: padSynth, deep: deepSynth, arp: arpSynth }[type];
+        }
+
+        function noteStr(freq) { return Tone.Frequency(freq).toNote(); }
+
+        function fmtTime(seconds) {
+            const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+            const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+            return `${m}:${s}`;
+        }
+
+        function fmtSize(bytes) {
+            if (bytes < 1024) return `${bytes} B`;
+            if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+            return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+        }
+
+        function showToast(msg, duration = 2200, isError = false) {
+            toastEl.textContent = msg;
+            toastEl.classList.toggle('error', isError);
+            toastEl.classList.add('show');
+            clearTimeout(showToast._t);
+            showToast._t = setTimeout(() => toastEl.classList.remove('show'), duration);
+        }
+
+        // ====== AUDIO SETUP ======
+        function setupAudio() {
+            // Master chain: sources -> analyser -> masterGain -> saturation -> widener -> compressor -> limiter -> destination
+            //                                                                                                 \-> recorder
+            masterGain = new Tone.Gain(0.9);
+            saturation = new Tone.Distortion({ distortion: 0.08, oversample: '2x', wet: 0.5 });
+            stereoWidener = new Tone.StereoWidener({ width: 0.7 });
+            compressor = new Tone.Compressor({ threshold: -18, ratio: 3, attack: 0.005, release: 0.12, knee: 12 });
+            limiter = new Tone.Limiter(-1);
+            masterGain.connect(saturation);
+            saturation.connect(stereoWidener);
+            stereoWidener.connect(compressor);
+            compressor.connect(limiter);
+            limiter.toDestination();
+
+            analyser = new Tone.Analyser('waveform', 1024);
+            analyser.connect(masterGain);
+
+            delay = new Tone.PingPongDelay({ delayTime: '8n', feedback: 0.15, wet: 0.2 }).connect(analyser);
+            reverb = new Tone.Reverb({ decay: 3.5, wet: 0.25, preDelay: 0.02 }).connect(analyser);
+            chorus = new Tone.Chorus({ frequency: 1.5, delayTime: 3.5, depth: 0.7, wet: 0.3 }).connect(analyser);
+
+            // LEAD
+            leadSynth = new Tone.Synth({
+                oscillator: { type: 'triangle8' },
+                envelope: { attack: 0.02, decay: 0.4, sustain: 0.3, release: 0.6 },
+            });
+            leadSynth.volume.value = -4;
+            leadSynth.connect(delay);
+            leadSynth.connect(reverb);
+            leadSynth.connect(analyser);
+
+            // PAD
+            padSynth = new Tone.FMSynth({
+                harmonicity: 1.5, modulationIndex: 3,
+                oscillator: { type: 'sine' },
+                envelope: { attack: 0.4, decay: 1.2, sustain: 0.5, release: 1.8 },
+                modulation: { type: 'triangle' },
+                modulationEnvelope: { attack: 0.3, decay: 0.8, sustain: 0.4, release: 1.8 },
+            });
+            padSynth.volume.value = -8;
+            padSynth.connect(chorus);
+            padSynth.connect(reverb);
+            padSynth.connect(analyser);
+
+            // DEEP
+            deepSynth = new Tone.DuoSynth({
+                vibratoAmount: 0.3, vibratoRate: 1.5, harmonicity: 0.5,
+                voice0: { volume: -8, oscillator: { type: 'sawtooth4' },
+                    filterEnvelope: { baseFrequency: 100, attack: 0.1, decay: 0.8, sustain: 0.2, release: 1.2, octaves: 3 },
+                    envelope: { attack: 0.06, decay: 0.8, sustain: 0.25, release: 1.2 } },
+                voice1: { volume: -8, oscillator: { type: 'sine' },
+                    filterEnvelope: { baseFrequency: 80, attack: 0.1, decay: 1.0, sustain: 0.25, release: 1.5, octaves: 2 },
+                    envelope: { attack: 0.06, decay: 1.0, sustain: 0.25, release: 1.5 } }
+            });
+            deepSynth.connect(analyser);
+            deepSynth.connect(reverb);
+
+            // ARP
+            arpSynth = new Tone.MonoSynth({
+                oscillator: { type: 'square8' },
+                filter: { Q: 4, type: 'lowpass', rolloff: -24 },
+                envelope: { attack: 0.005, decay: 0.15, sustain: 0.05, release: 0.3 },
+                filterEnvelope: { baseFrequency: 300, octaves: 4, attack: 0.01, decay: 0.2, sustain: 0.1, release: 0.5 },
+            });
+            arpSynth.volume.value = -4;
+            arpSynth.connect(delay);
+            arpSynth.connect(analyser);
+
+            // DRUMS
+            const drumBus = new Tone.Channel({ volume: -2 });
+            drumBus.connect(analyser);
+
+            // Kick — this gets reconfigured when variant changes
+            kick = new Tone.MembraneSynth();
+            kickFilter = new Tone.Filter(200, 'lowpass');
+            kickDist = new Tone.Distortion(0.15);
+            kick.chain(kickFilter, kickDist, drumBus);
+            applyKickVariant();
+
+            snareNoise = new Tone.NoiseSynth({
+                noise: { type: 'white', playbackRate: 3 },
+                envelope: { attack: 0.001, decay: 0.18, sustain: 0.02, release: 0.15 }, volume: -4,
+            });
+            snareNoise.chain(new Tone.Filter(5000, 'highpass'), drumBus);
+
+            snareBody = new Tone.MembraneSynth({
+                pitchDecay: 0.01, octaves: 4,
+                envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.1 }, volume: -8,
+            });
+            snareBody.connect(drumBus);
+
+            snare = { trigger(dur, time) {
+                snareNoise.triggerAttackRelease(dur, time);
+                snareBody.triggerAttackRelease('G3', dur, time);
+            } };
+
+            bass = new Tone.FMSynth({
+                harmonicity: 0.5, modulationIndex: 8, oscillator: { type: 'triangle' },
+                envelope: { attack: 0.01, decay: 0.25, sustain: 0.1, release: 0.3 },
+                modulationEnvelope: { attack: 0.01, decay: 0.3, sustain: 0.1, release: 0.2 }, volume: -2,
+            });
+            bass.chain(new Tone.Filter(300, 'lowpass'), drumBus);
+
+            hats = new Tone.MetalSynth({
+                frequency: 300, envelope: { attack: 0.001, decay: 0.06, release: 0.04 },
+                harmonicity: 5.1, modulationIndex: 32, resonance: 4000, volume: -10,
+            });
+            hats.chain(new Tone.Filter(8000, 'highpass'), drumBus);
+
+            // Sequences
+            const idx16 = Array.from(Array(16).keys());
+            new Tone.Sequence((t, s) => { if (patterns.kick[s]) kick.triggerAttackRelease('C1', '8n', t); }, idx16, '16n').start(0);
+            new Tone.Sequence((t, s) => { if (patterns.snare[s]) snare.trigger('8n', t); }, idx16, '16n').start(0);
+            new Tone.Sequence((t, s) => { if (patterns.bass[s]) bass.triggerAttackRelease('E1', '16n', t); }, idx16, '16n').start(0);
+            new Tone.Sequence((t, s) => { if (patterns.hats[s]) hats.triggerAttackRelease('32n', t, 0.4); }, idx16, '16n').start(0);
+
+            Tone.Transport.loop = true;
+            Tone.Transport.loopEnd = '1m';
+            Tone.Transport.bpm.value = bpm;
+
+            new Tone.Loop(time => {
+                Tone.Draw.schedule(() => {
+                    if (!steps.length || Tone.Transport.state !== 'started') return;
+                    const cs = Math.floor(Tone.Transport.progress * 16) % 16;
+                    steps.forEach((s, i) => s.classList.toggle('active', i === cs));
+                }, time);
+            }, '16n').start(0);
+
+            drawOscilloscope();
+        }
+
+        function applyKickVariant() {
+            // SUB: rounded sub-heavy 808, PUNCH: short click-heavy, DEEP: long sub with grit
+            if (kickVariant === 0) {
+                // SUB — default 808ish
+                kick.set({ pitchDecay: 0.04, octaves: 8, oscillator: { type: 'sine' },
+                    envelope: { attack: 0.001, decay: 0.35, sustain: 0.01, release: 0.6 }, volume: 2 });
+                kickFilter.frequency.value = 200;
+                kickDist.distortion = 0.15;
+            } else if (kickVariant === 1) {
+                // PUNCH — tight, punchy, more click
+                kick.set({ pitchDecay: 0.02, octaves: 4, oscillator: { type: 'sine' },
+                    envelope: { attack: 0.001, decay: 0.18, sustain: 0.01, release: 0.25 }, volume: 3 });
+                kickFilter.frequency.value = 450;
+                kickDist.distortion = 0.3;
+            } else {
+                // DEEP — long sub, garage-style
+                kick.set({ pitchDecay: 0.08, octaves: 10, oscillator: { type: 'sine' },
+                    envelope: { attack: 0.001, decay: 0.6, sustain: 0.02, release: 1.0 }, volume: 3 });
+                kickFilter.frequency.value = 140;
+                kickDist.distortion = 0.1;
+            }
+        }
+
+        // ====== OSCILLOSCOPE ======
+        function drawOscilloscope() {
+            requestAnimationFrame(drawOscilloscope);
+            if (!analyser) return;
+            const wf = analyser.getValue();
+            const w = canvas.width, h = canvas.height;
+            ctx.fillStyle = 'rgba(196, 207, 161, 0.3)';
+            ctx.fillRect(0, 0, w, h);
+            ctx.strokeStyle = 'rgba(123, 138, 108, 0.3)';
+            ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            ctx.moveTo(0, h/2); ctx.lineTo(w, h/2);
+            for (let i = 0; i < w; i += w/8) { ctx.moveTo(i, 0); ctx.lineTo(i, h); }
+            ctx.stroke();
+            ctx.shadowBlur = 6; ctx.shadowColor = 'rgba(58,65,71,0.5)';
+            ctx.beginPath(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#2A3038';
+            const sw = w / wf.length;
+            for (let i = 0; i < wf.length; i++) {
+                const x = i * sw, y = (wf[i]/2+0.5) * h;
+                i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+            }
+            ctx.stroke(); ctx.shadowBlur = 0;
+        }
+
+        // ====== PAD GRID ======
+        function drawPadGrid() {
+            const w = padCanvas.width = touchPad.clientWidth;
+            const h = padCanvas.height = touchPad.clientHeight;
+            padCtx.clearRect(0, 0, w, h);
+            padCtx.fillStyle = 'rgba(155, 188, 15, 0.08)';
+            for (let x = 30; x < w; x += 30)
+                for (let y = 30; y < h; y += 30) { padCtx.beginPath(); padCtx.arc(x, y, 1, 0, Math.PI*2); padCtx.fill(); }
+            padCtx.strokeStyle = 'rgba(155, 188, 15, 0.1)';
+            padCtx.lineWidth = 1; padCtx.setLineDash([4,4]);
+            padCtx.beginPath(); padCtx.moveTo(w/2,0); padCtx.lineTo(w/2,h); padCtx.moveTo(0,h/2); padCtx.lineTo(w,h/2);
+            padCtx.stroke(); padCtx.setLineDash([]);
+        }
+
+        // ====== FX ======
+        function updateFX(xr, yr, synthType) {
+            if (synthType === 'lead') {
+                delay.feedback.value = xr * 0.5;
+                delay.wet.value = 0.1 + xr * 0.3;
+                reverb.wet.value = 0.1 + (1-yr) * 0.3;
+            } else if (synthType === 'pad') {
+                chorus.frequency.value = 0.5 + xr * 4;
+                reverb.wet.value = 0.2 + xr * 0.4;
+            } else if (synthType === 'deep') {
+                deepSynth.vibratoAmount.value = xr * 0.8;
+                deepSynth.vibratoRate.value = 1 + (1-yr) * 6;
+            }
+        }
+
+        function updateDrumParams(xr, yr, drum) {
+            switch (drum) {
+                case 'kick':
+                    // Per-variant dynamic tweaks
+                    if (kickVariant === 0) {
+                        kick.set({ pitchDecay: 0.02+xr*0.08, envelope: { decay: 0.2+yr*0.4 } });
+                    } else if (kickVariant === 1) {
+                        kick.set({ pitchDecay: 0.01+xr*0.04, envelope: { decay: 0.1+yr*0.25 } });
+                    } else {
+                        kick.set({ pitchDecay: 0.05+xr*0.1, envelope: { decay: 0.4+yr*0.6 } });
+                    }
+                    statusDiv.textContent = `KICK ${KICK_VARIANTS[kickVariant]} | CLICK ${(xr*100)|0}% | BODY ${(yr*100)|0}%`;
+                    break;
+                case 'snare':
+                    snareNoise.set({ envelope: { decay: 0.1+xr*0.3 } });
+                    statusDiv.textContent = `SNARE | TONE ${(yr*100)|0}% | TAIL ${(xr*100)|0}%`; break;
+                case 'bass':
+                    bass.set({ modulationIndex: 4+yr*14, harmonicity: 0.5+xr*2.5 });
+                    statusDiv.textContent = `BASS | GRIT ${(yr*100)|0}% | HARM ${(xr*100)|0}%`; break;
+                case 'hats':
+                    hats.set({ frequency: 200+yr*600, envelope: { decay: 0.02+xr*0.12 } });
+                    statusDiv.textContent = `HATS | TONE ${(yr*100)|0}% | OPEN ${(xr*100)|0}%`; break;
+            }
+        }
+
+        // ====== ARP ======
+        function startArp(baseFreq, speed) {
+            const baseMidi = Tone.Frequency(baseFreq).toMidi();
+            const sc = SCALES[currentScale];
+            const notes = [];
+            for (let oct = 0; oct < 2; oct++) for (const n of sc) notes.push(Tone.Frequency(baseMidi + n + oct*12, 'midi').toFrequency());
+            const upDown = [...notes, ...notes.slice().reverse().slice(1,-1)];
+            const rate = ['16n','8n','8t','4n'][Math.min(Math.floor(speed*4),3)];
+            let i = 0;
+            const seq = new Tone.Loop(time => {
+                arpSynth.triggerAttackRelease(upDown[i % upDown.length], rate, time);
+                i++;
+            }, rate);
+            seq.start(0);
+            return seq;
+        }
+
+        // ====== TOUCH HANDLERS ======
+        function getFreeIndicator() {
+            const used = new Set();
+            for (const t of activeTouches.values()) used.add(t.indicatorIdx);
+            if (!used.has(0)) return 0;
+            if (!used.has(1)) return 1;
+            return -1;
+        }
+
+        function showIndicator(idx, x, y) {
+            const ind = indicators[idx];
+            ind.style.left = `${x}px`;
+            ind.style.top = `${y}px`;
+            ind.style.display = 'block';
+            ind.style.opacity = '1';
+            ind.style.transition = '';
+        }
+
+        function hideIndicator(idx) {
+            const ind = indicators[idx];
+            ind.style.transition = 'opacity 0.35s ease-out';
+            ind.style.opacity = '0';
+            setTimeout(() => {
+                ind.style.display = 'none';
+                ind.style.transition = '';
+            }, 360);
+        }
+
+        function handlePointerDown(e) {
+            if (!isInitialized) return;
+            e.preventDefault();
+            touchPad.setPointerCapture(e.pointerId);
+
+            const rect = touchPad.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const xr = Math.max(0, Math.min(1, x / rect.width));
+            const yr = Math.max(0, Math.min(1, 1 - y / rect.height));
+
+            if (SYNTH_MODES.includes(activeControl)) {
+                if (activeTouches.size >= 2) return;
+                const indIdx = getFreeIndicator();
+                if (indIdx < 0) return;
+
+                const isSecondFinger = activeTouches.size === 1;
+
+                if (isSecondFinger) {
+                    for (const [pid, existing] of activeTouches) {
+                        sustainedNotes.push({
+                            synthType: existing.synthType,
+                            note: existing.currentNote,
+                            indicatorIdx: existing.indicatorIdx,
+                        });
+                        existing.sustained = true;
+                        const ind = indicators[existing.indicatorIdx];
+                        ind.style.transition = 'box-shadow 0.2s';
+                        ind.style.boxShadow = existing.indicatorIdx === 0
+                            ? '0 0 20px rgba(155,188,15,0.6), 0 0 40px rgba(155,188,15,0.3)'
+                            : '0 0 20px rgba(217,38,61,0.6), 0 0 40px rgba(217,38,61,0.3)';
+                    }
+                    statusDiv.textContent = `HOLD ♪ SUSTAINED`;
+                }
+
+                const synthType = isSecondFinger ? 'deep' : activeControl;
+                const [minF, maxF] = getFreqRange(synthType);
+                const freq = quantizeToScale(freqFromPad(yr, minF, maxF));
+                const note = noteStr(freq);
+                const synth = getSynth(synthType);
+
+                const td = { synthType, indicatorIdx: indIdx, currentNote: note, arpSeq: null, sustained: false };
+
+                if (synthType === 'arp') {
+                    td.arpSeq = startArp(freq, xr);
+                } else {
+                    synth.triggerAttack(note);
+                }
+
+                activeTouches.set(e.pointerId, td);
+                updateFX(xr, yr, synthType);
+                showIndicator(indIdx, x, y);
+                statusDiv.textContent = isSecondFinger
+                    ? `HOLD ♪ + ${synthType.toUpperCase()} ${note}`
+                    : `${synthType.toUpperCase()} ${note}`;
+
+            } else if (DRUM_MODES.includes(activeControl)) {
+                switch (activeControl) {
+                    case 'kick': kick.triggerAttackRelease('C1', '8n'); break;
+                    case 'snare': snare.trigger('8n'); break;
+                    case 'bass': bass.triggerAttackRelease('E1', '8n'); break;
+                    case 'hats': hats.triggerAttackRelease('32n', Tone.now(), 0.4); break;
+                }
+                updateDrumParams(xr, yr, activeControl);
+            }
+        }
+
+        function handlePointerMove(e) {
+            if (!isInitialized) return;
+            e.preventDefault();
+
+            const td = activeTouches.get(e.pointerId);
+            if (!td) {
+                if (DRUM_MODES.includes(activeControl)) {
+                    const rect = touchPad.getBoundingClientRect();
+                    const xr = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                    const yr = Math.max(0, Math.min(1, 1 - (e.clientY - rect.top) / rect.height));
+                    updateDrumParams(xr, yr, activeControl);
+                }
+                return;
+            }
+
+            const rect = touchPad.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const xr = Math.max(0, Math.min(1, x / rect.width));
+            const yr = Math.max(0, Math.min(1, 1 - y / rect.height));
+
+            const [minF, maxF] = getFreqRange(td.synthType);
+            const freq = quantizeToScale(freqFromPad(yr, minF, maxF));
+            const note = noteStr(freq);
+            const synth = getSynth(td.synthType);
+
+            if (td.synthType === 'arp') {
+                // intentionally passive on move
+            } else if (td.synthType === 'deep') {
+                synth.frequency.rampTo(freq, 0.06);
+                td.currentNote = note;
+            } else {
+                if (note !== td.currentNote) {
+                    synth.triggerRelease(Tone.now());
+                    synth.triggerAttack(note, Tone.now() + 0.015);
+                    td.currentNote = note;
+                }
+            }
+
+            updateFX(xr, yr, td.synthType);
+            indicators[td.indicatorIdx].style.left = `${x}px`;
+            indicators[td.indicatorIdx].style.top = `${y}px`;
+            statusDiv.textContent = `${td.synthType.toUpperCase()} ${note}`;
+        }
+
+        function handlePointerUp(e) {
+            if (!isInitialized) return;
+            e.preventDefault();
+
+            const td = activeTouches.get(e.pointerId);
+            if (!td) return;
+
+            if (!td.sustained) {
+                const synth = getSynth(td.synthType);
+                if (td.synthType === 'arp') {
+                    if (td.arpSeq) { td.arpSeq.stop(0); td.arpSeq.dispose(); }
+                    try { arpSynth.triggerRelease(); } catch(ex) {}
+                } else {
+                    try { synth.triggerRelease(Tone.now()); } catch(ex) {}
+                }
+                hideIndicator(td.indicatorIdx);
+            }
+
+            activeTouches.delete(e.pointerId);
+
+            if (activeTouches.size === 0 && sustainedNotes.length > 0) {
+                for (const sn of sustainedNotes) {
+                    const synth = getSynth(sn.synthType);
+                    try { synth.triggerRelease(Tone.now()); } catch(ex) {}
+                    hideIndicator(sn.indicatorIdx);
+                }
+                sustainedNotes = [];
+                statusDiv.textContent = activeControl.toUpperCase() + ' MODE';
+            } else if (activeTouches.size === 0) {
+                statusDiv.textContent = activeControl.toUpperCase() + ' MODE';
+            }
+        }
+
+        // ====== SEQUENCER ======
+        function updateSequencerDisplay() {
+            if (!isInitialized) return;
+            if (DRUM_MODES.includes(activeControl)) {
+                steps.forEach((s, i) => s.classList.toggle('enabled', patterns[activeControl][i] !== null));
+            } else {
+                steps.forEach(s => s.classList.remove('enabled'));
+            }
+        }
+
+        function handleStepClick(e) {
+            if (!isInitialized || !DRUM_MODES.includes(activeControl)) return;
+            const i = parseInt(e.target.dataset.index, 10);
+            const note = { kick:'C1', snare:'C4', bass:'E1', hats:'C4' }[activeControl];
+            patterns[activeControl][i] = patterns[activeControl][i] ? null : note;
+            e.target.classList.toggle('enabled', patterns[activeControl][i] !== null);
+        }
+
+        // ====== MODE SWITCHING ======
+        function setActiveControl(mode) {
+            if (!isInitialized) return;
+            for (const [pid, td] of activeTouches) {
+                const synth = getSynth(td.synthType);
+                if (td.arpSeq) { td.arpSeq.stop(0); td.arpSeq.dispose(); }
+                try { synth.triggerRelease(Tone.now()); } catch(ex) {}
+                indicators[td.indicatorIdx].style.display = 'none';
+            }
+            activeTouches.clear();
+            for (const sn of sustainedNotes) {
+                const synth = getSynth(sn.synthType);
+                try { synth.triggerRelease(Tone.now()); } catch(ex) {}
+                indicators[sn.indicatorIdx].style.display = 'none';
+            }
+            sustainedNotes = [];
+
+            Object.values(rhythmButtons).forEach(b => b.classList.remove('active'));
+            Object.values(synthButtons).forEach(b => b.classList.remove('active'));
+            activeControl = mode;
+
+            if (SYNTH_MODES.includes(mode)) {
+                synthButtons[mode].classList.add('active');
+                modeIndicator.textContent = mode.toUpperCase();
+                $('label-y-top').textContent = 'HIGH';
+                $('label-y-bottom').textContent = 'LOW';
+                $('label-x-right').textContent = { lead:'DELAY ▸', pad:'CHORUS ▸', deep:'VIBRATO ▸', arp:'SPEED ▸' }[mode];
+            } else {
+                rhythmButtons[mode].classList.add('active');
+                modeIndicator.textContent = mode === 'kick' ? `KICK ${KICK_VARIANTS[kickVariant]}` : mode.toUpperCase();
+                $('label-y-top').textContent = 'TONE';
+                $('label-y-bottom').textContent = '';
+                $('label-x-right').textContent = 'SHAPE ▸';
+            }
+            statusDiv.textContent = modeIndicator.textContent + ' MODE';
+            updateSequencerDisplay();
+        }
+
+        // ====== TRANSPORT ======
+        function togglePlayback() {
+            if (!isInitialized) return;
+            if (Tone.Transport.state === 'started') {
+                Tone.Transport.stop();
+                playButton.textContent = '▶ PLAY';
+                steps.forEach(s => s.classList.remove('active'));
+            } else {
+                Tone.Transport.start();
+                playButton.textContent = '■ STOP';
+            }
+        }
+
+        function changeBPM(delta) {
+            bpm = Math.max(60, Math.min(200, bpm + delta));
+            Tone.Transport.bpm.value = bpm;
+            bpmDisplay.textContent = `${bpm} BPM`;
+        }
+
+        // ====== INIT ======
+        async function initialize() {
+            if (isInitialized) return;
+            try {
+                // iOS silent mode bypass
+                const silentCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const buf = silentCtx.createBuffer(1, 1, 22050);
+                const src = silentCtx.createBufferSource();
+                src.buffer = buf;
+                src.connect(silentCtx.destination);
+                src.start(0);
+                if (silentCtx.state === 'suspended') await silentCtx.resume();
+
+                await Tone.start();
+                powerButton.style.display = 'none';
+                powerLed.classList.add('on');
+                isInitialized = true;
+
+                const sr = $('screen').getBoundingClientRect();
+                canvas.width = sr.width; canvas.height = sr.height;
+
+                const seqDiv = $('sequencer');
+                for (let i = 0; i < 16; i++) {
+                    const step = document.createElement('div');
+                    step.classList.add('step');
+                    step.dataset.index = i;
+                    if (i % 4 === 0) step.classList.add('beat-marker');
+                    seqDiv.appendChild(step);
+                }
+                steps = Array.from(document.querySelectorAll('.step'));
+                steps.forEach(s => s.addEventListener('click', handleStepClick));
+
+                setupAudio();
+                drawPadGrid();
+                statusDiv.textContent = 'READY';
+
+                playButton.addEventListener('click', togglePlayback);
+                $('bpm-up').addEventListener('click', () => changeBPM(5));
+                $('bpm-down').addEventListener('click', () => changeBPM(-5));
+
+                // Rhythm buttons: click to select, if already selected on KICK → cycle variant
+                Object.keys(rhythmButtons).forEach(k => {
+                    rhythmButtons[k].addEventListener('click', () => {
+                        if (k === 'kick' && activeControl === 'kick') {
+                            kickVariant = (kickVariant + 1) % KICK_VARIANTS.length;
+                            applyKickVariant();
+                            $('kick-variant').textContent = KICK_VARIANTS[kickVariant];
+                            modeIndicator.textContent = `KICK ${KICK_VARIANTS[kickVariant]}`;
+                            statusDiv.textContent = `KICK ${KICK_VARIANTS[kickVariant]} MODE`;
+                            // Preview the new variant
+                            kick.triggerAttackRelease('C1', '8n');
+                        } else {
+                            setActiveControl(k);
+                        }
+                    });
+                });
+                Object.keys(synthButtons).forEach(k => {
+                    synthButtons[k].addEventListener('click', () => setActiveControl(k));
+                });
+
+                document.querySelectorAll('.scale-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        document.querySelectorAll('.scale-btn').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                        currentScale = btn.dataset.scale;
+                    });
+                });
+
+                touchPad.addEventListener('pointerdown', handlePointerDown);
+                touchPad.addEventListener('pointermove', handlePointerMove);
+                touchPad.addEventListener('pointerup', handlePointerUp);
+                touchPad.addEventListener('pointercancel', handlePointerUp);
+                window.addEventListener('pointerup', handlePointerUp);
+                window.addEventListener('pointercancel', handlePointerUp);
+
+                window.addEventListener('resize', () => {
+                    const r = $('screen').getBoundingClientRect();
+                    canvas.width = r.width; canvas.height = r.height;
+                    drawPadGrid();
+                });
+
+                loadPreset();
+            } catch (e) {
+                console.error('Audio init error:', e);
+                statusDiv.textContent = 'AUDIO ERROR';
+            }
+        }
+
+        function loadPreset() {
+            bpm = 130;
+            Tone.Transport.bpm.value = bpm;
+            bpmDisplay.textContent = `${bpm} BPM`;
+
+            //                 1 . . . 2 . . . 3 . . . 4 . . .
+            patterns.kick  = [1,0,0,0, 0,0,1,0, 1,0,0,1, 0,0,0,0].map(v => v ? 'C1' : null);
+            patterns.snare = [0,0,0,0, 0,0,1,0, 0,0,0,0, 0,1,0,1].map(v => v ? 'C4' : null);
+            patterns.hats  = [1,0,1,1, 0,1,1,0, 1,0,1,1, 0,1,0,1].map(v => v ? 'C4' : null);
+            patterns.bass  = [1,0,0,0, 0,0,0,1, 0,0,1,0, 0,0,0,0].map(v => v ? 'E1' : null);
+            updateSequencerDisplay();
+        }
+
+        powerButton.addEventListener('click', initialize, { once: true });
+    })();
+    </script>
+</body>
+</html>
