@@ -2,20 +2,15 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>limbrow.zip</title>
-    <meta name="description" content="Creative experiments by limbrow.">
     <link rel="icon" href="favicon.png" type="image/png">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
 
     <meta property="og:title" content="limbrow.zip">
-    <meta property="og:description" content="Creative experiments by limbrow.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://limbrow.zip">
-
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+    <meta property="og:image" content="avatar.jpg">
 
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -23,248 +18,173 @@
         :root {
             --bg: #0a0a0a;
             --card: #0f0f0f;
-            --card-hover: #161616;
             --line: #1a1a1a;
-            --text: #e8e8e8;
-            --muted: #888;
-            --dim: #555;
         }
 
         html, body {
             background: var(--bg);
-            color: var(--text);
-            font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
             min-height: 100vh;
             min-height: 100dvh;
+            overflow-x: hidden;
         }
 
-        header {
-            padding: 32px 32px 24px;
+        body {
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+
+        /* AVATAR */
+        .avatar {
+            display: block;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            margin: 24px auto 20px;
+            cursor: pointer;
+            overflow: hidden;
+            background: #000;
+            border: 0;
+            padding: 0;
+            transition: opacity 0.2s ease;
+        }
+        .avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .avatar:hover { opacity: 0.85; }
+        .avatar:focus-visible {
+            outline: 2px solid #fff;
+            outline-offset: 4px;
+        }
+
+        /* AVATAR FULLSCREEN OVERLAY */
+        .avatar-overlay {
+            position: fixed;
+            inset: 0;
+            background: #000;
             display: flex;
-            align-items: baseline;
-            gap: 12px;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+            z-index: 100;
+            cursor: pointer;
+            padding: 24px;
         }
-        header .root { font-size: 13px; color: var(--muted); }
-        header .name { font-size: 18px; font-weight: 500; letter-spacing: 0.02em; }
-        header .tag  { font-size: 11px; color: var(--dim); margin-left: auto; letter-spacing: 0.1em; text-transform: uppercase; }
+        .avatar-overlay.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .avatar-overlay img {
+            width: 100%;
+            max-width: 480px;
+            height: auto;
+            border-radius: 50%;
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+            box-shadow: 0 0 80px rgba(255, 255, 255, 0.05);
+        }
+        .avatar-overlay.open img {
+            transform: scale(1);
+        }
 
+        /* MASONRY GRID */
         main {
-            padding: 0 24px 64px;
+            padding: 0 12px 48px;
             max-width: 1400px;
             margin: 0 auto;
         }
 
         .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 16px;
+            column-count: 3;
+            column-gap: 8px;
+        }
+
+        @media (max-width: 900px) {
+            .grid { column-count: 2; }
+        }
+        @media (max-width: 480px) {
+            .grid { column-count: 1; }
+            main { padding: 0 8px 32px; }
         }
 
         .card {
+            display: block;
+            margin-bottom: 8px;
             background: var(--card);
-            border-radius: 8px;
+            border-radius: 4px;
             overflow: hidden;
             text-decoration: none;
-            color: inherit;
-            display: flex;
-            flex-direction: column;
-            transition: transform 0.2s ease, background 0.2s ease;
             position: relative;
-            cursor: pointer;
+            break-inside: avoid;
+            -webkit-column-break-inside: avoid;
+            page-break-inside: avoid;
+            transition: outline-color 0.2s ease;
+            outline: 1px solid transparent;
         }
 
-        .card:hover { background: var(--card-hover); }
-        .card:hover .preview-frame { opacity: 1; }
-        .card:hover .preview-static { opacity: 0; }
-        .card:hover .arrow { color: var(--text); transform: translateX(2px); }
-
-        .preview {
+        .card .preview {
             position: relative;
-            aspect-ratio: 4 / 3;
+            width: 100%;
             background: #000;
             overflow: hidden;
-            border-bottom: 1px solid var(--line);
+            aspect-ratio: 1 / var(--aspect, 1);
         }
 
-        .preview-frame {
+        .card .preview iframe {
             position: absolute;
             top: 0; left: 0;
-            width: 250%;
-            height: 250%;
-            transform: scale(0.4);
-            transform-origin: top left;
             border: 0;
-            opacity: 0;
-            transition: opacity 0.3s ease;
+            transform-origin: top left;
             pointer-events: none;
             background: #000;
+            width: calc(100% / var(--scale, 0.4));
+            height: calc(100% / var(--scale, 0.4));
+            transform: scale(var(--scale, 0.4));
         }
 
-        .preview-static {
-            position: absolute;
-            inset: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--dim);
-            font-size: 13px;
-            transition: opacity 0.3s ease;
-            background: var(--card);
-            background-image:
-                linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
-            background-size: 20px 20px;
-        }
-
-        .preview-static .glyph {
-            font-size: 32px;
-            color: var(--muted);
-            opacity: 0.5;
-        }
-
-        .preview-loading-static {
-            background-image: none;
-        }
-
-        /* Image-based static preview (fallback / fast load) */
-        .preview-static.with-image {
-            background-image: var(--preview-img);
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
-        }
-
-        .meta {
-            padding: 14px 16px;
-            display: grid;
-            grid-template-columns: 1fr auto;
-            gap: 8px;
-            align-items: start;
-        }
-
-        .meta .name {
-            font-size: 14px;
-            font-weight: 500;
-            letter-spacing: 0.01em;
-        }
-        .meta .name .slash { color: var(--dim); font-weight: 400; }
-
-        .meta .desc {
-            font-size: 11px;
-            color: var(--muted);
-            margin-top: 4px;
-            letter-spacing: 0.02em;
-            line-height: 1.5;
-        }
-
-        .meta .right {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            gap: 4px;
-        }
-
-        .meta .date {
-            font-size: 10px;
-            color: var(--dim);
-            white-space: nowrap;
-        }
-
-        .arrow {
-            font-size: 14px;
-            color: var(--dim);
-            transition: color 0.15s ease, transform 0.15s ease;
-        }
-
-        footer {
-            padding: 32px;
-            color: var(--dim);
-            font-size: 11px;
-            display: flex;
-            gap: 16px;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-
-        footer a {
-            color: var(--muted);
-            text-decoration: none;
-            transition: color 0.15s ease;
-        }
-        footer a:hover { color: var(--text); }
-
-        @media (max-width: 600px) {
-            header { padding: 24px 20px 20px; }
-            main { padding: 0 16px 40px; }
-            .grid { gap: 12px; grid-template-columns: 1fr; }
-            .preview-frame { width: 333%; height: 333%; transform: scale(0.3); }
-        }
-
-        /* On touch devices, show iframes always (no hover) */
-        @media (hover: none) {
-            .preview-frame { opacity: 1; }
-            .preview-static { opacity: 0; }
+        .card:hover {
+            outline-color: rgba(255, 255, 255, 0.12);
         }
     </style>
 </head>
 <body>
 
-    <header>
-        <span class="root">~/</span>
-        <span class="name">limbrow.zip</span>
-        <span class="tag">archive</span>
-    </header>
+    <button class="avatar" id="avatar-btn" aria-label="View avatar">
+        <img src="avatar.jpg" alt="">
+    </button>
+
+    <div class="avatar-overlay" id="avatar-overlay" aria-hidden="true">
+        <img src="avatar.jpg" alt="">
+    </div>
 
     <main>
         <div class="grid" id="grid"></div>
     </main>
-
-    <footer>
-        <a href="https://github.com/Limbrow" target="_blank" rel="noopener">github</a>
-        <span>·</span>
-        <a href="https://limbrow.com" target="_blank" rel="noopener">limbrow.com</a>
-    </footer>
 
     <script type="module">
         import { posts } from './posts.js';
 
         const grid = document.getElementById('grid');
 
-        function formatDate(iso) {
-            return iso.replace(/-/g, '.');
-        }
-
         function makeCard(post) {
             const card = document.createElement('a');
             card.className = 'card';
             card.href = `/p/${post.slug}/`;
-            card.setAttribute('aria-label', `Open ${post.name}`);
-
-            // Static preview shown by default; iframe lazy-loaded on intersect/hover
-            const staticHtml = post.cover
-                ? `<div class="preview-static with-image" style="--preview-img: url('${post.cover}')"></div>`
-                : `<div class="preview-static"><span class="glyph">${post.glyph || '·'}</span></div>`;
+            card.style.setProperty('--aspect', post.aspect ?? 1);
+            card.style.setProperty('--scale', post.scale ?? 0.4);
 
             card.innerHTML = `
                 <div class="preview">
-                    <iframe class="preview-frame" loading="lazy" tabindex="-1" aria-hidden="true"></iframe>
-                    ${staticHtml}
-                </div>
-                <div class="meta">
-                    <div>
-                        <div class="name">${post.name}<span class="slash">/</span></div>
-                        <div class="desc">${post.desc}</div>
-                    </div>
-                    <div class="right">
-                        <span class="date">${formatDate(post.date)}</span>
-                        <span class="arrow" aria-hidden="true">→</span>
-                    </div>
+                    <iframe loading="lazy" tabindex="-1" aria-hidden="true" scrolling="no"></iframe>
                 </div>
             `;
 
-            // Lazy-load iframe when card scrolls into view
             const iframe = card.querySelector('iframe');
             const io = new IntersectionObserver((entries) => {
                 entries.forEach(e => {
@@ -273,17 +193,39 @@
                         io.disconnect();
                     }
                 });
-            }, { rootMargin: '200px' });
+            }, { rootMargin: '400px' });
             io.observe(card);
 
             return card;
         }
 
-        // Sort by date descending (newest first)
         posts
             .slice()
             .sort((a, b) => b.date.localeCompare(a.date))
             .forEach(post => grid.appendChild(makeCard(post)));
+
+        // Avatar fullscreen
+        const avatarBtn = document.getElementById('avatar-btn');
+        const overlay = document.getElementById('avatar-overlay');
+
+        function openAvatar() {
+            overlay.classList.add('open');
+            overlay.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+        }
+        function closeAvatar() {
+            overlay.classList.remove('open');
+            overlay.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+        }
+
+        avatarBtn.addEventListener('click', openAvatar);
+        overlay.addEventListener('click', closeAvatar);
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && overlay.classList.contains('open')) {
+                closeAvatar();
+            }
+        });
     </script>
 </body>
 </html>

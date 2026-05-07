@@ -10,11 +10,12 @@ Live at **[limbrow.zip](https://limbrow.zip)**.
 
 ```
 limbrow.zip/
-├── index.html              ← the gallery (grid of cards)
-├── posts.js                ← registry of all posts
+├── index.html        ← masonry gallery
+├── posts.js          ← post registry
+├── avatar.jpg        ← profile picture (tap to expand)
 ├── favicon.png
 ├── apple-touch-icon.png
-└── p/                      ← every post lives here
+└── p/                ← every post lives here as a folder
     ├── liserium/
     │   └── index.html
     ├── game-of-life/
@@ -23,51 +24,37 @@ limbrow.zip/
         └── index.html
 ```
 
-Each post is a folder under `/p/<slug>/` containing its own `index.html`. The post can include any assets it needs (CSS, JS, images) inside its own folder — everything stays self-contained.
-
-The gallery (`index.html`) reads `posts.js` and renders one card per entry. Each card embeds the post's `index.html` as a live, scaled-down iframe that animates on hover.
-
 ## Adding a new post
 
 ```bash
-# 1. Create the folder + html
 mkdir -p p/sketch-042
 $EDITOR p/sketch-042/index.html
 
-# 2. Register it in posts.js
-#    Add this entry to the `posts` array:
-#    {
-#        slug: 'sketch-042',
-#        name: 'sketch-042',
-#        desc: 'flow field study · p5.js',
-#        date: '2026-05-12',
-#        glyph: '≈'
-#    }
+# Add this entry to posts.js:
+#   {
+#       slug: 'sketch-042',
+#       date: '2026-05-12',
+#       aspect: 1,        // optional, default 1 (square). Higher = taller.
+#       scale: 0.4        // optional, default 0.4. Lower = more zoomed out.
+#   }
 
-# 3. Commit and push
 git add p/sketch-042 posts.js
 git commit -m "add sketch-042"
 git push
 ```
 
-Done. The new card appears at `limbrow.zip` and the post is reachable at `limbrow.zip/p/sketch-042/`.
+## Post fields
 
-## Post entry fields
-
-| Field   | Required | Notes |
-|---------|----------|-------|
-| `slug`  | yes      | Folder name under `/p/`. Lowercase, hyphenated. |
-| `name`  | yes      | Display name shown on the card. |
-| `desc`  | yes      | One-line description shown under the name. |
-| `date`  | yes      | ISO date `YYYY-MM-DD`. Used for sorting (newest first). |
-| `glyph` | no       | Single character shown as fallback when iframe is loading. |
-| `cover` | no       | Path to a static cover image, e.g. `/p/<slug>/cover.png`. If set, used instead of the glyph. |
+| Field    | Required | Notes |
+|----------|----------|-------|
+| `slug`   | yes      | Folder name under `/p/`. Lowercase, hyphenated. |
+| `date`   | yes      | ISO `YYYY-MM-DD`. Sort order (newest first). |
+| `aspect` | no       | Card height / width ratio. `1` = square (default), `1.4` = portrait, `0.7` = wide. |
+| `scale`  | no       | Iframe zoom-out factor in preview. Default `0.4`. Lower = sees more of the page. |
 
 ## Tech
 
-Vanilla HTML + CSS + a tiny ES module for the gallery. No build step, no framework. Hosted on GitHub Pages with a custom domain.
-
-Each card uses an `<iframe>` with `loading="lazy"` and an `IntersectionObserver` so previews only load when scrolled near. On hover, the static placeholder fades out and the live iframe fades in. On touch devices (where there's no hover), iframes are always visible.
+Vanilla HTML + CSS + a tiny ES module. CSS columns for the masonry layout. `IntersectionObserver` to lazy-load iframes only when scrolling near. No build step, no framework.
 
 ## License
 
