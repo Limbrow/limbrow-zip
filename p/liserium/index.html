@@ -160,28 +160,6 @@
         }
         .step.beat-marker { border-bottom: 2px solid var(--lis-screen-glow); }
 
-        #scale-row {
-            display: flex; gap: 4px; flex-shrink: 0;
-        }
-
-        .scale-btn {
-            flex: 1;
-            font-family: 'VT323', monospace;
-            font-size: clamp(0.8em, 2.3vw, 1em);
-            background: var(--lis-deep-panel);
-            border: 1px solid #3A4740;
-            color: #667;
-            border-radius: 4px;
-            cursor: pointer;
-            padding: 4px 2px;
-            transition: all 0.08s;
-        }
-        .scale-btn.active {
-            color: var(--lis-screen-glow);
-            border-color: var(--lis-screen-glow);
-            box-shadow: 0 0 6px rgba(155,188,15,0.3);
-        }
-
         #controls-row {
             display: flex;
             gap: clamp(6px, 2vw, 10px);
@@ -264,6 +242,67 @@
             opacity: 0.6;
             margin-top: 1px;
             letter-spacing: 0;
+        }
+
+        #pad-area {
+            flex: 1 1 0;
+            min-height: 60px;
+            display: flex;
+            gap: 6px;
+            align-items: stretch;
+        }
+
+        .dub-side {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            flex: 0 0 auto;
+            width: clamp(48px, 14vw, 72px);
+        }
+
+        .dub-pad {
+            flex: 1;
+            background: linear-gradient(180deg, #2a3530 0%, #1a2420 100%);
+            border: 2px solid var(--lis-bevel-dark);
+            border-top-color: #3a4740;
+            border-radius: 8px;
+            color: rgba(155, 188, 15, 0.55);
+            font-family: 'Silkscreen', monospace;
+            font-size: clamp(0.55em, 1.7vw, 0.7em);
+            letter-spacing: 0.06em;
+            cursor: pointer;
+            position: relative;
+            box-shadow: inset 0 0 12px rgba(0,0,0,0.4), 0 2px 0 #1a2420, 0 3px 4px rgba(0,0,0,0.3);
+            transition: all 0.06s;
+            padding: 4px;
+            overflow: hidden;
+        }
+        .dub-pad::before {
+            content: '';
+            position: absolute;
+            inset: 4px;
+            border-radius: 4px;
+            background:
+                radial-gradient(ellipse at 50% 0%, rgba(155,188,15,0.06) 0%, transparent 60%),
+                repeating-linear-gradient(45deg, transparent 0px, transparent 3px, rgba(155,188,15,0.025) 3px, rgba(155,188,15,0.025) 4px);
+            pointer-events: none;
+        }
+        .dub-pad:active,
+        .dub-pad.firing {
+            transform: translateY(2px);
+            box-shadow: inset 0 0 16px rgba(0,0,0,0.6), 0 0 0 #1a2420, 0 1px 2px rgba(0,0,0,0.3);
+            color: var(--lis-screen-glow);
+        }
+        .dub-pad.firing {
+            animation: dub-flash 0.45s ease-out;
+        }
+        @keyframes dub-flash {
+            0%   { background: linear-gradient(180deg, #4a6055 0%, #2a3530 100%); }
+            100% { background: linear-gradient(180deg, #2a3530 0%, #1a2420 100%); }
+        }
+        .dub-label {
+            position: relative;
+            z-index: 1;
         }
 
         #touch-pad {
@@ -450,15 +489,6 @@
 
         <div id="sequencer"></div>
 
-        <div id="scale-row">
-            <button class="scale-btn" data-scale="chromatic">CHR</button>
-            <button class="scale-btn active" data-scale="minor">MIN</button>
-            <button class="scale-btn" data-scale="major">MAJ</button>
-            <button class="scale-btn" data-scale="pentatonic">PEN</button>
-            <button class="scale-btn" data-scale="blues">BLU</button>
-            <button class="scale-btn" data-scale="dorian">DOR</button>
-        </div>
-
         <div id="controls-row">
             <div id="synth-controls">
                 <button class="synth-button" id="lead-btn">LEAD</button>
@@ -474,13 +504,25 @@
             </div>
         </div>
 
-        <div id="touch-pad">
-            <canvas id="touch-pad-grid"></canvas>
-            <span class="pad-label y-top" id="label-y-top">HIGH</span>
-            <span class="pad-label y-bottom" id="label-y-bottom">LOW</span>
-            <span class="pad-label x-right" id="label-x-right">VIBRATO ▸</span>
-            <div id="touch-indicator-1" class="touch-indicator"></div>
-            <div id="touch-indicator-2" class="touch-indicator"></div>
+        <div id="pad-area">
+            <div class="dub-side dub-left">
+                <button class="dub-pad" data-pad="0"><span class="dub-label" id="dub-label-0">STAB</span></button>
+                <button class="dub-pad" data-pad="1"><span class="dub-label" id="dub-label-1">CHORD</span></button>
+            </div>
+
+            <div id="touch-pad">
+                <canvas id="touch-pad-grid"></canvas>
+                <span class="pad-label y-top" id="label-y-top">HIGH</span>
+                <span class="pad-label y-bottom" id="label-y-bottom">LOW</span>
+                <span class="pad-label x-right" id="label-x-right">VIBRATO ▸</span>
+                <div id="touch-indicator-1" class="touch-indicator"></div>
+                <div id="touch-indicator-2" class="touch-indicator"></div>
+            </div>
+
+            <div class="dub-side dub-right">
+                <button class="dub-pad" data-pad="2"><span class="dub-label" id="dub-label-2">BELL</span></button>
+                <button class="dub-pad" data-pad="3"><span class="dub-label" id="dub-label-3">VOX</span></button>
+            </div>
         </div>
 
         <div id="transport-controls">
@@ -495,6 +537,7 @@
     <button id="power-button">TOUCH<br>ME</button>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <script src="sounds.js"></script>
     <script>
     (function() {
         // ====== VIEWPORT HEIGHT (iOS Safari / Instagram in-app) ======
@@ -530,21 +573,12 @@
         };
 
         // ====== CONSTANTS ======
-        const SCALES = {
-            chromatic: [0,1,2,3,4,5,6,7,8,9,10,11],
-            minor: [0,2,3,5,7,8,10],
-            major: [0,2,4,5,7,9,11],
-            pentatonic: [0,3,5,7,10],
-            blues: [0,3,5,6,7,10],
-            dorian: [0,2,3,5,7,9,10],
-        };
         const SYNTH_MODES = ['lead', 'pad', 'deep', 'arp'];
         const DRUM_MODES = ['kick', 'snare', 'bass', 'hats'];
 
         // ====== STATE ======
         let isInitialized = false;
         let activeControl = 'deep';
-        let currentScale = 'minor';
         let bpm = 130;
         let steps = [];
         let patterns = {
@@ -566,19 +600,13 @@
         let delay, reverb, chorus, compressor, limiter;
         let masterGain, saturation, stereoWidener;
         let kickFilter, kickDist;
+        let dubPads = [];
 
         // ====== HELPERS ======
+        // No scale anymore — touch pad is fully chromatic.
+        // Function kept (returning identity) so existing call sites still work.
         function quantizeToScale(freq) {
-            const midi = Tone.Frequency(freq).toMidi();
-            const noteInOctave = ((midi % 12) + 12) % 12;
-            const octave = Math.floor(midi / 12);
-            const sc = SCALES[currentScale];
-            let closest = sc[0], minD = 99;
-            for (const n of sc) {
-                const d = Math.min(Math.abs(noteInOctave - n), 12 - Math.abs(noteInOctave - n));
-                if (d < minD) { minD = d; closest = n; }
-            }
-            return Tone.Frequency(octave * 12 + closest, 'midi').toFrequency();
+            return freq;
         }
 
         function freqFromPad(yr, minF, maxF) {
@@ -591,6 +619,19 @@
 
         function getSynth(type) {
             return { lead: leadSynth, pad: padSynth, deep: deepSynth, arp: arpSynth }[type];
+        }
+
+        // Release any synth properly. PolySynth needs releaseAll() (or note arg);
+        // DuoSynth/MonoSynth/PluckSynth use triggerRelease(time).
+        function releaseSynth(synth, time) {
+            if (!synth) return;
+            try {
+                if (typeof synth.releaseAll === 'function') {
+                    synth.releaseAll(time);
+                } else {
+                    synth.triggerRelease(time);
+                }
+            } catch (ex) { /* noop */ }
         }
 
         function noteStr(freq) { return Tone.Frequency(freq).toNote(); }
@@ -633,97 +674,42 @@
             analyser = new Tone.Analyser('waveform', 1024);
             analyser.connect(masterGain);
 
-            delay = new Tone.PingPongDelay({ delayTime: '8n', feedback: 0.15, wet: 0.2 }).connect(analyser);
-            reverb = new Tone.Reverb({ decay: 3.5, wet: 0.25, preDelay: 0.02 }).connect(analyser);
-            chorus = new Tone.Chorus({ frequency: 1.5, delayTime: 3.5, depth: 0.7, wet: 0.3 }).connect(analyser);
+            // FX bus — for voice tails that route through global FX
+            // Each voice has its own fx chain in sounds.js, but they all end up here.
+            const fxBus = analyser;
 
-            // LEAD
-            leadSynth = new Tone.Synth({
-                oscillator: { type: 'triangle8' },
-                envelope: { attack: 0.02, decay: 0.4, sustain: 0.3, release: 0.6 },
-            });
-            leadSynth.volume.value = -4;
-            leadSynth.connect(delay);
-            leadSynth.connect(reverb);
-            leadSynth.connect(analyser);
+            // Effects globales (mantenidos para compatibilidad con updateFX existente)
+            delay = new Tone.PingPongDelay({ delayTime: '8n', feedback: 0.15, wet: 0.0 }).connect(analyser);
+            reverb = new Tone.Reverb({ decay: 3.5, wet: 0.0, preDelay: 0.02 }).connect(analyser);
+            chorus = new Tone.Chorus({ frequency: 1.5, delayTime: 3.5, depth: 0.7, wet: 0.0 }).start().connect(analyser);
 
-            // PAD
-            padSynth = new Tone.FMSynth({
-                harmonicity: 1.5, modulationIndex: 3,
-                oscillator: { type: 'sine' },
-                envelope: { attack: 0.4, decay: 1.2, sustain: 0.5, release: 1.8 },
-                modulation: { type: 'triangle' },
-                modulationEnvelope: { attack: 0.3, decay: 0.8, sustain: 0.4, release: 1.8 },
-            });
-            padSynth.volume.value = -8;
-            padSynth.connect(chorus);
-            padSynth.connect(reverb);
-            padSynth.connect(analyser);
+            // VOICES — built in sounds.js
+            leadSynth = LiseriumSounds.buildLead(fxBus);
+            padSynth  = LiseriumSounds.buildPad(fxBus);
+            deepSynth = LiseriumSounds.buildDeep(fxBus);
+            arpSynth  = LiseriumSounds.buildArp(fxBus);
 
-            // DEEP
-            deepSynth = new Tone.DuoSynth({
-                vibratoAmount: 0.3, vibratoRate: 1.5, harmonicity: 0.5,
-                voice0: { volume: -8, oscillator: { type: 'sawtooth4' },
-                    filterEnvelope: { baseFrequency: 100, attack: 0.1, decay: 0.8, sustain: 0.2, release: 1.2, octaves: 3 },
-                    envelope: { attack: 0.06, decay: 0.8, sustain: 0.25, release: 1.2 } },
-                voice1: { volume: -8, oscillator: { type: 'sine' },
-                    filterEnvelope: { baseFrequency: 80, attack: 0.1, decay: 1.0, sustain: 0.25, release: 1.5, octaves: 2 },
-                    envelope: { attack: 0.06, decay: 1.0, sustain: 0.25, release: 1.5 } }
-            });
-            deepSynth.connect(analyser);
-            deepSynth.connect(reverb);
-
-            // ARP
-            arpSynth = new Tone.MonoSynth({
-                oscillator: { type: 'square8' },
-                filter: { Q: 4, type: 'lowpass', rolloff: -24 },
-                envelope: { attack: 0.005, decay: 0.15, sustain: 0.05, release: 0.3 },
-                filterEnvelope: { baseFrequency: 300, octaves: 4, attack: 0.01, decay: 0.2, sustain: 0.1, release: 0.5 },
-            });
-            arpSynth.volume.value = -4;
-            arpSynth.connect(delay);
-            arpSynth.connect(analyser);
-
-            // DRUMS
+            // DRUMS — built in sounds.js
             const drumBus = new Tone.Channel({ volume: -2 });
             drumBus.connect(analyser);
-
-            // Kick — this gets reconfigured when variant changes
-            kick = new Tone.MembraneSynth();
-            kickFilter = new Tone.Filter(200, 'lowpass');
-            kickDist = new Tone.Distortion(0.15);
-            kick.chain(kickFilter, kickDist, drumBus);
+            const drums = LiseriumSounds.buildDrums(drumBus);
+            kick = drums.kick;
+            kickFilter = drums.kickFilter;
+            kickDist = drums.kickDist;
+            snare = drums.snare;
+            snareNoise = drums.snareNoise;
+            snareBody = drums.snareBody;
+            bass = drums.bass;
+            hats = drums.hats;
             applyKickVariant();
 
-            snareNoise = new Tone.NoiseSynth({
-                noise: { type: 'white', playbackRate: 3 },
-                envelope: { attack: 0.001, decay: 0.18, sustain: 0.02, release: 0.15 }, volume: -4,
+            // DUB PADS — 4 one-shot triggers around the touchpad
+            dubPads = LiseriumSounds.buildDubPads(fxBus);
+            // Update labels with their meaning
+            dubPads.forEach((p, i) => {
+                const lbl = $('dub-label-' + i);
+                if (lbl) lbl.textContent = p.label;
             });
-            snareNoise.chain(new Tone.Filter(5000, 'highpass'), drumBus);
-
-            snareBody = new Tone.MembraneSynth({
-                pitchDecay: 0.01, octaves: 4,
-                envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.1 }, volume: -8,
-            });
-            snareBody.connect(drumBus);
-
-            snare = { trigger(dur, time) {
-                snareNoise.triggerAttackRelease(dur, time);
-                snareBody.triggerAttackRelease('G3', dur, time);
-            } };
-
-            bass = new Tone.FMSynth({
-                harmonicity: 0.5, modulationIndex: 8, oscillator: { type: 'triangle' },
-                envelope: { attack: 0.01, decay: 0.25, sustain: 0.1, release: 0.3 },
-                modulationEnvelope: { attack: 0.01, decay: 0.3, sustain: 0.1, release: 0.2 }, volume: -2,
-            });
-            bass.chain(new Tone.Filter(300, 'lowpass'), drumBus);
-
-            hats = new Tone.MetalSynth({
-                frequency: 300, envelope: { attack: 0.001, decay: 0.06, release: 0.04 },
-                harmonicity: 5.1, modulationIndex: 32, resonance: 4000, volume: -10,
-            });
-            hats.chain(new Tone.Filter(8000, 'highpass'), drumBus);
 
             // Sequences
             const idx16 = Array.from(Array(16).keys());
@@ -851,14 +837,15 @@
         // ====== ARP ======
         function startArp(baseFreq, speed) {
             const baseMidi = Tone.Frequency(baseFreq).toMidi();
-            const sc = SCALES[currentScale];
-            const notes = [];
-            for (let oct = 0; oct < 2; oct++) for (const n of sc) notes.push(Tone.Frequency(baseMidi + n + oct*12, 'midi').toFrequency());
-            const upDown = [...notes, ...notes.slice().reverse().slice(1,-1)];
+            // Chromatic-ish pattern (root, +3, +5, +7, +10, +12, then back down)
+            // Tonally ambiguous, fits dub/dark electronics.
+            const intervals = [0, 3, 5, 7, 10, 12, 10, 7, 5, 3];
+            const notes = intervals.map(n => Tone.Frequency(baseMidi + n, 'midi').toFrequency());
             const rate = ['16n','8n','8t','4n'][Math.min(Math.floor(speed*4),3)];
             let i = 0;
             const seq = new Tone.Loop(time => {
-                arpSynth.triggerAttackRelease(upDown[i % upDown.length], rate, time);
+                // PluckSynth uses triggerAttack only — release is automatic (string decay)
+                arpSynth.triggerAttack(notes[i % notes.length], time);
                 i++;
             }, rate);
             seq.start(0);
@@ -993,7 +980,7 @@
                 td.currentNote = note;
             } else {
                 if (note !== td.currentNote) {
-                    synth.triggerRelease(Tone.now());
+                    releaseSynth(synth, Tone.now());
                     synth.triggerAttack(note, Tone.now() + 0.015);
                     td.currentNote = note;
                 }
@@ -1018,7 +1005,7 @@
                     if (td.arpSeq) { td.arpSeq.stop(0); td.arpSeq.dispose(); }
                     try { arpSynth.triggerRelease(); } catch(ex) {}
                 } else {
-                    try { synth.triggerRelease(Tone.now()); } catch(ex) {}
+                    try { releaseSynth(synth, Tone.now()); } catch(ex) {}
                 }
                 hideIndicator(td.indicatorIdx);
             }
@@ -1028,7 +1015,7 @@
             if (activeTouches.size === 0 && sustainedNotes.length > 0) {
                 for (const sn of sustainedNotes) {
                     const synth = getSynth(sn.synthType);
-                    try { synth.triggerRelease(Tone.now()); } catch(ex) {}
+                    try { releaseSynth(synth, Tone.now()); } catch(ex) {}
                     hideIndicator(sn.indicatorIdx);
                 }
                 sustainedNotes = [];
@@ -1062,13 +1049,13 @@
             for (const [pid, td] of activeTouches) {
                 const synth = getSynth(td.synthType);
                 if (td.arpSeq) { td.arpSeq.stop(0); td.arpSeq.dispose(); }
-                try { synth.triggerRelease(Tone.now()); } catch(ex) {}
+                try { releaseSynth(synth, Tone.now()); } catch(ex) {}
                 indicators[td.indicatorIdx].style.display = 'none';
             }
             activeTouches.clear();
             for (const sn of sustainedNotes) {
                 const synth = getSynth(sn.synthType);
-                try { synth.triggerRelease(Tone.now()); } catch(ex) {}
+                try { releaseSynth(synth, Tone.now()); } catch(ex) {}
                 indicators[sn.indicatorIdx].style.display = 'none';
             }
             sustainedNotes = [];
@@ -1173,12 +1160,19 @@
                     synthButtons[k].addEventListener('click', () => setActiveControl(k));
                 });
 
-                document.querySelectorAll('.scale-btn').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        document.querySelectorAll('.scale-btn').forEach(b => b.classList.remove('active'));
-                        btn.classList.add('active');
-                        currentScale = btn.dataset.scale;
-                    });
+                // DUB PADS — one-shot triggers on the sides of the touch pad
+                document.querySelectorAll('.dub-pad').forEach(btn => {
+                    const idx = parseInt(btn.dataset.pad, 10);
+                    const fire = (e) => {
+                        e.preventDefault();
+                        if (dubPads[idx]) {
+                            dubPads[idx].trigger();
+                            btn.classList.add('firing');
+                            statusDiv.textContent = `${dubPads[idx].label}`;
+                            setTimeout(() => btn.classList.remove('firing'), 450);
+                        }
+                    };
+                    btn.addEventListener('pointerdown', fire);
                 });
 
                 touchPad.addEventListener('pointerdown', handlePointerDown);
