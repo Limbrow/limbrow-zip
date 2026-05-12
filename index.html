@@ -238,7 +238,6 @@
             <img src="avatar.jpg" alt="">
         </button>
         <div class="handle">limbrow<span class="slash">.</span><span class="ext">zip</span></div>
-        <div class="tagline">netart · archive</div>
     </header>
 
     <div class="avatar-overlay" id="avatar-overlay" aria-hidden="true">
@@ -283,10 +282,13 @@
             `;
 
             const iframe = card.querySelector('iframe');
+            const previewUrl = post.preview
+                ? `/p/${post.slug}/${post.preview}`
+                : `/p/${post.slug}/`;
             const io = new IntersectionObserver((entries) => {
                 entries.forEach(e => {
                     if (e.isIntersecting && !iframe.src) {
-                        iframe.src = `/p/${post.slug}/`;
+                        iframe.src = previewUrl;
                         io.disconnect();
                     }
                 });

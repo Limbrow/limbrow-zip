@@ -11,6 +11,9 @@
 //   slug    (required) folder name under /p/, lowercase-hyphenated.
 //   date    (required) YYYY-MM-DD, newest first.
 //   scale   (optional) iframe zoom-out factor in preview. 0.4 = default, lower = sees more.
+//   preview (optional) filename inside /p/<slug>/ to use as the card preview (e.g. "preview.html").
+//                      If omitted, the card shows the post's index.html itself.
+//                      Use a dedicated preview for posts that look better cropped or animated alone.
 //   span    (optional) break the grid: "2cols" | "2rows" | "2x2"
 //   aspect  (optional) override the square. 1 = square (default), 1.5 = portrait, 0.6 = wide.
 //                      Only use this when really needed — uniformity is a feature.
@@ -23,7 +26,8 @@ export const posts = [
     {
         slug: 'house-of-axes',
         date: '2026-05-12',
-        scale: 0.25       // poster is big — zoom out more to show the whole thing
+        preview: 'preview.html',  // dedicated card preview — just the animated graph
+        scale: 0.55               // less zoom-out, the graph fills the card better
     },
 
     {
