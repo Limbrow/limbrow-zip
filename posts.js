@@ -33,13 +33,15 @@ export const posts = [
     {
         slug: 'liserium',
         date: '2026-04-15',
-        scale: 0.35
+        preview: 'preview.html',  // synth chassis + animated oscilloscope (no audio)
+        scale: 0.4
     },
 
     {
         slug: 'game-of-life',
         date: '2026-04-10',
-        scale: 0.45
+        preview: 'preview.html',  // live cellular automaton, auto-reseeds
+        scale: 1.0                // preview fills the card, no zoom-out needed
     },
 
 ];

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Game of Life — preview</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+        background: #000;
+        width: 100%;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+    }
+    canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+    }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+(() => {
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+
+    // Logical grid size — independent from canvas pixels so we can scale crisp
+    const COLS = 50;
+    const ROWS = 50;
+    let cell = 0;
+    let livingCells = new Set();   // "x,y" strings
+
+    function resize() {
+        const dpr = window.devicePixelRatio || 1;
+        const w = canvas.clientWidth;
+        const h = canvas.clientHeight;
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        cell = Math.min(w / COLS, h / ROWS);
+    }
+
+    // Random soup — fills ~30% of the grid in a centered area
+    function randomSoup() {
+        livingCells.clear();
+        const margin = 6;
+        for (let y = margin; y < ROWS - margin; y++) {
+            for (let x = margin; x < COLS - margin; x++) {
+                if (Math.random() < 0.32) livingCells.add(`${x},${y}`);
+            }
+        }
+    }
+
+    function step() {
+        const counts = new Map();
+        for (const key of livingCells) {
+            const [x, y] = key.split(',').map(Number);
+            for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    if (dx === 0 && dy === 0) continue;
+                    const nx = x + dx, ny = y + dy;
+                    if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS) continue;
+                    const k = `${nx},${ny}`;
+                    counts.set(k, (counts.get(k) || 0) + 1);
+                }
+            }
+        }
+        const next = new Set();
+        for (const [key, n] of counts) {
+            const alive = livingCells.has(key);
+            if (alive && (n === 2 || n === 3)) next.add(key);
+            else if (!alive && n === 3) next.add(key);
+        }
+        // also keep alive cells with 2-3 neighbours that may not be in counts
+        for (const key of livingCells) {
+            const n = counts.get(key) || 0;
+            if (n === 2 || n === 3) next.add(key);
+        }
+        livingCells = next;
+    }
+
+    function render() {
+        const w = canvas.clientWidth, h = canvas.clientHeight;
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, w, h);
+
+        // Center the grid
+        const totalW = COLS * cell;
+        const totalH = ROWS * cell;
+        const offX = (w - totalW) / 2;
+        const offY = (h - totalH) / 2;
+
+        ctx.fillStyle = '#fff';
+        for (const key of livingCells) {
+            const [x, y] = key.split(',').map(Number);
+            ctx.fillRect(offX + x * cell, offY + y * cell, cell - 0.5, cell - 0.5);
+        }
+    }
+
+    // Reseed every ~250 generations to keep things visually interesting forever
+    let gen = 0;
+    function loop() {
+        step();
+        render();
+        gen++;
+        if (gen > 240 || livingCells.size < 5) {
+            randomSoup();
+            gen = 0;
+        }
+    }
+
+    window.addEventListener('resize', resize);
+    resize();
+    randomSoup();
+    render();
+    setInterval(loop, 110);  // ~9 fps — feels alive, easy on CPU
+})();
+</script>
+</body>
+</html>

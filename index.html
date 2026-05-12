@@ -125,26 +125,6 @@
             transform: scale(1);
         }
 
-        /* ── DIVIDER ── */
-        .divider {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 0 var(--gap);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 9px;
-            color: var(--dim);
-            letter-spacing: 0.18em;
-            text-transform: uppercase;
-            margin-bottom: 12px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid var(--line);
-        }
-        .divider .left, .divider .right {
-            padding: 0 4px;
-        }
-
         /* ── GRID — IG-style 3 columns, infinite scroll ── */
         main {
             padding: 0 var(--gap) 48px;
@@ -242,11 +222,6 @@
 
     <div class="avatar-overlay" id="avatar-overlay" aria-hidden="true">
         <img src="avatar.jpg" alt="">
-    </div>
-
-    <div class="divider">
-        <span class="left">·· archive</span>
-        <span class="right">v.1 ··</span>
     </div>
 
     <main>
