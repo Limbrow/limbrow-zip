@@ -4,13 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>limbrow.zip</title>
+    <meta name="description" content="Netart archive by limbrow.">
     <link rel="icon" href="favicon.png" type="image/png">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
 
     <meta property="og:title" content="limbrow.zip">
+    <meta property="og:description" content="Netart archive by limbrow.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://limbrow.zip">
     <meta property="og:image" content="avatar.jpg">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -19,10 +25,17 @@
             --bg: #0a0a0a;
             --card: #0f0f0f;
             --line: #1a1a1a;
+            --text: #e8e8e8;
+            --muted: #888;
+            --dim: #444;
+            --accent: #fff;
+            --gap: 4px;
         }
 
         html, body {
             background: var(--bg);
+            color: var(--text);
+            font-family: 'JetBrains Mono', ui-monospace, monospace;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
             min-height: 100vh;
@@ -35,33 +48,53 @@
             padding-bottom: env(safe-area-inset-bottom);
         }
 
-        /* AVATAR */
+        /* ── IDENTITY HEADER ── */
+        header {
+            padding: 28px 16px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+        }
+
         .avatar {
             display: block;
-            width: 56px;
-            height: 56px;
+            width: 64px;
+            height: 64px;
             border-radius: 50%;
-            margin: 24px auto 20px;
             cursor: pointer;
             overflow: hidden;
             background: #000;
             border: 0;
             padding: 0;
             transition: opacity 0.2s ease;
+            flex-shrink: 0;
         }
-        .avatar img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
-        }
+        .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
         .avatar:hover { opacity: 0.85; }
         .avatar:focus-visible {
-            outline: 2px solid #fff;
+            outline: 2px solid var(--accent);
             outline-offset: 4px;
         }
 
-        /* AVATAR FULLSCREEN OVERLAY */
+        .handle {
+            font-size: 13px;
+            color: var(--text);
+            letter-spacing: 0.02em;
+            font-weight: 400;
+        }
+        .handle .slash { color: var(--dim); }
+        .handle .ext { color: var(--muted); }
+
+        .tagline {
+            font-size: 10px;
+            color: var(--muted);
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            margin-top: -8px;
+        }
+
+        /* ── AVATAR FULLSCREEN OVERLAY ── */
         .avatar-overlay {
             position: fixed;
             inset: 0;
@@ -87,53 +120,76 @@
             border-radius: 50%;
             transform: scale(0.9);
             transition: transform 0.3s ease;
-            box-shadow: 0 0 80px rgba(255, 255, 255, 0.05);
         }
         .avatar-overlay.open img {
             transform: scale(1);
         }
 
-        /* MASONRY GRID */
+        /* ── DIVIDER ── */
+        .divider {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 var(--gap);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 9px;
+            color: var(--dim);
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--line);
+        }
+        .divider .left, .divider .right {
+            padding: 0 4px;
+        }
+
+        /* ── GRID — IG-style 3 columns, infinite scroll ── */
         main {
-            padding: 0 12px 48px;
+            padding: 0 var(--gap) 48px;
             max-width: 1400px;
             margin: 0 auto;
         }
 
         .grid {
-            column-count: 3;
-            column-gap: 8px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: var(--gap);
         }
 
-        @media (max-width: 900px) {
-            .grid { column-count: 2; }
-        }
         @media (max-width: 480px) {
-            .grid { column-count: 1; }
-            main { padding: 0 8px 32px; }
+            :root { --gap: 2px; }
+            main { padding: 0 var(--gap) 24px; }
         }
 
+        /* ── CARDS ── */
         .card {
             display: block;
-            margin-bottom: 8px;
             background: var(--card);
-            border-radius: 4px;
             overflow: hidden;
             text-decoration: none;
             position: relative;
-            break-inside: avoid;
-            -webkit-column-break-inside: avoid;
-            page-break-inside: avoid;
-            transition: outline-color 0.2s ease;
-            outline: 1px solid transparent;
+            aspect-ratio: 1 / 1;                /* default = perfect square */
+            transition: transform 0.2s ease;
+        }
+
+        /* Spec for "break the rules" posts. Set in posts.js with width/height in cells. */
+        .card.span-2-cols { grid-column: span 2; }
+        .card.span-2-rows { grid-row: span 2; }
+        .card.span-2x2    { grid-column: span 2; grid-row: span 2; }
+
+        /* Non-square allowed via --aspect when really needed */
+        .card[style*="--aspect"] {
+            aspect-ratio: 1 / var(--aspect);
         }
 
         .card .preview {
             position: relative;
             width: 100%;
+            height: 100%;
             background: #000;
             overflow: hidden;
-            aspect-ratio: 1 / var(--aspect, 1);
         }
 
         .card .preview iframe {
@@ -148,24 +204,57 @@
             transform: scale(var(--scale, 0.4));
         }
 
-        .card:hover {
-            outline-color: rgba(255, 255, 255, 0.12);
+        /* Hover halo — minimal */
+        .card::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            box-shadow: inset 0 0 0 0 rgba(255,255,255,0.15);
+            transition: box-shadow 0.2s ease;
+            pointer-events: none;
+        }
+        .card:hover::after { box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18); }
+
+        /* ── FOOTER MARK ── */
+        footer {
+            padding: 48px 16px 32px;
+            text-align: center;
+            font-size: 9px;
+            color: var(--dim);
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+        }
+
+        /* Touch devices: iframes always visible (no hover state) */
+        @media (hover: none) {
+            .card::after { display: none; }
         }
     </style>
 </head>
 <body>
 
-    <button class="avatar" id="avatar-btn" aria-label="View avatar">
-        <img src="avatar.jpg" alt="">
-    </button>
+    <header>
+        <button class="avatar" id="avatar-btn" aria-label="View avatar">
+            <img src="avatar.jpg" alt="">
+        </button>
+        <div class="handle">limbrow<span class="slash">.</span><span class="ext">zip</span></div>
+        <div class="tagline">netart · archive</div>
+    </header>
 
     <div class="avatar-overlay" id="avatar-overlay" aria-hidden="true">
         <img src="avatar.jpg" alt="">
     </div>
 
+    <div class="divider">
+        <span class="left">·· archive</span>
+        <span class="right">v.1 ··</span>
+    </div>
+
     <main>
         <div class="grid" id="grid"></div>
     </main>
+
+    <footer>limbrow.zip</footer>
 
     <script type="module">
         import { posts } from './posts.js';
@@ -176,7 +265,15 @@
             const card = document.createElement('a');
             card.className = 'card';
             card.href = `/p/${post.slug}/`;
-            card.style.setProperty('--aspect', post.aspect ?? 1);
+            card.setAttribute('aria-label', `Open ${post.slug}`);
+
+            // Special span overrides — for hero / breaking-the-grid posts
+            if (post.span === '2cols') card.classList.add('span-2-cols');
+            else if (post.span === '2rows') card.classList.add('span-2-rows');
+            else if (post.span === '2x2') card.classList.add('span-2x2');
+
+            // Aspect override only if absolutely needed
+            if (post.aspect) card.style.setProperty('--aspect', post.aspect);
             card.style.setProperty('--scale', post.scale ?? 0.4);
 
             card.innerHTML = `
@@ -199,6 +296,7 @@
             return card;
         }
 
+        // Newest first
         posts
             .slice()
             .sort((a, b) => b.date.localeCompare(a.date))
@@ -207,7 +305,6 @@
         // Avatar fullscreen
         const avatarBtn = document.getElementById('avatar-btn');
         const overlay = document.getElementById('avatar-overlay');
-
         function openAvatar() {
             overlay.classList.add('open');
             overlay.setAttribute('aria-hidden', 'false');
@@ -218,13 +315,10 @@
             overlay.setAttribute('aria-hidden', 'true');
             document.body.style.overflow = '';
         }
-
         avatarBtn.addEventListener('click', openAvatar);
         overlay.addEventListener('click', closeAvatar);
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && overlay.classList.contains('open')) {
-                closeAvatar();
-            }
+            if (e.key === 'Escape' && overlay.classList.contains('open')) closeAvatar();
         });
     </script>
 </body>

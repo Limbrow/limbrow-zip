@@ -1,8 +1,8 @@
 # limbrow.zip
 
-> Personal archive of creative experiments by [limbrow](https://limbrow.com).
+> Netart archive by [limbrow](https://limbrow.com). A profile, but in code.
 
-A self-hosted feed where every post is a live HTML page — code, art, sketches, visualizers, anything. Each card in the gallery shows a real, interactive miniature of the project.
+Every post is a folder of HTML/CSS/JS that runs live in a 3-column grid. Like Instagram, but each tile is a real, interactive piece — generative art, micro-tools, sketches, visualizers, synths.
 
 Live at **[limbrow.zip](https://limbrow.zip)**.
 
@@ -10,32 +10,34 @@ Live at **[limbrow.zip](https://limbrow.zip)**.
 
 ```
 limbrow.zip/
-├── index.html        ← masonry gallery
+├── index.html        ← 3-column IG-style grid
 ├── posts.js          ← post registry
-├── avatar.jpg        ← profile picture (tap to expand)
+├── avatar.jpg
 ├── favicon.png
 ├── apple-touch-icon.png
-└── p/                ← every post lives here as a folder
+└── p/
     ├── liserium/
-    │   └── index.html
+    │   ├── index.html
+    │   └── sounds.js
     ├── game-of-life/
     │   └── index.html
     └── <new-post>/
         └── index.html
 ```
 
-## Adding a new post
+Each post is self-contained inside `/p/<slug>/`. The folder can hold any HTML/CSS/JS/assets it needs — everything stays local to that post.
+
+## Adding a post
 
 ```bash
 mkdir -p p/sketch-042
 $EDITOR p/sketch-042/index.html
 
-# Add this entry to posts.js:
+# Add to posts.js:
 #   {
 #       slug: 'sketch-042',
 #       date: '2026-05-12',
-#       aspect: 1,        // optional, default 1 (square). Higher = taller.
-#       scale: 0.4        // optional, default 0.4. Lower = more zoomed out.
+#       scale: 0.4            // optional: how zoomed-out the preview is
 #   }
 
 git add p/sketch-042 posts.js
@@ -48,13 +50,14 @@ git push
 | Field    | Required | Notes |
 |----------|----------|-------|
 | `slug`   | yes      | Folder name under `/p/`. Lowercase, hyphenated. |
-| `date`   | yes      | ISO `YYYY-MM-DD`. Sort order (newest first). |
-| `aspect` | no       | Card height / width ratio. `1` = square (default), `1.4` = portrait, `0.7` = wide. |
-| `scale`  | no       | Iframe zoom-out factor in preview. Default `0.4`. Lower = sees more of the page. |
+| `date`   | yes      | ISO `YYYY-MM-DD`. Newest first. |
+| `scale`  | no       | Default `0.4`. Lower = preview shows more of the page (zoomed out). |
+| `span`   | no       | Break the grid: `"2cols"`, `"2rows"`, or `"2x2"`. Use sparingly — uniformity is a feature, breaking it is a statement. |
+| `aspect` | no       | Override the square. `1` = square (default), `1.5` = portrait, `0.6` = wide. Only when really needed. |
 
 ## Tech
 
-Vanilla HTML + CSS + a tiny ES module. CSS columns for the masonry layout. `IntersectionObserver` to lazy-load iframes only when scrolling near. No build step, no framework.
+Vanilla HTML + CSS + ES modules. No build step, no framework. `IntersectionObserver` for lazy-loading iframes. Hosted on GitHub Pages with custom domain via DNS.
 
 ## License
 
