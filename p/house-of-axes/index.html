@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Limbrow × Casa Axis — f(x) = 1/x</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:      #070706;
+    --fg:      #eeebe4;
+    --mid:     #7a756e;
+    --dim:     #3e3a34;
+    --faint:   #141210;
+   --warm: #ff2a2a;
+--cold: #2a6bff;
+    --rule:    #222018;
+  }
+
+  body {
+    background: #111;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 3rem 1rem;
+    font-family: 'Space Mono', monospace;
+  }
+
+  /* ── POSTER SHELL ── */
+  .poster {
+    width: 700px;
+    max-width: 100%;
+    background: var(--bg);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #1c1a16;
+  }
+
+  /* On narrow screens, scale paddings down so it doesn't break */
+  @media (max-width: 740px) {
+    body { padding: 1.5rem 0.6rem; }
+    .header { padding: 1.8rem 1.4rem 1.4rem; }
+    .diagram-section,
+    .limits-section,
+    .asym-section,
+    .props-section,
+    .concept-section { padding: 0 1.4rem; }
+    .rule-mid { margin: 0 1.4rem; }
+    .footer { padding: 1.4rem 1.4rem 1.8rem; }
+    .title-large { font-size: 2.1rem; }
+    .title-eq { font-size: 1.3rem; }
+    .lim-val { font-size: 1.1rem; }
+    .sig-name { font-size: 1.5rem; }
+  }
+  @media (max-width: 520px) {
+    .limits-grid {
+      grid-template-columns: 1fr 1px 1fr;
+    }
+    .limits-grid > .lim-col-divider:nth-of-type(2),
+    .limits-grid > .lim-col-divider:nth-of-type(4) { display: none; }
+    .props-row { grid-template-columns: 1fr; gap: 1.4rem; }
+    .prop-item { padding-right: 0; }
+  }
+
+  /* grain */
+  .poster::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+    opacity: 0.5;
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  /* ── SECTION RULES ── */
+  hr { border: none; }
+  .rule-full  { height: 1px; background: var(--rule); margin: 0; }
+  .rule-mid   { height: 1px; background: var(--rule); margin: 0 2.8rem; }
+  .rule-light { height: 1px; background: linear-gradient(90deg,transparent,#ffffff18 30%,#ffffff18 70%,transparent); }
+
+  /* ── HEADER ── */
+  .header {
+    padding: 2.6rem 2.8rem 2rem;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 1rem;
+    align-items: end;
+  }
+
+  .plate-no {
+    font-size: 0.52rem;
+    letter-spacing: 0.28em;
+    color: var(--mid);
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+  }
+
+  .title-large {
+    font-family: 'IM Fell English', serif;
+    font-size: 3rem;
+    line-height: 0.93;
+    color: var(--fg);
+    letter-spacing: -0.015em;
+  }
+
+  .title-large em {
+    font-style: italic;
+    color: #b8b2aa;
+  }
+
+  .title-eq {
+    font-family: 'IM Fell English', serif;
+    font-style: italic;
+    font-size: 1.8rem;
+    color: var(--mid);
+    text-align: right;
+    line-height: 1.2;
+    align-self: end;
+    padding-bottom: 0.2rem;
+  }
+
+  .subtitle {
+    font-size: 0.55rem;
+    letter-spacing: 0.22em;
+    color: var(--mid);
+    text-transform: uppercase;
+    margin-top: 0.9rem;
+    grid-column: 1 / -1;
+  }
+
+  /* ── DIAGRAM AREA ── */
+  .diagram-section {
+    position: relative;
+    padding: 0 2.8rem;
+    background: #060605;
+  }
+
+  .diagram-caption {
+    font-size: 0.5rem;
+    letter-spacing: 0.22em;
+    color: #3a3630;
+    text-transform: uppercase;
+    padding: 1rem 0 0.6rem;
+  }
+
+  #svg-main {
+    width: 100%;
+    height: auto;
+    display: block;
+    overflow: visible;
+  }
+
+  /* ── LIMITS GRID ── */
+  .limits-section {
+    padding: 0 2.8rem;
+  }
+
+  .limits-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 1.4rem 0 1rem;
+  }
+
+  .section-label {
+    font-size: 0.5rem;
+    letter-spacing: 0.26em;
+    color: var(--mid);
+    text-transform: uppercase;
+  }
+
+  .limits-grid {
+    display: grid;
+    grid-template-columns: 1fr 1px 1fr 1px 1fr 1px 1fr;
+    gap: 0;
+    margin-bottom: 1.4rem;
+  }
+
+  .lim-col {
+    padding: 0 1rem 0.6rem;
+  }
+  .lim-col:first-child { padding-left: 0; }
+  .lim-col:last-child  { padding-right: 0; }
+
+  .lim-col-divider {
+    background: var(--rule);
+    margin: 0;
+  }
+
+  .lim-tag {
+    font-size: 0.44rem;
+    letter-spacing: 0.18em;
+    color: #3e3a34;
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+  }
+
+  .lim-expr {
+    font-family: 'IM Fell English', serif;
+    font-size: 0.88rem;
+    color: #7a756e;
+    line-height: 1;
+    display: block;
+    margin-bottom: 0.12rem;
+  }
+
+  .lim-val {
+    font-family: 'IM Fell English', serif;
+    font-style: italic;
+    font-size: 1.35rem;
+    line-height: 1;
+    display: block;
+    margin-bottom: 0.35rem;
+  }
+
+.lim-val.zero,
+.lim-val.inf-p,
+.lim-val.inf-n {
+  color: var(--fg);
+}
+
+  .lim-note {
+    font-size: 0.44rem;
+    color: #3a3630;
+    letter-spacing: 0.1em;
+    line-height: 1.6;
+    text-transform: uppercase;
+  }
+
+  /* ── ASYMPTOTE ROW ── */
+  .asym-section {
+    padding: 0 2.8rem;
+  }
+
+  .asym-grid {
+    display: grid;
+    grid-template-columns: 1fr 1px 1fr;
+    padding: 1.2rem 0 1.4rem;
+  }
+
+  .asym-col {
+    padding: 0 1.2rem;
+  }
+  .asym-col:first-child { padding-left: 0; }
+  .asym-col:last-child  { padding-right: 0; }
+
+  .asym-col-div {
+    background: var(--rule);
+  }
+
+  .asym-type {
+    font-size: 0.44rem;
+    letter-spacing: 0.22em;
+    color: var(--mid);
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .asym-type::before {
+    content: '';
+    display: inline-block;
+    width: 16px;
+    height: 1px;
+    background: currentColor;
+  }
+
+  .asym-eq {
+    font-family: 'IM Fell English', serif;
+    font-style: italic;
+    font-size: 1.1rem;
+    color: var(--fg);
+    display: block;
+    margin-bottom: 0.3rem;
+  }
+
+  .asym-desc {
+    font-size: 0.48rem;
+    color: #4a4640;
+    letter-spacing: 0.08em;
+    line-height: 1.65;
+    text-transform: uppercase;
+  }
+
+  /* ── PROPERTIES ROW ── */
+  .props-section {
+    padding: 0 2.8rem;
+  }
+
+  .props-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    padding: 1.2rem 0 1.4rem;
+  }
+
+  .prop-item {
+    padding-right: 1.5rem;
+  }
+
+  .prop-item:last-child { padding-right: 0; }
+
+  .prop-sym {
+    font-family: 'IM Fell English', serif;
+    font-style: italic;
+    font-size: 1.05rem;
+    color: #5a5650;
+    display: block;
+    margin-bottom: 0.3rem;
+  }
+
+  .prop-text {
+    font-size: 0.46rem;
+    color: #3a3630;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    line-height: 1.6;
+  }
+
+  /* ── CONCEPT BLOCK ── */
+  .concept-section {
+    padding: 0 2.8rem;
+  }
+
+  .concept-inner {
+    border-left: 1px solid #1e1c18;
+    padding: 1.4rem 0 1.4rem 1.4rem;
+    margin: 0;
+  }
+
+  .concept-body {
+    font-family: 'IM Fell English', serif;
+    font-style: italic;
+    font-size: 1.0rem;
+    color: #6a6560;
+    line-height: 1.75;
+  }
+
+  .concept-body strong {
+    font-style: normal;
+    color: #b0aaa0;
+    font-weight: 400;
+  }
+
+  .concept-body em {
+    font-style: italic;
+    color: var(--fg);
+  }
+
+  /* ── FOOTER ── */
+  .footer {
+    padding: 1.8rem 2.8rem 2.4rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+
+  .footer-sig {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .sig-name {
+    font-family: 'IM Fell English', serif;
+    font-size: 1.9rem;
+    color: var(--fg);
+    line-height: 1;
+    letter-spacing: 0.01em;
+  }
+
+  .sig-sub {
+    font-size: 0.48rem;
+    color: var(--mid);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+
+  .footer-right {
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    align-items: flex-end;
+  }
+
+  .footer-formula {
+    font-family: 'IM Fell English', serif;
+    font-style: italic;
+    font-size: 0.85rem;
+    color: #2e2c28;
+    line-height: 1.5;
+  }
+
+  /* ── ANIMATIONS ── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .poster > * {
+    animation: fadeUp 0.8s ease both;
+  }
+
+  .poster > *:nth-child(1)  { animation-delay: 0.05s; }
+  .poster > *:nth-child(2)  { animation-delay: 0.1s; }
+  .poster > *:nth-child(3)  { animation-delay: 0.15s; }
+  .poster > *:nth-child(4)  { animation-delay: 0.2s; }
+  .poster > *:nth-child(5)  { animation-delay: 0.25s; }
+  .poster > *:nth-child(6)  { animation-delay: 0.3s; }
+  .poster > *:nth-child(7)  { animation-delay: 0.35s; }
+  .poster > *:nth-child(8)  { animation-delay: 0.4s; }
+  .poster > *:nth-child(9)  { animation-delay: 0.45s; }
+  .poster > *:nth-child(10) { animation-delay: 0.5s; }
+  .poster > *:nth-child(11) { animation-delay: 0.55s; }
+  .poster > *:nth-child(12) { animation-delay: 0.6s; }
+  .poster > *:nth-child(13) { animation-delay: 0.65s; }
+
+  @keyframes drawPath {
+    from { stroke-dashoffset: 1; }
+    to   { stroke-dashoffset: 0; }
+  }
+
+  .draw-q1 {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    pathLength: 1;
+    animation: drawPath 2s cubic-bezier(0.4,0,0.2,1) 0.6s both;
+  }
+  .draw-q3 {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    pathLength: 1;
+    animation: drawPath 2s cubic-bezier(0.4,0,0.2,1) 1.0s both;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  .fade-late { animation: fadeIn 1s ease 1.8s both; }
+</style>
+</head>
+<body>
+<div class="poster">
+
+  <!-- ═══ HEADER ═══ -->
+  <header class="header">
+    <div style="grid-column:1/-1">
+      <div class="plate-no">Research Plate № 01 — Mathematical Identity</div>
+    </div>
+    <div class="title-large">
+      The House<br>of <em>Axes</em>
+    </div>
+    <div class="title-eq">
+      f(x) = <sup style="font-size:1.1rem">1</sup>⁄<sub style="font-size:1.1rem">x</sub>
+    </div>
+    <div class="subtitle">
+      On asymptotes, limits, and the identity of approach — Casa Axis × Limbrow
+    </div>
+  </header>
+
+  <hr class="rule-full">
+
+  <!-- ═══ DIAGRAM ═══ -->
+  <div class="diagram-section">
+    <div class="diagram-caption">Fig. 1 — f(x) = 1/x &nbsp;·&nbsp; ℝ \ {0} → ℝ \ {0} &nbsp;·&nbsp; Two branches, four limits, one function</div>
+
+    <svg id="svg-main" viewBox="0 0 644 500" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <!-- Q1 branch gradient: warm amber -->
+        <linearGradient id="gQ1" x1="0%" y1="100%" x2="100%" y2="0%">
+          <stop offset="0%"   stop-color="var(--warm)" stop-opacity="0.5"/>
+          <stop offset="55%"  stop-color="var(--warm)" stop-opacity="1"/>
+          <stop offset="100%" stop-color="var(--warm)" stop-opacity="0.35"/>
+        </linearGradient>
+        <!-- Q3 branch gradient: cold blue -->
+        <linearGradient id="gQ3" x1="100%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%"   stop-color="var(--cold)" stop-opacity="0.5"/>
+          <stop offset="55%"  stop-color="var(--cold)" stop-opacity="1"/>
+          <stop offset="100%" stop-color="var(--cold)" stop-opacity="0.35"/>
+        </linearGradient>
+
+        <!-- Subtle glow -->
+        <filter id="glowWarm" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="2.5" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <filter id="glowCold" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="2.5" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+
+        <!-- Clip to diagram area -->
+        <clipPath id="clip">
+          <rect x="80" y="20" width="484" height="460"/>
+        </clipPath>
+
+        <!-- Arrowhead markers -->
+        <marker id="arrFg" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L6,3 Z" fill="#2e2c28"/>
+        </marker>
+        <marker id="arrDim" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto">
+          <path d="M0,0 L0,5 L5,2.5 Z" fill="#3a3630" opacity="0.6"/>
+        </marker>
+        <marker id="arrWarm" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto">
+          <path d="M0,0 L0,5 L5,2.5 Z" fill="#e8c87a" opacity="0.7"/>
+        </marker>
+        <marker id="arrCold" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto">
+          <path d="M0,0 L0,5 L5,2.5 Z" fill="#7ab8e8" opacity="0.7"/>
+        </marker>
+
+        <!-- Grid pattern -->
+        <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse" x="82" y="22">
+          <path d="M40 0 L0 0 0 40" fill="none" stroke="#0f0e0c" stroke-width="0.7"/>
+        </pattern>
+      </defs>
+
+      <!-- ── Grid ── -->
+      <rect x="82" y="22" width="480" height="456" fill="url(#grid)"/>
+
+      <!-- ── Quadrant labels ── -->
+      <text x="390" y="80"  font-family="'Space Mono',monospace" font-size="9" fill="#1e1c18" letter-spacing="2" text-anchor="middle">I</text>
+      <text x="175" y="80"  font-family="'Space Mono',monospace" font-size="9" fill="#1e1c18" letter-spacing="2" text-anchor="middle">II</text>
+      <text x="175" y="420" font-family="'Space Mono',monospace" font-size="9" fill="#1e1c18" letter-spacing="2" text-anchor="middle">III</text>
+      <text x="390" y="420" font-family="'Space Mono',monospace" font-size="9" fill="#1e1c18" letter-spacing="2" text-anchor="middle">IV</text>
+
+      <!-- ── ASYMPTOTE LINES (dashed) ── -->
+      <line x1="282" y1="22" x2="282" y2="478"
+            stroke="#2a2820" stroke-width="1" stroke-dasharray="5,6"/>
+      <line x1="82" y1="250" x2="562" y2="250"
+            stroke="#2a2820" stroke-width="1" stroke-dasharray="5,6"/>
+
+      <!-- ── AXES ── -->
+      <line x1="282" y1="478" x2="282" y2="28"
+            stroke="#282420" stroke-width="1.2" marker-end="url(#arrFg)"/>
+      <line x1="82" y1="250" x2="558" y2="250"
+            stroke="#282420" stroke-width="1.2" marker-end="url(#arrFg)"/>
+
+      <text x="565" y="254" font-family="'IM Fell English',serif" font-style="italic" font-size="14" fill="#3a3630">x</text>
+      <text x="274" y="22"  font-family="'IM Fell English',serif" font-style="italic" font-size="14" fill="#3a3630">y</text>
+
+      <circle cx="282" cy="250" r="2" fill="#282420"/>
+      <text x="270" y="262" font-family="'Space Mono',monospace" font-size="8" fill="#282420">O</text>
+
+      <g font-family="'Space Mono',monospace" font-size="7.5" fill="#282420" text-anchor="middle">
+        <line x1="322" y1="247" x2="322" y2="253" stroke="#282420" stroke-width="0.8"/>
+        <text x="322" y="263">1</text>
+        <line x1="362" y1="247" x2="362" y2="253" stroke="#282420" stroke-width="0.8"/>
+        <text x="362" y="263">2</text>
+        <line x1="442" y1="247" x2="442" y2="253" stroke="#282420" stroke-width="0.8"/>
+        <text x="442" y="263">4</text>
+        <line x1="522" y1="247" x2="522" y2="253" stroke="#282420" stroke-width="0.8"/>
+        <text x="522" y="263">6</text>
+      </g>
+      <g font-family="'Space Mono',monospace" font-size="7.5" fill="#282420" text-anchor="middle">
+        <line x1="242" y1="247" x2="242" y2="253" stroke="#282420" stroke-width="0.8"/>
+        <text x="242" y="263">-1</text>
+        <line x1="202" y1="247" x2="202" y2="253" stroke="#282420" stroke-width="0.8"/>
+        <text x="202" y="263">-2</text>
+        <line x1="122" y1="247" x2="122" y2="253" stroke="#282420" stroke-width="0.8"/>
+        <text x="122" y="263">-6</text>
+      </g>
+      <g font-family="'Space Mono',monospace" font-size="7.5" fill="#282420" text-anchor="end">
+        <line x1="279" y1="210" x2="285" y2="210" stroke="#282420" stroke-width="0.8"/>
+        <text x="276" y="213">1</text>
+        <line x1="279" y1="170" x2="285" y2="170" stroke="#282420" stroke-width="0.8"/>
+        <text x="276" y="173">2</text>
+        <line x1="279" y1="90"  x2="285" y2="90"  stroke="#282420" stroke-width="0.8"/>
+        <text x="276" y="93">4</text>
+      </g>
+      <g font-family="'Space Mono',monospace" font-size="7.5" fill="#282420" text-anchor="end">
+        <line x1="279" y1="290" x2="285" y2="290" stroke="#282420" stroke-width="0.8"/>
+        <text x="276" y="293">-1</text>
+        <line x1="279" y1="330" x2="285" y2="330" stroke="#282420" stroke-width="0.8"/>
+        <text x="276" y="333">-2</text>
+        <line x1="279" y1="410" x2="285" y2="410" stroke="#282420" stroke-width="0.8"/>
+        <text x="276" y="413">-4</text>
+      </g>
+
+      <!-- Q1 branch — warm amber -->
+      <path class="draw-q1"
+        clip-path="url(#clip)"
+        d="M 554,244.1
+           C 540,244.5 522,244 502,243
+           C 482,242 462,241 442,240
+           C 422,239 402,238.5 382,237.5
+           C 362,236.5 342,234 322,229
+           C 312,226.5 306,223 300,218
+           C 296,213 293,207 291.5,200
+           C 289.5,190 288.5,178 287,163
+           C 286,150 285,136 284.2,120
+           C 283.5,100 283,75 282.5,40"
+        fill="none"
+        stroke="url(#gQ1)"
+        stroke-width="2.2"
+        stroke-linecap="round"
+        filter="url(#glowWarm)"
+        pathLength="1"
+      />
+
+      <!-- Q3 branch — cold blue -->
+      <path class="draw-q3"
+        clip-path="url(#clip)"
+        d="M 114,255.9
+           C 130,255.5 152,255 172,256
+           C 192,257 212,258 232,260
+           C 252,262 262,265 268,270
+           C 272,274 276,280 278,288
+           C 279.5,296 280.5,308 281.2,325
+           C 282,342 282.5,365 282.8,392
+           C 283.2,416 283.6,445 284,476"
+        fill="none"
+        stroke="url(#gQ3)"
+        stroke-width="2.2"
+        stroke-linecap="round"
+        filter="url(#glowCold)"
+        pathLength="1"
+      />
+
+      <g class="fade-late">
+        <line x1="490" y1="242.3" x2="534" y2="241"
+              stroke="#e8c87a" stroke-width="0.9" opacity="0.5"
+              marker-end="url(#arrWarm)"/>
+        <line x1="284.5" y1="128" x2="283.2" y2="50"
+              stroke="#e8c87a" stroke-width="0.9" opacity="0.5"
+              marker-end="url(#arrWarm)"/>
+        <line x1="162" y1="257.8" x2="118" y2="256.1"
+              stroke="#7ab8e8" stroke-width="0.9" opacity="0.5"
+              marker-end="url(#arrCold)"/>
+        <line x1="282.2" y1="370" x2="283.2" y2="448"
+              stroke="#7ab8e8" stroke-width="0.9" opacity="0.5"
+              marker-end="url(#arrCold)"/>
+      </g>
+
+      <g class="fade-late" font-family="'Space Mono',monospace">
+        <text x="490" y="236" font-size="8" fill="#e8c87a" opacity="0.7" text-anchor="middle">x → +∞</text>
+        <text x="490" y="228" font-size="7.5" fill="#b09050" opacity="0.6" text-anchor="middle">f → 0</text>
+        <text x="297" y="115" font-size="8" fill="#e8c87a" opacity="0.7">x → 0⁺</text>
+        <text x="297" y="105" font-size="7.5" fill="#b09050" opacity="0.6">f → +∞</text>
+        <text x="140" y="268" font-size="8" fill="#7ab8e8" opacity="0.7" text-anchor="middle">x → −∞</text>
+        <text x="140" y="277" font-size="7.5" fill="#5a90b8" opacity="0.6" text-anchor="middle">f → 0</text>
+        <text x="218" y="390" font-size="8" fill="#7ab8e8" opacity="0.7">x → 0⁻</text>
+        <text x="218" y="400" font-size="7.5" fill="#5a90b8" opacity="0.6">f → −∞</text>
+      </g>
+
+      <g class="fade-late" opacity="0.3">
+        <line x1="420" y1="162" x2="144" y2="338"
+              stroke="#5a5650" stroke-width="0.6" stroke-dasharray="3,5"/>
+        <text x="396" y="153" font-family="'Space Mono',monospace" font-size="7" fill="#4a4640"
+              text-anchor="middle">point symmetry</text>
+        <text x="396" y="143" font-family="'Space Mono',monospace" font-size="7" fill="#4a4640"
+              text-anchor="middle">through O</text>
+      </g>
+
+      <g class="fade-late">
+        <text x="287" y="35" font-family="'IM Fell English',serif" font-style="italic" font-size="11"
+              fill="#3a3630">x = 0</text>
+        <text x="568" y="248" font-family="'IM Fell English',serif" font-style="italic" font-size="11"
+              fill="#3a3630">y = 0</text>
+      </g>
+
+      <text x="435" y="195"
+            font-family="'IM Fell English',serif" font-style="italic" font-size="15"
+            fill="#6a6460" text-anchor="middle" class="fade-late">
+        f(x) = 1/x
+      </text>
+
+    </svg>
+  </div>
+
+  <hr class="rule-full">
+
+  <!-- ═══ FOUR LIMITS ═══ -->
+  <div class="limits-section">
+    <div class="limits-header">
+      <span class="section-label">The four fundamental limits</span>
+      <span class="section-label" style="color:#2e2c28">ℝ \ {0} → ℝ \ {0}</span>
+    </div>
+
+    <div class="limits-grid">
+      <div class="lim-col">
+        <div class="lim-tag">As x grows large · positive</div>
+        <span class="lim-expr">lim<sub style="font-size:0.65em;color:#4a4640"> x→+∞</sub></span>
+        <span class="lim-val zero">0</span>
+        <div class="lim-note">Curve approaches<br>x-axis from above.<br>Horizontal asymptote.</div>
+      </div>
+
+      <div class="lim-col-divider"></div>
+
+      <div class="lim-col">
+        <div class="lim-tag">As x nears zero · right</div>
+        <span class="lim-expr">lim<sub style="font-size:0.65em;color:#4a4640"> x→0⁺</sub></span>
+        <span class="lim-val inf-p">+∞</span>
+        <div class="lim-note">Curve rises without<br>bound. Vertical<br>asymptote, Q1.</div>
+      </div>
+
+      <div class="lim-col-divider"></div>
+
+      <div class="lim-col">
+        <div class="lim-tag">As x nears zero · left</div>
+        <span class="lim-expr">lim<sub style="font-size:0.65em;color:#4a4640"> x→0⁻</sub></span>
+        <span class="lim-val inf-n">−∞</span>
+        <div class="lim-note">Curve falls without<br>bound. Vertical<br>asymptote, Q3.</div>
+      </div>
+
+      <div class="lim-col-divider"></div>
+
+      <div class="lim-col">
+        <div class="lim-tag">As x grows large · negative</div>
+        <span class="lim-expr">lim<sub style="font-size:0.65em;color:#4a4640"> x→−∞</sub></span>
+        <span class="lim-val zero">0</span>
+        <div class="lim-note">Curve approaches<br>x-axis from below.<br>Horizontal asymptote.</div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="rule-full">
+
+  <!-- ═══ ASYMPTOTES ═══ -->
+  <div class="asym-section">
+    <div class="asym-grid">
+      <div class="asym-col">
+        <div class="asym-type">Vertical asymptote</div>
+        <span class="asym-eq">x = 0</span>
+        <div class="asym-desc">
+          The y-axis. The function diverges here — it has no defined value at x = 0.
+          The curve approaches the axis from both sides, never crossing.
+        </div>
+      </div>
+
+      <div class="asym-col-div"></div>
+
+      <div class="asym-col">
+        <div class="asym-type">Horizontal asymptote</div>
+        <span class="asym-eq">y = 0</span>
+        <div class="asym-desc">
+          The x-axis. As x travels toward ±∞, the output shrinks toward zero —
+          the curve approaches the axis from above and below, never touching.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="rule-full">
+
+  <!-- ═══ PROPERTIES ═══ -->
+  <div class="props-section">
+    <div class="section-label" style="padding: 1.2rem 0 0.8rem; display:block;">Further properties</div>
+    <div class="props-row">
+      <div class="prop-item">
+        <span class="prop-sym">f ∘ f = Id</span>
+        <div class="prop-text">
+          Self-inverse. f(f(x)) = x for all x ≠ 0. The function is its own inverse —
+          applying it twice returns the original value.
+        </div>
+      </div>
+      <div class="prop-item">
+        <span class="prop-sym">f(−x) = −f(x)</span>
+        <div class="prop-text">
+          Odd symmetry. The graph is symmetric through the origin —
+          the two branches are each other's rotation by 180°.
+        </div>
+      </div>
+      <div class="prop-item">
+        <span class="prop-sym">f ′(x) = −1/x²</span>
+        <div class="prop-text">
+          Strictly decreasing on each branch. The curve always falls —
+          on (0,+∞) and on (−∞,0) separately.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="rule-full">
+
+  <!-- ═══ CONCEPT TEXT ═══ -->
+  <div class="concept-section">
+    <div style="padding: 1.2rem 0 0; display:flex; justify-content:space-between; align-items:baseline;">
+      <span class="section-label">Conceptual reading</span>
+      <span class="section-label" style="color:#2e2c28;">Casa Axis × Limbrow</span>
+    </div>
+    <div class="concept-inner" style="margin-top:1rem; margin-bottom:1.6rem; border-left:1px solid #1e1c18;">
+      <p class="concept-body">
+        <strong>Casa Axis</strong> is the house of axes.
+        The curve lives inside this house forever —
+        turning from vertical to horizontal in a single, continuous motion,
+        always approaching the walls but <em>never touching them.</em>
+        The axes are not boundaries. They are asymptotes:
+        directions the function inhabits as a permanent state of approach.
+        <br><br>
+        <strong>Limbrow</strong> is the limit. Not a destination —
+        a <em>tendency.</em> The notation lim x → ∞
+        does not describe arrival; it describes
+        the condition of infinite approach.
+        <br><br>
+        The function <em>f(x) = 1/x</em> diverges where you expect a center
+        and vanishes where you expect an end.
+        Its asymptotes are its identity.
+      </p>
+    </div>
+  </div>
+
+  <hr class="rule-full">
+
+  <!-- ═══ FOOTER ═══ -->
+  <footer class="footer">
+    <div class="footer-sig">
+      <span class="sig-name">Limbrow</span>
+      <span class="sig-sub">Casa Axis — Felipe Pantone Studio</span>
+    </div>
+    <div class="footer-right">
+      <span class="footer-formula">lim f(x) = 0 &nbsp;·&nbsp; x → ±∞</span>
+      <span class="footer-formula">lim f(x) = ±∞ &nbsp;·&nbsp; x → 0</span>
+      <span style="font-size:0.44rem; letter-spacing:0.2em; color:#2a2820; text-transform:uppercase; margin-top:0.3rem;">Research Plate № 01</span>
+    </div>
+  </footer>
+
+</div>
+</body>
+</html>

@@ -21,6 +21,12 @@
 export const posts = [
 
     {
+        slug: 'house-of-axes',
+        date: '2026-05-12',
+        scale: 0.25       // poster is big — zoom out more to show the whole thing
+    },
+
+    {
         slug: 'liserium',
         date: '2026-04-15',
         scale: 0.35
