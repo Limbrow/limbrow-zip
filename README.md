@@ -15,45 +15,47 @@ limbrow.zip/
 ├── avatar.jpg
 ├── favicon.png
 ├── apple-touch-icon.png
-└── p/
-    ├── liserium/
-    │   ├── index.html
-    │   └── sounds.js
-    ├── game-of-life/
-    │   └── index.html
-    └── <new-post>/
-        └── index.html
+└── <slug>/           ← every post is a folder in the root
+    ├── index.html
+    └── preview.html  (optional)
 ```
 
-Each post is self-contained inside `/p/<slug>/`. The folder can hold any HTML/CSS/JS/assets it needs — everything stays local to that post.
+Each post is self-contained inside `/<slug>/`. The folder can hold any HTML/CSS/JS/assets it needs — everything stays local to that post.
+
+URLs are clean: `limbrow.zip/<slug>/` (no `/p/` prefix).
 
 ## Adding a post
 
 ```bash
-mkdir -p p/sketch-042
-$EDITOR p/sketch-042/index.html
+mkdir sketch-042
+$EDITOR sketch-042/index.html
 
 # Add to posts.js:
 #   {
 #       slug: 'sketch-042',
-#       date: '2026-05-12',
-#       scale: 0.4            // optional: how zoomed-out the preview is
+#       date: '2026-05-13',
+#       scale: 0.4            // optional: preview zoom-out
 #   }
 
-git add p/sketch-042 posts.js
+git add sketch-042 posts.js
 git commit -m "add sketch-042"
 git push
 ```
+
+## Slug rules
+
+Slugs live in the root namespace alongside `index.html`, `assets`, `favicon.png`, etc. **Don't use these as slugs**: `assets`, `api`, `static`, `css`, `js`, `about`, `contact`, `index`, `posts`, `favicon`. Any other lowercase-hyphenated name is fair game.
 
 ## Post fields
 
 | Field    | Required | Notes |
 |----------|----------|-------|
-| `slug`   | yes      | Folder name under `/p/`. Lowercase, hyphenated. |
+| `slug`   | yes      | Folder name in root. Lowercase, hyphenated. |
 | `date`   | yes      | ISO `YYYY-MM-DD`. Newest first. |
 | `scale`  | no       | Default `0.4`. Lower = preview shows more of the page (zoomed out). |
-| `span`   | no       | Break the grid: `"2cols"`, `"2rows"`, or `"2x2"`. Use sparingly — uniformity is a feature, breaking it is a statement. |
-| `aspect` | no       | Override the square. `1` = square (default), `1.5` = portrait, `0.6` = wide. Only when really needed. |
+| `preview`| no       | Filename inside `<slug>/` to use as the card preview (e.g. `"preview.html"`). |
+| `span`   | no       | Break the grid: `"2cols"`, `"2rows"`, or `"2x2"`. |
+| `aspect` | no       | Override the square. `1` = square, `1.5` = portrait, `0.6` = wide. |
 
 ## Tech
 

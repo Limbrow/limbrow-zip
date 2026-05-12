@@ -238,7 +238,7 @@
         function makeCard(post) {
             const card = document.createElement('a');
             card.className = 'card';
-            card.href = `/p/${post.slug}/`;
+            card.href = `/${post.slug}/`;
             card.setAttribute('aria-label', `Open ${post.slug}`);
 
             // Special span overrides — for hero / breaking-the-grid posts
@@ -258,8 +258,8 @@
 
             const iframe = card.querySelector('iframe');
             const previewUrl = post.preview
-                ? `/p/${post.slug}/${post.preview}`
-                : `/p/${post.slug}/`;
+                ? `/${post.slug}/${post.preview}`
+                : `/${post.slug}/`;
             const io = new IntersectionObserver((entries) => {
                 entries.forEach(e => {
                     if (e.isIntersecting && !iframe.src) {
