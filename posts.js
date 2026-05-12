@@ -24,8 +24,15 @@
 export const posts = [
 
     {
+        slug: 'fractals',
+        date: '2026-05-13',
+        preview: 'preview.html',  // auto-zooming Mandelbrot — a deep dive on loop
+        scale: 1.0                // fullscreen card, no zoom-out
+    },
+
+    {
         slug: 'house-of-axes',
-        date: '2026-05-12',
+        date: '2026-05-11',
         preview: 'preview.html',  // dedicated card preview — just the animated graph
         scale: 0.55               // less zoom-out, the graph fills the card better
     },

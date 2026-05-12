@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0">
+<title>fractals · limbrow.zip</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+        background: #000;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+        font-family: ui-monospace, 'JetBrains Mono', monospace;
+        color: #fff;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Scroll-snap container — vertical Tinder swipe */
+    .deck {
+        height: 100%;
+        overflow-y: scroll;
+        scroll-snap-type: y mandatory;
+        scroll-behavior: smooth;
+        -webkit-overflow-scrolling: touch;
+        /* Pan vertical (1 finger) is for slide nav. Pinch is handled in JS. */
+        touch-action: pan-y;
+    }
+    .deck::-webkit-scrollbar { display: none; }
+    .deck { scrollbar-width: none; }
+
+    .slide {
+        height: 100vh;
+        height: 100dvh;
+        width: 100%;
+        scroll-snap-align: start;
+        scroll-snap-stop: always;
+        position: relative;
+        background: #000;
+        overflow: hidden;
+    }
+
+    canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        position: absolute;
+        inset: 0;
+        /* Inside the canvas: 2-finger gestures go to fractal, 1-finger to scroll */
+        touch-action: pan-y pinch-zoom;
+    }
+
+    /* Slide label — top-right, minimal */
+    .label {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        z-index: 5;
+        font-size: 11px;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.55);
+        mix-blend-mode: difference;
+        font-weight: 400;
+        pointer-events: none;
+    }
+
+    /* Index counter — bottom-right, very small */
+    .index {
+        position: absolute;
+        bottom: 20px;
+        right: 16px;
+        z-index: 5;
+        font-size: 9px;
+        letter-spacing: 0.2em;
+        color: rgba(255, 255, 255, 0.4);
+        mix-blend-mode: difference;
+        pointer-events: none;
+    }
+
+    /* Pinch hint — appears the first time, fades away */
+    .hint {
+        position: absolute;
+        bottom: 40px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 5;
+        font-size: 10px;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.4);
+        mix-blend-mode: difference;
+        pointer-events: none;
+        animation: hintFade 6s ease-out forwards;
+    }
+    @keyframes hintFade {
+        0%   { opacity: 0; }
+        15%  { opacity: 1; }
+        70%  { opacity: 1; }
+        100% { opacity: 0; }
+    }
+
+    /* Back to grid — top-left arrow */
+    .back {
+        position: fixed;
+        top: 16px;
+        left: 16px;
+        z-index: 100;
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0,0,0,0.45);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border-radius: 50%;
+        color: #fff;
+        text-decoration: none;
+        font-size: 16px;
+        line-height: 1;
+        padding-bottom: 2px;
+    }
+    .back:hover { background: rgba(0,0,0,0.65); }
+</style>
+</head>
+<body>
+
+<a class="back" href="/" aria-label="Back to grid">←</a>
+
+<div class="deck" id="deck">
+
+    <section class="slide" data-fractal="mandelbrot">
+        <canvas></canvas>
+        <div class="label">Mandelbrot</div>
+        <div class="index">01 / 03</div>
+        <div class="hint">pinch to zoom · two fingers to pan</div>
+    </section>
+
+    <section class="slide" data-fractal="julia">
+        <canvas></canvas>
+        <div class="label">Julia</div>
+        <div class="index">02 / 03</div>
+    </section>
+
+    <section class="slide" data-fractal="burning-ship">
+        <canvas></canvas>
+        <div class="label">Burning Ship</div>
+        <div class="index">03 / 03</div>
+    </section>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// FRACTAL VISUALIZER — 3 WebGL shaders, slide-by-slide
+//
+// Architecture:
+//   - One <canvas> per slide
+//   - One FractalView instance per canvas, holding its own WebGL context,
+//     shader program, and viewport state (center, zoom).
+//   - Slides outside the viewport stop rendering to save battery.
+//   - 1-finger drag → scroll-snap (browser handles slide change)
+//   - 2-finger pinch → zoom in/out (center on pinch midpoint)
+//   - 2-finger drag → pan in fractal space
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── Color palette: classic Mandelbrot rainbow ──────────────────────────────
+// Implemented as a sinusoidal function of escape iterations.
+// Returns smooth blues → pinks → oranges → white.
+
+const VERTEX_SHADER = `
+attribute vec2 a_pos;
+varying vec2 v_uv;
+void main() {
+    v_uv = a_pos * 0.5 + 0.5;
+    gl_Position = vec4(a_pos, 0.0, 1.0);
+}
+`;
+
+// Common fragment shader template. The fractal-specific iteration is injected.
+function makeFragmentShader(iterationCode, init) {
+    return `
+precision highp float;
+varying vec2 v_uv;
+uniform vec2  u_resolution;
+uniform vec2  u_center;       // fractal-space center
+uniform float u_zoom;         // fractal-space half-height
+uniform float u_maxIter;      // animated up during reveal
+uniform vec2  u_julia_c;      // Julia parameter (only used by Julia shader)
+
+vec3 palette(float t) {
+    // Smooth rainbow palette — sin-based, classic Mandelbrot look
+    vec3 a = vec3(0.5, 0.5, 0.5);
+    vec3 b = vec3(0.5, 0.5, 0.5);
+    vec3 c = vec3(1.0, 1.0, 1.0);
+    vec3 d = vec3(0.00, 0.33, 0.67);  // R, G, B phase offsets — gives blue→pink→orange
+    return a + b * cos(6.28318 * (c * t + d));
+}
+
+void main() {
+    float aspect = u_resolution.x / u_resolution.y;
+    // Pixel position in fractal space
+    vec2 p = vec2((v_uv.x - 0.5) * 2.0 * aspect, (v_uv.y - 0.5) * 2.0) * u_zoom + u_center;
+
+    ${init}
+
+    float n = 0.0;
+    bool escaped = false;
+    for (int i = 0; i < 512; i++) {
+        if (float(i) >= u_maxIter) break;
+        ${iterationCode}
+        if (dot(z, z) > 4.0) {
+            escaped = true;
+            n = float(i);
+            break;
+        }
+    }
+
+    if (!escaped) {
+        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+        return;
+    }
+
+    // Smooth coloring: continuous escape time
+    float log_zn = log(dot(z, z)) / 2.0;
+    float nu = log(log_zn / log(2.0)) / log(2.0);
+    float smoothed = n + 1.0 - nu;
+
+    float t = smoothed / 80.0;  // controls color cycle frequency
+    vec3 col = palette(t);
+
+    // Slight gamma touch
+    col = pow(col, vec3(0.85));
+
+    gl_FragColor = vec4(col, 1.0);
+}
+`;
+}
+
+// ─── Shader sources for each fractal ────────────────────────────────────────
+
+const SHADERS = {
+    mandelbrot: makeFragmentShader(
+        // iteration: z = z² + c, where c = pixel position, z starts at 0
+        `z = vec2(z.x*z.x - z.y*z.y, 2.0*z.x*z.y) + c;`,
+        `vec2 c = p; vec2 z = vec2(0.0);`
+    ),
+    julia: makeFragmentShader(
+        // iteration: z = z² + c, where c is fixed and z starts at pixel position
+        `z = vec2(z.x*z.x - z.y*z.y, 2.0*z.x*z.y) + c;`,
+        `vec2 z = p; vec2 c = u_julia_c;`
+    ),
+    'burning-ship': makeFragmentShader(
+        // iteration: z = (|x| + i|y|)² + c
+        `z = vec2(z.x*z.x - z.y*z.y, 2.0*abs(z.x*z.y)) + c;`,
+        `vec2 c = p; vec2 z = vec2(0.0);`
+    ),
+};
+
+// Default view per fractal (center & zoom that show the fractal nicely)
+const DEFAULTS = {
+    mandelbrot:     { cx: -0.5, cy:  0.0, zoom: 1.5, juliaC: [0, 0] },
+    julia:          { cx:  0.0, cy:  0.0, zoom: 1.7, juliaC: [-0.7, 0.27015] },
+    'burning-ship': { cx: -0.4, cy: -0.5, zoom: 1.6, juliaC: [0, 0] },
+};
+
+// ─── WebGL helpers ──────────────────────────────────────────────────────────
+
+function compileShader(gl, source, type) {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        console.error('shader compile error:', gl.getShaderInfoLog(shader));
+        return null;
+    }
+    return shader;
+}
+
+function createProgram(gl, vsSource, fsSource) {
+    const vs = compileShader(gl, vsSource, gl.VERTEX_SHADER);
+    const fs = compileShader(gl, fsSource, gl.FRAGMENT_SHADER);
+    const program = gl.createProgram();
+    gl.attachShader(program, vs);
+    gl.attachShader(program, fs);
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        console.error('program link error:', gl.getProgramInfoLog(program));
+        return null;
+    }
+    return program;
+}
+
+// ─── FractalView: one per slide ─────────────────────────────────────────────
+
+class FractalView {
+    constructor(canvas, fractalKey) {
+        this.canvas = canvas;
+        this.key = fractalKey;
+        this.gl = canvas.getContext('webgl', { antialias: false, preserveDrawingBuffer: false });
+        if (!this.gl) {
+            console.warn('No WebGL on', canvas);
+            return;
+        }
+
+        const d = DEFAULTS[fractalKey];
+        this.cx = d.cx;
+        this.cy = d.cy;
+        this.zoom = d.zoom;
+        this.zoomHome = d.zoom;
+        this.juliaC = [...d.juliaC];
+
+        // Reveal animation state
+        this.maxIter = 4;        // grows to MAX_ITER over REVEAL_MS
+        this.targetMaxIter = 4;
+        this.MAX_ITER = 200;
+        this.REVEAL_MS = 1800;
+        this.revealStart = 0;
+        this.revealed = false;
+
+        // Render scaling: lower while interacting (smoother)
+        this.renderScale = 1.0;
+        this.interacting = false;
+
+        this._initGL();
+        this._setupGestures();
+        this._resize();
+        window.addEventListener('resize', () => this._resize());
+
+        this.active = false;       // whether to render (set externally)
+        this._loop = this._loop.bind(this);
+        requestAnimationFrame(this._loop);
+    }
+
+    _initGL() {
+        const gl = this.gl;
+        this.program = createProgram(gl, VERTEX_SHADER, SHADERS[this.key]);
+        gl.useProgram(this.program);
+
+        // Fullscreen quad
+        const buf = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+            -1,-1,  1,-1,  -1, 1,
+            -1, 1,  1,-1,   1, 1,
+        ]), gl.STATIC_DRAW);
+        const aPos = gl.getAttribLocation(this.program, 'a_pos');
+        gl.enableVertexAttribArray(aPos);
+        gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+        // Uniform locations
+        this.u_res     = gl.getUniformLocation(this.program, 'u_resolution');
+        this.u_center  = gl.getUniformLocation(this.program, 'u_center');
+        this.u_zoom    = gl.getUniformLocation(this.program, 'u_zoom');
+        this.u_maxIter = gl.getUniformLocation(this.program, 'u_maxIter');
+        this.u_juliaC  = gl.getUniformLocation(this.program, 'u_julia_c');
+    }
+
+    _resize() {
+        const dpr = window.devicePixelRatio || 1;
+        const w = this.canvas.clientWidth;
+        const h = this.canvas.clientHeight;
+        const scale = this.renderScale * dpr;
+        this.canvas.width  = Math.max(1, Math.floor(w * scale));
+        this.canvas.height = Math.max(1, Math.floor(h * scale));
+        if (this.gl) {
+            this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+        }
+    }
+
+    _setupGestures() {
+        const c = this.canvas;
+        let pinchStart = null;   // { dist, midX, midY, zoom, cx, cy }
+
+        const getTouchPair = (e) => {
+            const t1 = e.touches[0], t2 = e.touches[1];
+            const r = c.getBoundingClientRect();
+            const x1 = t1.clientX - r.left, y1 = t1.clientY - r.top;
+            const x2 = t2.clientX - r.left, y2 = t2.clientY - r.top;
+            const dx = x1 - x2, dy = y1 - y2;
+            return {
+                dist: Math.hypot(dx, dy),
+                midX: (x1 + x2) / 2,
+                midY: (y1 + y2) / 2,
+                w: r.width, h: r.height,
+            };
+        };
+
+        const screenToFractal = (sx, sy, w, h) => {
+            const aspect = w / h;
+            const fx = ((sx / w) - 0.5) * 2.0 * aspect * this.zoom + this.cx;
+            const fy = -((sy / h) - 0.5) * 2.0 * this.zoom + this.cy;
+            return [fx, fy];
+        };
+
+        c.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2) {
+                const p = getTouchPair(e);
+                pinchStart = {
+                    dist: p.dist,
+                    midX: p.midX, midY: p.midY,
+                    cx: this.cx, cy: this.cy,
+                    zoom: this.zoom,
+                    w: p.w, h: p.h,
+                    // Anchor point in fractal space — the point under the midpoint
+                    anchor: screenToFractal(p.midX, p.midY, p.w, p.h),
+                };
+                this.interacting = true;
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        c.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 2 && pinchStart) {
+                const p = getTouchPair(e);
+                // Zoom factor
+                const factor = pinchStart.dist / p.dist;
+                this.zoom = pinchStart.zoom * factor;
+                // Clamp zoom — float32 precision starts breaking around 1e-6
+                this.zoom = Math.max(1e-6, Math.min(8.0, this.zoom));
+
+                // Translate so the anchor point stays under the midpoint
+                const aspect = p.w / p.h;
+                const offsetX = (p.midX / p.w - 0.5) * 2.0 * aspect * this.zoom;
+                const offsetY = -(p.midY / p.h - 0.5) * 2.0 * this.zoom;
+                this.cx = pinchStart.anchor[0] - offsetX;
+                this.cy = pinchStart.anchor[1] - offsetY;
+
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        c.addEventListener('touchend', (e) => {
+            if (e.touches.length < 2) {
+                pinchStart = null;
+                this.interacting = false;
+            }
+        });
+
+        // Mouse equivalent: wheel for zoom, click+drag for pan
+        c.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const r = c.getBoundingClientRect();
+            const sx = e.clientX - r.left, sy = e.clientY - r.top;
+            const anchor = screenToFractal(sx, sy, r.width, r.height);
+
+            const factor = Math.exp(e.deltaY * 0.001);
+            this.zoom = Math.max(1e-6, Math.min(8.0, this.zoom * factor));
+
+            const aspect = r.width / r.height;
+            const offsetX = (sx / r.width - 0.5) * 2.0 * aspect * this.zoom;
+            const offsetY = -(sy / r.height - 0.5) * 2.0 * this.zoom;
+            this.cx = anchor[0] - offsetX;
+            this.cy = anchor[1] - offsetY;
+        }, { passive: false });
+
+        // Right-click + drag for pan on desktop
+        let dragging = null;
+        c.addEventListener('mousedown', (e) => {
+            if (e.button === 2 || e.shiftKey) {
+                const r = c.getBoundingClientRect();
+                dragging = { x: e.clientX, y: e.clientY, cx: this.cx, cy: this.cy, w: r.width, h: r.height };
+                e.preventDefault();
+            }
+        });
+        window.addEventListener('mousemove', (e) => {
+            if (dragging) {
+                const aspect = dragging.w / dragging.h;
+                const dx = (e.clientX - dragging.x) / dragging.w * 2.0 * aspect * this.zoom;
+                const dy = (e.clientY - dragging.y) / dragging.h * 2.0 * this.zoom;
+                this.cx = dragging.cx - dx;
+                this.cy = dragging.cy + dy;
+            }
+        });
+        window.addEventListener('mouseup', () => dragging = null);
+        c.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        // Double-tap → reset view
+        let lastTap = 0;
+        c.addEventListener('touchend', (e) => {
+            const now = Date.now();
+            if (now - lastTap < 350 && e.touches.length === 0) {
+                this._reset();
+            }
+            lastTap = now;
+        });
+        c.addEventListener('dblclick', () => this._reset());
+    }
+
+    _reset() {
+        const d = DEFAULTS[this.key];
+        this.cx = d.cx;
+        this.cy = d.cy;
+        this.zoom = d.zoom;
+    }
+
+    activate() {
+        if (this.active) return;
+        this.active = true;
+        if (!this.revealed) {
+            this.revealStart = performance.now();
+            this.targetMaxIter = this.MAX_ITER;
+        }
+    }
+
+    deactivate() {
+        this.active = false;
+    }
+
+    _loop(now) {
+        if (this.active) {
+            // Reveal animation: ease maxIter from 4 → MAX_ITER
+            if (!this.revealed) {
+                const t = Math.min(1, (now - this.revealStart) / this.REVEAL_MS);
+                const eased = 1 - Math.pow(1 - t, 3);
+                this.maxIter = 4 + (this.MAX_ITER - 4) * eased;
+                if (t >= 1) this.revealed = true;
+            } else {
+                this.maxIter = this.MAX_ITER;
+            }
+            this._render();
+        }
+        requestAnimationFrame(this._loop);
+    }
+
+    _render() {
+        const gl = this.gl;
+        if (!gl) return;
+        gl.uniform2f(this.u_res, this.canvas.width, this.canvas.height);
+        gl.uniform2f(this.u_center, this.cx, this.cy);
+        gl.uniform1f(this.u_zoom, this.zoom);
+        gl.uniform1f(this.u_maxIter, this.maxIter);
+        gl.uniform2f(this.u_juliaC, this.juliaC[0], this.juliaC[1]);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+    }
+}
+
+// ─── Boot: one FractalView per slide, observe which one is visible ──────────
+
+const slides = document.querySelectorAll('.slide');
+const views = [];
+
+slides.forEach(slide => {
+    const canvas = slide.querySelector('canvas');
+    const key = slide.dataset.fractal;
+    const v = new FractalView(canvas, key);
+    views.push({ slide, view: v });
+});
+
+// Activate the slide currently in viewport, deactivate others
+const io = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+        const v = views.find(x => x.slide === entry.target)?.view;
+        if (!v) return;
+        if (entry.intersectionRatio > 0.5) v.activate();
+        else v.deactivate();
+    });
+}, { threshold: [0, 0.5, 1] });
+
+views.forEach(({ slide }) => io.observe(slide));
+
+// Make sure the first one starts revealed immediately
+views[0]?.view.activate();
+
+// Prevent iOS double-tap zoom on the page itself
+let lastTouchEnd = 0;
+document.addEventListener('touchend', e => {
+    const now = Date.now();
+    if (now - lastTouchEnd < 350) e.preventDefault();
+    lastTouchEnd = now;
+}, { passive: false });
+</script>
+
+</body>
+</html>
