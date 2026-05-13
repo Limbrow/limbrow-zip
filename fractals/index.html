@@ -312,6 +312,11 @@
     <select id="formula">
         <option value="mandelbrot">Mandelbrot</option>
         <option value="mandelbrot3">Mandelbrot³</option>
+        <option value="mandelbrot4">Mandelbrot⁴</option>
+        <option value="mandelbrot5">Mandelbrot⁵</option>
+        <option value="mandelbrot6">Mandelbrot⁶</option>
+        <option value="mandelbrot7">Mandelbrot⁷</option>
+        <option value="mandelbrot-2">Mandelbrot⁻²</option>
         <option value="burning-ship">Burning Ship</option>
         <option value="julia">Julia</option>
         <option value="phoenix">Phoenix</option>
@@ -320,6 +325,9 @@
 
     <h3>Iterations <span id="iter-val" style="float:right;font-weight:normal;color:#fff;letter-spacing:0;">200</span></h3>
     <input type="range" id="iter" min="32" max="1000" value="200" step="8">
+
+    <h3>Color Compression <span id="comp-val" style="float:right;font-weight:normal;color:#fff;letter-spacing:0;">80</span></h3>
+    <input type="range" id="comp" min="5" max="300" value="80" step="1">
 
     <h3>Coloring</h3>
     <label class="checkbox-row">
@@ -384,6 +392,12 @@ void main() {
 // This gives infinite smooth periodic palettes from just 12 numbers.
 const PALETTES = [
     {
+        name: 'cobalt',
+        // Deep blue → light blue → white → orange → brown (research-plate vibe)
+        // Coefficients tuned to match the reference Mandelbrot⁴ image
+        a: [0.3, 0.35, 0.55], b: [0.55, 0.55, 0.5], c: [0.85, 0.9, 1.0], d: [0.20, 0.18, 0.05]
+    },
+    {
         name: 'classic',
         // Blue → magenta → orange → white (Mandelbrot classic)
         a: [0.5, 0.5, 0.5], b: [0.5, 0.5, 0.5], c: [1.0, 1.0, 1.0], d: [0.00, 0.33, 0.67]
@@ -423,6 +437,59 @@ const FORMULAS = {
             z = vec2(z.x*(x2 - 3.0*y2), z.y*(3.0*x2 - y2)) + c;
         `,
         defaultView: { cx: 0.0, cy: 0.0, zoom: 1.5 },
+    },
+    'mandelbrot4': {
+        init: `vec2 c = p; vec2 z = vec2(0.0);`,
+        // z^4 via polar: easiest way for higher powers
+        // |z|^4 and angle*4
+        iter: `
+            float r = length(z);
+            float th = atan(z.y, z.x);
+            float rn = r*r*r*r;
+            z = vec2(rn * cos(th*4.0), rn * sin(th*4.0)) + c;
+        `,
+        defaultView: { cx: 0.0, cy: 0.0, zoom: 1.4 },
+    },
+    'mandelbrot5': {
+        init: `vec2 c = p; vec2 z = vec2(0.0);`,
+        iter: `
+            float r = length(z);
+            float th = atan(z.y, z.x);
+            float rn = r*r*r*r*r;
+            z = vec2(rn * cos(th*5.0), rn * sin(th*5.0)) + c;
+        `,
+        defaultView: { cx: 0.0, cy: 0.0, zoom: 1.4 },
+    },
+    'mandelbrot6': {
+        init: `vec2 c = p; vec2 z = vec2(0.0);`,
+        iter: `
+            float r = length(z);
+            float th = atan(z.y, z.x);
+            float rn = pow(r, 6.0);
+            z = vec2(rn * cos(th*6.0), rn * sin(th*6.0)) + c;
+        `,
+        defaultView: { cx: 0.0, cy: 0.0, zoom: 1.4 },
+    },
+    'mandelbrot7': {
+        init: `vec2 c = p; vec2 z = vec2(0.0);`,
+        iter: `
+            float r = length(z);
+            float th = atan(z.y, z.x);
+            float rn = pow(r, 7.0);
+            z = vec2(rn * cos(th*7.0), rn * sin(th*7.0)) + c;
+        `,
+        defaultView: { cx: 0.0, cy: 0.0, zoom: 1.4 },
+    },
+    'mandelbrot-2': {
+        init: `vec2 c = p; vec2 z = vec2(0.0001);`,  // can't start at 0 for negative powers
+        // z^-2 = 1/z²
+        iter: `
+            float r2 = z.x*z.x + z.y*z.y;
+            float r4 = r2*r2;
+            // 1/z² in complex form: (a-bi)² / |z|^4 = ((a²-b²) - 2abi) / |z|^4
+            z = vec2((z.x*z.x - z.y*z.y) / r4, -2.0*z.x*z.y / r4) + c;
+        `,
+        defaultView: { cx: 0.0, cy: 0.0, zoom: 2.5 },
     },
     'burning-ship': {
         init: `vec2 c = p; vec2 z = vec2(0.0);`,
@@ -508,11 +575,11 @@ function buildFragmentShader(formulaKey, smooth, banded) {
             // Color by the angle of the converged point (which root)
             float angle = atan(z.y, z.x);
             float t = (angle + 3.14159) / 6.28318;
-            t = t + smoothed / 200.0;  // brightness by speed of convergence
+            t = t + smoothed / u_compression;  // brightness by speed of convergence
             ${bandedCode}
         `
         : `
-            float t = smoothed / 80.0;
+            float t = smoothed / u_compression;
             ${bandedCode}
         `;
 
@@ -523,6 +590,7 @@ uniform vec2  u_resolution;
 uniform vec2  u_center;
 uniform float u_zoom;
 uniform float u_maxIter;
+uniform float u_compression;
 uniform vec3  u_pal_a;
 uniform vec3  u_pal_b;
 uniform vec3  u_pal_c;
@@ -568,7 +636,8 @@ let state = {
     iterations: 200,
     smooth: true,
     banded: false,
-    palette: 0,
+    palette: 0,         // 0 = cobalt now (default)
+    compression: 80,
     cx: -0.5,
     cy: 0.0,
     zoom: 1.5,
@@ -623,6 +692,7 @@ function rebuildProgram() {
         center:  gl.getUniformLocation(program, 'u_center'),
         zoom:    gl.getUniformLocation(program, 'u_zoom'),
         maxIter: gl.getUniformLocation(program, 'u_maxIter'),
+        compression: gl.getUniformLocation(program, 'u_compression'),
         pal_a:   gl.getUniformLocation(program, 'u_pal_a'),
         pal_b:   gl.getUniformLocation(program, 'u_pal_b'),
         pal_c:   gl.getUniformLocation(program, 'u_pal_c'),
@@ -647,6 +717,7 @@ function render() {
     gl.uniform2f(uniforms.center, state.cx, state.cy);
     gl.uniform1f(uniforms.zoom, state.zoom);
     gl.uniform1f(uniforms.maxIter, state.iterations);
+    gl.uniform1f(uniforms.compression, state.compression);
     gl.uniform3fv(uniforms.pal_a, pal.a);
     gl.uniform3fv(uniforms.pal_b, pal.b);
     gl.uniform3fv(uniforms.pal_c, pal.c);
@@ -809,6 +880,12 @@ $('iter').addEventListener('input', (e) => {
     render();
 });
 
+$('comp').addEventListener('input', (e) => {
+    state.compression = parseInt(e.target.value, 10);
+    $('comp-val').textContent = state.compression;
+    render();
+});
+
 $('smooth').addEventListener('change', (e) => {
     state.smooth = e.target.checked;
     rebuildProgram();
@@ -856,6 +933,7 @@ $('randomize').addEventListener('click', () => {
     state.formula = keys[Math.floor(Math.random() * keys.length)];
     state.palette = Math.floor(Math.random() * PALETTES.length);
     state.iterations = 100 + Math.floor(Math.random() * 600);
+    state.compression = 20 + Math.floor(Math.random() * 200);
     state.smooth = Math.random() > 0.3;
     state.banded = Math.random() > 0.7;
     const d = FORMULAS[state.formula].defaultView;
@@ -864,6 +942,8 @@ $('randomize').addEventListener('click', () => {
     $('formula').value = state.formula;
     $('iter').value = state.iterations;
     $('iter-val').textContent = state.iterations;
+    $('comp').value = state.compression;
+    $('comp-val').textContent = state.compression;
     $('smooth').checked = state.smooth;
     $('banded').checked = state.banded;
     document.querySelectorAll('.palette-swatch').forEach((s, i) => {

@@ -19,11 +19,81 @@
 <body>
 <canvas id="c"></canvas>
 <script>
-// Auto-zooming Mandelbrot — for the limbrow.zip grid card.
-// Slowly dives into an interesting region of the set on a loop, so the card always feels alive.
+// ════════════════════════════════════════════════════════════════════════════
+// FRACTALS PREVIEW
+// Picks a random fractal + palette + parameters every time it loads.
+// Shows in the limbrow.zip grid card — implies variety inside the post.
+// ════════════════════════════════════════════════════════════════════════════
 
 const canvas = document.getElementById('c');
 const gl = canvas.getContext('webgl', { antialias: false });
+if (!gl) { document.body.style.background = '#000'; throw new Error('no webgl'); }
+
+// ─── PALETTES (same as the main fractal post) ──────────────────────────────
+const PALETTES = [
+    { a:[0.3,0.35,0.55], b:[0.55,0.55,0.5], c:[0.85,0.9,1.0], d:[0.20,0.18,0.05] },
+    { a:[0.5,0.5,0.5],   b:[0.5,0.5,0.5],   c:[1.0,1.0,1.0],  d:[0.00,0.33,0.67] },
+    { a:[0.5,0.5,0.5],   b:[0.5,0.5,0.5],   c:[1.0,1.0,0.5],  d:[0.80,0.90,0.30] },
+    { a:[0.5,0.5,0.7],   b:[0.5,0.5,0.3],   c:[1.0,1.0,1.0],  d:[0.50,0.55,0.65] },
+];
+
+// ─── FRACTAL FAMILY — pick a random one each load ──────────────────────────
+const FRACTALS = [
+    {
+        name: 'mandelbrot',
+        init: `vec2 c = p; vec2 z = vec2(0.0);`,
+        iter: `z = vec2(z.x*z.x - z.y*z.y, 2.0*z.x*z.y) + c;`,
+        view: { cx: -0.5, cy: 0.0, zoom: 1.5 },
+    },
+    {
+        name: 'mandelbrot3',
+        init: `vec2 c = p; vec2 z = vec2(0.0);`,
+        iter: `float x2 = z.x*z.x, y2 = z.y*z.y; z = vec2(z.x*(x2 - 3.0*y2), z.y*(3.0*x2 - y2)) + c;`,
+        view: { cx: 0.0, cy: 0.0, zoom: 1.5 },
+    },
+    {
+        name: 'mandelbrot4',
+        init: `vec2 c = p; vec2 z = vec2(0.0);`,
+        iter: `float r = length(z); float th = atan(z.y, z.x); float rn = r*r*r*r; z = vec2(rn*cos(th*4.0), rn*sin(th*4.0)) + c;`,
+        view: { cx: 0.0, cy: 0.0, zoom: 1.4 },
+    },
+    {
+        name: 'mandelbrot5',
+        init: `vec2 c = p; vec2 z = vec2(0.0);`,
+        iter: `float r = length(z); float th = atan(z.y, z.x); float rn = r*r*r*r*r; z = vec2(rn*cos(th*5.0), rn*sin(th*5.0)) + c;`,
+        view: { cx: 0.0, cy: 0.0, zoom: 1.4 },
+    },
+    {
+        name: 'mandelbrot7',
+        init: `vec2 c = p; vec2 z = vec2(0.0);`,
+        iter: `float r = length(z); float th = atan(z.y, z.x); float rn = pow(r, 7.0); z = vec2(rn*cos(th*7.0), rn*sin(th*7.0)) + c;`,
+        view: { cx: 0.0, cy: 0.0, zoom: 1.4 },
+    },
+    {
+        name: 'burning-ship',
+        init: `vec2 c = p; vec2 z = vec2(0.0);`,
+        iter: `z = vec2(z.x*z.x - z.y*z.y, 2.0*abs(z.x*z.y)) + c;`,
+        view: { cx: -0.4, cy: -0.5, zoom: 1.6 },
+    },
+    {
+        name: 'julia',
+        init: `vec2 z = p; vec2 c = vec2(-0.7, 0.27015);`,
+        iter: `z = vec2(z.x*z.x - z.y*z.y, 2.0*z.x*z.y) + c;`,
+        view: { cx: 0.0, cy: 0.0, zoom: 1.7 },
+    },
+    {
+        name: 'phoenix',
+        init: `vec2 c = vec2(0.5667, -0.5); float pp = -0.5; vec2 z = p; vec2 zp = vec2(0.0);`,
+        iter: `vec2 newZ = vec2(z.x*z.x - z.y*z.y, 2.0*z.x*z.y) + c + pp * zp; zp = z; z = newZ;`,
+        view: { cx: 0.0, cy: 0.0, zoom: 1.7 },
+    },
+];
+
+// ─── Random pick ────────────────────────────────────────────────────────────
+const fractal    = FRACTALS[Math.floor(Math.random() * FRACTALS.length)];
+const palette    = PALETTES[Math.floor(Math.random() * PALETTES.length)];
+const compression = 40 + Math.floor(Math.random() * 140);   // 40–180
+const iterations  = 150 + Math.floor(Math.random() * 250);  // 150–400
 
 const VS = `
 attribute vec2 a_pos;
@@ -40,40 +110,36 @@ varying vec2 v_uv;
 uniform vec2  u_resolution;
 uniform vec2  u_center;
 uniform float u_zoom;
+uniform float u_maxIter;
+uniform float u_compression;
+uniform vec3  u_pal_a;
+uniform vec3  u_pal_b;
+uniform vec3  u_pal_c;
+uniform vec3  u_pal_d;
 
 vec3 palette(float t) {
-    vec3 a = vec3(0.5, 0.5, 0.5);
-    vec3 b = vec3(0.5, 0.5, 0.5);
-    vec3 c = vec3(1.0, 1.0, 1.0);
-    vec3 d = vec3(0.00, 0.33, 0.67);
-    return a + b * cos(6.28318 * (c * t + d));
+    return u_pal_a + u_pal_b * cos(6.28318 * (u_pal_c * t + u_pal_d));
 }
 
 void main() {
     float aspect = u_resolution.x / u_resolution.y;
-    vec2 c = vec2((v_uv.x - 0.5) * 2.0 * aspect, (v_uv.y - 0.5) * 2.0) * u_zoom + u_center;
-    vec2 z = vec2(0.0);
+    vec2 p = vec2((v_uv.x - 0.5) * 2.0 * aspect, (v_uv.y - 0.5) * 2.0) * u_zoom + u_center;
+    ${fractal.init}
 
     float n = 0.0;
     bool escaped = false;
-    for (int i = 0; i < 256; i++) {
-        z = vec2(z.x*z.x - z.y*z.y, 2.0*z.x*z.y) + c;
-        if (dot(z, z) > 4.0) {
-            escaped = true;
-            n = float(i);
-            break;
-        }
+    for (int i = 0; i < 500; i++) {
+        if (float(i) >= u_maxIter) break;
+        ${fractal.iter}
+        if (dot(z, z) > 4.0) { escaped = true; n = float(i); break; }
     }
 
-    if (!escaped) {
-        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
-        return;
-    }
+    if (!escaped) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
 
     float log_zn = log(dot(z, z)) / 2.0;
     float nu = log(log_zn / log(2.0)) / log(2.0);
     float smoothed = n + 1.0 - nu;
-    float t = smoothed / 80.0;
+    float t = smoothed / u_compression;
     vec3 col = palette(t);
     col = pow(col, vec3(0.85));
     gl_FragColor = vec4(col, 1.0);
@@ -103,9 +169,17 @@ const aPos = gl.getAttribLocation(program, 'a_pos');
 gl.enableVertexAttribArray(aPos);
 gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
 
-const u_res = gl.getUniformLocation(program, 'u_resolution');
-const u_cen = gl.getUniformLocation(program, 'u_center');
-const u_zoom = gl.getUniformLocation(program, 'u_zoom');
+const u = {
+    res:  gl.getUniformLocation(program, 'u_resolution'),
+    cen:  gl.getUniformLocation(program, 'u_center'),
+    zoom: gl.getUniformLocation(program, 'u_zoom'),
+    iter: gl.getUniformLocation(program, 'u_maxIter'),
+    comp: gl.getUniformLocation(program, 'u_compression'),
+    pa:   gl.getUniformLocation(program, 'u_pal_a'),
+    pb:   gl.getUniformLocation(program, 'u_pal_b'),
+    pc:   gl.getUniformLocation(program, 'u_pal_c'),
+    pd:   gl.getUniformLocation(program, 'u_pal_d'),
+};
 
 function fit() {
     const dpr = window.devicePixelRatio || 1;
@@ -113,36 +187,36 @@ function fit() {
     canvas.height = canvas.clientHeight * dpr;
     gl.viewport(0, 0, canvas.width, canvas.height);
 }
-window.addEventListener('resize', fit);
+window.addEventListener('resize', () => { fit(); render(); });
 fit();
 
-// Interesting deep-zoom point — "seahorse valley"
-const TARGET_CX = -0.7453;
-const TARGET_CY =  0.1127;
-
-const ZOOM_START = 1.5;
-const ZOOM_END   = 0.00015;   // about 10000x in
-const CYCLE_MS   = 22000;     // 22-second cycle
-
+// ─── Reveal animation: maxIter grows from 4 → target over 1.5s ─────────────
+const REVEAL_MS = 1500;
 const t0 = performance.now();
-function frame() {
-    const elapsed = (performance.now() - t0) % CYCLE_MS;
-    const t = elapsed / CYCLE_MS;
-    // ease zoom exponentially (so deeper levels look smooth)
-    const zoom = ZOOM_START * Math.pow(ZOOM_END / ZOOM_START, t);
-    // ease center from default to target as we zoom in, snap back at loop
-    const ease = t < 0.85 ? (t / 0.85) : 1 - (t - 0.85) / 0.15;
-    const cx = -0.5 + (TARGET_CX - (-0.5)) * ease;
-    const cy =  0.0 + (TARGET_CY -   0.0)  * ease;
+let revealed = false;
 
-    gl.uniform2f(u_res, canvas.width, canvas.height);
-    gl.uniform2f(u_cen, cx, cy);
-    gl.uniform1f(u_zoom, zoom);
+function render() {
+    let it = iterations;
+    if (!revealed) {
+        const t = Math.min(1, (performance.now() - t0) / REVEAL_MS);
+        const eased = 1 - Math.pow(1 - t, 3);
+        it = 4 + (iterations - 4) * eased;
+        if (t >= 1) revealed = true;
+    }
+
+    gl.uniform2f(u.res, canvas.width, canvas.height);
+    gl.uniform2f(u.cen, fractal.view.cx, fractal.view.cy);
+    gl.uniform1f(u.zoom, fractal.view.zoom);
+    gl.uniform1f(u.iter, it);
+    gl.uniform1f(u.comp, compression);
+    gl.uniform3fv(u.pa, palette.a);
+    gl.uniform3fv(u.pb, palette.b);
+    gl.uniform3fv(u.pc, palette.c);
+    gl.uniform3fv(u.pd, palette.d);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
-
-    requestAnimationFrame(frame);
+    if (!revealed) requestAnimationFrame(render);
 }
-frame();
+render();
 </script>
 </body>
 </html>
