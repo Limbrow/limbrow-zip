@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0">
+<title>ring · limbrow.zip</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+        background: #04050a;
+        color: #e8e8e8;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+        font-family: ui-monospace, 'JetBrains Mono', monospace;
+        -webkit-user-select: none; user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: none;
+    }
+
+    /* ─── BACK ─── */
+    .back {
+        position: fixed;
+        top: 16px;
+        left: 16px;
+        z-index: 100;
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(10, 14, 30, 0.65);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 50%;
+        color: #fff;
+        text-decoration: none;
+        font-size: 16px;
+        line-height: 1;
+        padding-bottom: 2px;
+    }
+
+    /* ─── SKY (top half) ─── */
+    #sky-canvas {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%;
+        height: 60%;
+        display: block;
+        z-index: 1;
+    }
+
+    /* ─── RING (overlaid on sky) ─── */
+    #ring-canvas {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%;
+        height: 60%;
+        display: block;
+        z-index: 2;
+        touch-action: none;
+    }
+
+    /* ─── BOX (bottom half) ─── */
+    .box {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 40%;
+        z-index: 10;
+        background:
+            linear-gradient(180deg, #0a0c1a 0%, #03040a 100%);
+        border-top: 1px solid rgba(120, 130, 200, 0.15);
+        box-shadow: 0 -20px 50px rgba(0,0,0,0.6);
+        padding: 14px 18px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        overflow: hidden;
+    }
+    .box::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background-image:
+            repeating-linear-gradient(0deg, transparent 0px, transparent 3px, rgba(255,255,255,0.012) 3px, rgba(255,255,255,0.012) 4px);
+        pointer-events: none;
+    }
+
+    .col {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        position: relative;
+        z-index: 2;
+    }
+
+    h3 {
+        font-size: 8px;
+        font-weight: 400;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: rgba(180, 190, 230, 0.4);
+        margin-top: 2px;
+    }
+    h3:first-child { margin-top: 0; }
+
+    button, select {
+        width: 100%;
+        background: rgba(120, 130, 200, 0.05);
+        border: 1px solid rgba(180, 190, 230, 0.15);
+        color: #d8dcf0;
+        padding: 7px 8px;
+        font-family: inherit;
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        border-radius: 3px;
+        cursor: pointer;
+        -webkit-appearance: none;
+        appearance: none;
+        transition: all 0.1s;
+    }
+    button:hover, select:hover {
+        background: rgba(120, 130, 200, 0.12);
+        border-color: rgba(180, 190, 230, 0.3);
+        color: #fff;
+    }
+    button.active {
+        background: rgba(180, 100, 255, 0.18);
+        border-color: rgba(220, 150, 255, 0.5);
+        color: #fff;
+        box-shadow: 0 0 12px rgba(180, 100, 255, 0.3) inset;
+    }
+    select {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M0 2 L4 6 L8 2' stroke='%23a0acd0' stroke-width='1' fill='none'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 8px center;
+        padding-right: 22px;
+    }
+    select option { background: #0a0c1a; color: #d8dcf0; }
+
+    .btn-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 4px;
+    }
+
+    label {
+        display: flex;
+        justify-content: space-between;
+        font-size: 8px;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        color: rgba(180, 190, 230, 0.4);
+        margin-bottom: 4px;
+    }
+    label span.val {
+        color: rgba(255, 255, 255, 0.85);
+        letter-spacing: 0;
+    }
+
+    input[type=range] {
+        width: 100%;
+        -webkit-appearance: none;
+        appearance: none;
+        height: 2px;
+        background: rgba(180, 190, 230, 0.15);
+        outline: none;
+        margin-bottom: 6px;
+    }
+    input[type=range]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 12px;
+        height: 12px;
+        background: linear-gradient(180deg, #c8a4ff 0%, #8060e0 100%);
+        border-radius: 50%;
+        cursor: pointer;
+        box-shadow: 0 0 8px rgba(180, 100, 255, 0.5);
+    }
+    input[type=range]::-moz-range-thumb {
+        width: 12px;
+        height: 12px;
+        background: #c8a4ff;
+        border-radius: 50%;
+        cursor: pointer;
+        border: 0;
+    }
+
+    /* ─── POWER BUTTON OVERLAY ─── */
+    #power {
+        position: fixed;
+        inset: 0;
+        z-index: 200;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(4, 5, 10, 0.92);
+        backdrop-filter: blur(20px);
+        cursor: pointer;
+    }
+    #power.hidden { display: none; }
+    #power .btn {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 30% 30%, rgba(220, 200, 255, 0.95) 0%, rgba(140, 100, 220, 0.7) 60%, rgba(60, 40, 120, 0.3) 100%);
+        box-shadow:
+            0 0 40px rgba(180, 130, 255, 0.6),
+            0 0 80px rgba(180, 130, 255, 0.3),
+            inset 0 2px 6px rgba(255, 255, 255, 0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: rgba(40, 20, 80, 0.9);
+        font-size: 11px;
+        letter-spacing: 0.3em;
+        text-transform: uppercase;
+        font-weight: 500;
+        cursor: pointer;
+        animation: pulse 3s ease-in-out infinite;
+    }
+    @keyframes pulse {
+        0%, 100% { transform: scale(1); box-shadow: 0 0 40px rgba(180, 130, 255, 0.6), 0 0 80px rgba(180, 130, 255, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.4); }
+        50%      { transform: scale(1.05); box-shadow: 0 0 60px rgba(180, 130, 255, 0.8), 0 0 120px rgba(180, 130, 255, 0.4), inset 0 2px 6px rgba(255, 255, 255, 0.4); }
+    }
+
+    /* ─── HUD READOUT ─── */
+    .hud {
+        position: fixed;
+        top: 16px;
+        right: 16px;
+        z-index: 50;
+        font-size: 9px;
+        letter-spacing: 0.1em;
+        line-height: 1.5;
+        color: rgba(220, 200, 255, 0.7);
+        text-align: right;
+        mix-blend-mode: screen;
+        pointer-events: none;
+    }
+    .hud .k { color: rgba(180, 160, 220, 0.5); display: inline-block; width: 28px; text-align: right; }
+
+    @media (max-height: 600px) {
+        h3 { margin-top: 0; }
+    }
+</style>
+</head>
+<body>
+
+<a class="back" href="/" aria-label="Back to grid">←</a>
+
+<canvas id="sky-canvas"></canvas>
+<canvas id="ring-canvas"></canvas>
+
+<div class="hud">
+    <div><span class="k">f</span> <span id="hud-freq">—</span></div>
+    <div><span class="k">x</span> <span id="hud-x">—</span></div>
+    <div><span class="k">y</span> <span id="hud-y">—</span></div>
+</div>
+
+<div class="box">
+
+    <div class="col">
+        <h3>Mode</h3>
+        <div class="btn-row">
+            <button id="m-harm" class="active" data-mode="harmonic">HARM</button>
+            <button id="m-mod" data-mode="modular">MOD</button>
+            <button id="m-hyb" data-mode="hybrid">HYBR</button>
+        </div>
+
+        <h3>Auto Motion</h3>
+        <select id="auto-mode">
+            <option value="off">OFF — Manual</option>
+            <option value="sinusoidal">Sinusoidal</option>
+            <option value="random-walk">Random walk</option>
+            <option value="wave">Wave breath</option>
+            <option value="pulse">Pulse jumps</option>
+            <option value="orbital">Orbital</option>
+        </select>
+
+        <div>
+            <label>Speed <span class="val" id="speed-val">0.5</span></label>
+            <input type="range" id="speed" min="0" max="100" value="50">
+        </div>
+    </div>
+
+    <div class="col">
+        <h3>Tone</h3>
+        <div>
+            <label>Fundamental <span class="val" id="freq-val">110 Hz</span></label>
+            <input type="range" id="freq" min="40" max="220" value="110">
+        </div>
+        <div>
+            <label>Detune <span class="val" id="detune-val">5</span></label>
+            <input type="range" id="detune" min="0" max="50" value="5">
+        </div>
+        <div>
+            <label>Drift <span class="val" id="drift-val">0.3</span></label>
+            <input type="range" id="drift" min="0" max="100" value="30">
+        </div>
+        <div>
+            <label>Volume <span class="val" id="vol-val">-12 dB</span></label>
+            <input type="range" id="vol" min="-40" max="0" value="-12">
+        </div>
+    </div>
+</div>
+
+<div id="power">
+    <div class="btn">touch<br>to start</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+// RING — drone box visualizer (Aether-style)
+//
+// Architecture:
+//   - SKY: animated volumetric-looking clouds in canvas 2D (multilayer noise)
+//   - RING: 3D torus rendered with manual perspective projection, neon palette,
+//           deforms in real time based on touch + FFT amplitude
+//   - AUDIO: Tone.js
+//     - HARM mode  → oscillator + 7 partial harmonics
+//     - MOD mode   → AM/FM cross-modulated dual oscillator
+//     - HYBR mode  → both, mixed
+//   - INTERACTION: touch on the ring stretches it (X = width, Y = brightness)
+//   - AUTO modes: programmatic motion that moves the "virtual finger" by itself
+// ════════════════════════════════════════════════════════════════════════════
+
+// ─── DOM ────────────────────────────────────────────────────────────────────
+const skyCanvas = document.getElementById('sky-canvas');
+const ringCanvas = document.getElementById('ring-canvas');
+const skyCtx = skyCanvas.getContext('2d');
+const ringCtx = ringCanvas.getContext('2d');
+const powerOverlay = document.getElementById('power');
+
+// ─── STATE ──────────────────────────────────────────────────────────────────
+const state = {
+    started: false,
+    mode: 'harmonic',
+    autoMode: 'off',
+    autoSpeed: 0.5,
+    fundamental: 110,
+    detune: 5,
+    drift: 0.3,
+    volume: -12,
+
+    // Touch position normalized 0..1
+    touchX: 0.5,
+    touchY: 0.5,
+    isTouching: false,
+
+    // Internal animation time
+    t: 0,
+};
+
+// ─── CANVAS RESIZE ──────────────────────────────────────────────────────────
+function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);  // cap at 2 for perf
+    [skyCanvas, ringCanvas].forEach(c => {
+        const r = c.getBoundingClientRect();
+        c.width = Math.floor(r.width * dpr);
+        c.height = Math.floor(r.height * dpr);
+        const ctx = c.getContext('2d');
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    });
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ─── SKY (volumetric-looking clouds via noise layers) ───────────────────────
+// We use a simple value noise summed across multiple octaves with slow drift.
+// Each draw, the canvas is partially cleared (motion blur) so movement looks soft.
+
+const SKY_GRAD_STOPS = [
+    [0.0, [12, 6, 30]],     // deep top
+    [0.5, [30, 25, 75]],    // mid purple
+    [1.0, [90, 60, 140]],   // warmer bottom (horizon)
+];
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+function lerpRgb(c1, c2, t) {
+    return [lerp(c1[0], c2[0], t), lerp(c1[1], c2[1], t), lerp(c1[2], c2[2], t)];
+}
+
+function skyGradient(yNorm) {
+    for (let i = 0; i < SKY_GRAD_STOPS.length - 1; i++) {
+        const [s1, c1] = SKY_GRAD_STOPS[i];
+        const [s2, c2] = SKY_GRAD_STOPS[i + 1];
+        if (yNorm <= s2) {
+            const t = (yNorm - s1) / (s2 - s1);
+            return lerpRgb(c1, c2, t);
+        }
+    }
+    return SKY_GRAD_STOPS[SKY_GRAD_STOPS.length - 1][1];
+}
+
+// Pre-computed gradient strip
+let skyGradStrip = null;
+function buildSkyGrad(h) {
+    skyGradStrip = ringCtx.createImageData(1, h);
+    for (let y = 0; y < h; y++) {
+        const [r, g, b] = skyGradient(y / h);
+        const i = y * 4;
+        skyGradStrip.data[i]   = r;
+        skyGradStrip.data[i+1] = g;
+        skyGradStrip.data[i+2] = b;
+        skyGradStrip.data[i+3] = 255;
+    }
+}
+
+function drawSky(time) {
+    const w = skyCanvas.clientWidth;
+    const h = skyCanvas.clientHeight;
+
+    // Base gradient sky
+    const grad = skyCtx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0,   '#0c0620');
+    grad.addColorStop(0.5, '#1e1a4b');
+    grad.addColorStop(1,   '#5a3c8c');
+    skyCtx.fillStyle = grad;
+    skyCtx.fillRect(0, 0, w, h);
+
+    // Animated cloud layers (3 layers, each scaled differently for parallax)
+    const layers = [
+        { scale: 0.005, speed: 0.000015, opacity: 0.18, tint: [200, 180, 240] },
+        { scale: 0.011, speed: 0.000038, opacity: 0.12, tint: [180, 150, 230] },
+        { scale: 0.025, speed: 0.000080, opacity: 0.07, tint: [220, 200, 255] },
+    ];
+
+    // Pixel-level cloud rendering via downscale-then-upscale for performance
+    // Downscale factor — clouds are blurry by nature, this is "free" perf
+    const DS = 4;
+    const dsW = Math.ceil(w / DS);
+    const dsH = Math.ceil(h / DS);
+
+    // Reuse a backing canvas for cloud composition
+    if (!drawSky._buf || drawSky._buf.width !== dsW || drawSky._buf.height !== dsH) {
+        drawSky._buf = document.createElement('canvas');
+        drawSky._buf.width = dsW;
+        drawSky._buf.height = dsH;
+        drawSky._bufCtx = drawSky._buf.getContext('2d');
+        drawSky._imgData = drawSky._bufCtx.createImageData(dsW, dsH);
+    }
+    const buf = drawSky._buf;
+    const bufCtx = drawSky._bufCtx;
+    const imgData = drawSky._imgData;
+    const data = imgData.data;
+
+    // Clear buffer
+    for (let i = 0; i < data.length; i += 4) {
+        data[i] = 0; data[i+1] = 0; data[i+2] = 0; data[i+3] = 0;
+    }
+
+    // Render noise into buffer
+    for (let layer of layers) {
+        const tt = time * layer.speed;
+        for (let y = 0; y < dsH; y++) {
+            for (let x = 0; x < dsW; x++) {
+                const nx = x * DS;
+                const ny = y * DS;
+                // Cheap fractal-ish noise via summed sines
+                const v =
+                    Math.sin((nx + tt * 100000) * layer.scale)
+                  * Math.cos((ny + tt * 80000) * layer.scale * 1.3)
+                  * 0.5
+                  + Math.sin((nx + tt * 130000) * layer.scale * 2.0 + 1.7)
+                  * Math.cos((ny + tt * 60000) * layer.scale * 2.7 + 0.5)
+                  * 0.25
+                  + 0.25;
+                // Bias toward higher values (more clouds top, less bottom)
+                const yBias = 1.0 - (y / dsH) * 0.7;
+                const cv = Math.max(0, v * yBias);
+                const cloudAmt = Math.min(1, cv * cv * 2.2) * layer.opacity;
+
+                const idx = (y * dsW + x) * 4;
+                const prevA = data[idx + 3] / 255;
+                const newA = prevA + cloudAmt * (1 - prevA);
+                if (newA > prevA) {
+                    const tint = layer.tint;
+                    data[idx]   = lerp(data[idx],   tint[0], cloudAmt / (newA + 0.01));
+                    data[idx+1] = lerp(data[idx+1], tint[1], cloudAmt / (newA + 0.01));
+                    data[idx+2] = lerp(data[idx+2], tint[2], cloudAmt / (newA + 0.01));
+                    data[idx+3] = newA * 255;
+                }
+            }
+        }
+    }
+
+    bufCtx.putImageData(imgData, 0, 0);
+    skyCtx.imageSmoothingEnabled = true;
+    skyCtx.imageSmoothingQuality = 'high';
+    skyCtx.drawImage(buf, 0, 0, w, h);
+}
+
+// ─── RING (3D torus projected to 2D, neon, deformable) ──────────────────────
+
+let ringAnalyser = null;  // set after audio init
+
+function drawRing(time) {
+    const w = ringCanvas.clientWidth;
+    const h = ringCanvas.clientHeight;
+    const cx = w / 2;
+    const cy = h * 0.55;
+
+    // Trail effect: don't fully clear, leave a fading echo of the previous frame
+    ringCtx.fillStyle = 'rgba(4, 5, 10, 0.18)';
+    ringCtx.fillRect(0, 0, w, h);
+
+    // Get audio amplitude (0..1) from analyser
+    let amp = 0;
+    let wave = null;
+    if (ringAnalyser) {
+        wave = ringAnalyser.getValue();
+        let sum = 0;
+        for (let i = 0; i < wave.length; i++) sum += Math.abs(wave[i]);
+        amp = Math.min(1, (sum / wave.length) * 3);
+    }
+
+    // Ring parameters — touch deforms it
+    const baseR = Math.min(w, h) * 0.22;  // major radius
+    const stretchX = 1 + (state.touchX - 0.5) * 0.6;   // X position widens
+    const stretchY = 1 - (state.touchY - 0.5) * 0.4;   // Y position squashes
+    const Rmaj = baseR * stretchX;
+    const Rmin = baseR * 0.28 * stretchY * (1 + amp * 0.4);
+
+    // 3D rotation (slow, automatic — gives life)
+    const tiltX = Math.sin(time * 0.0004) * 0.4 + 0.45;       // pitch (about X axis)
+    const tiltZ = time * 0.0002;                                // yaw (rotation around Z)
+
+    // Brightness from Y axis of touch (top = brighter)
+    const bright = 0.4 + (1 - state.touchY) * 0.6;
+
+    // Color palette — neon cyan/magenta that shifts with amp
+    const hueShift = Math.sin(time * 0.0008) * 30;
+    const c1 = `hsla(${280 + hueShift}, 100%, ${50 + bright * 30}%, 0.95)`;   // magenta
+    const c2 = `hsla(${190 - hueShift}, 100%, ${55 + bright * 25}%, 0.95)`;   // cyan
+    const c3 = `hsla(${320 + hueShift}, 100%, 70%, 1)`;                       // hot pink
+
+    // Sample N points around the torus and project to 2D
+    const POINTS = 180;
+    const SEGMENTS = 18;  // around minor circle for cross-section "ribbons"
+
+    // Pre-compute trig
+    const cosTiltX = Math.cos(tiltX);
+    const sinTiltX = Math.sin(tiltX);
+    const cosTiltZ = Math.cos(tiltZ);
+    const sinTiltZ = Math.sin(tiltZ);
+
+    // Draw glow halos first (multiple passes for bloom effect)
+    for (let pass = 0; pass < 3; pass++) {
+        const lineWidth = pass === 0 ? 0.6 : (pass === 1 ? 2.5 : 6);
+        const alpha = pass === 0 ? 0.95 : (pass === 1 ? 0.35 : 0.12);
+
+        for (let s = 0; s < SEGMENTS; s++) {
+            ringCtx.beginPath();
+            const phi = (s / SEGMENTS) * Math.PI * 2;
+            const cosPhi = Math.cos(phi);
+            const sinPhi = Math.sin(phi);
+
+            // Use the audio waveform to modulate Rmin per point — this is the "visualizer"
+            for (let i = 0; i <= POINTS; i++) {
+                const theta = (i / POINTS) * Math.PI * 2;
+                const cosTheta = Math.cos(theta);
+                const sinTheta = Math.sin(theta);
+
+                // Audio waveform applied to minor radius
+                let waveAmp = 0;
+                if (wave) {
+                    const widx = Math.floor((i / POINTS) * wave.length) % wave.length;
+                    waveAmp = wave[widx] * 12;
+                }
+
+                // Torus parametric, with audio displacement on minor circle
+                const rMin = Rmin + waveAmp;
+                const r3d = Rmaj + rMin * cosPhi;
+                let x = r3d * cosTheta;
+                let y = r3d * sinTheta;
+                let z = rMin * sinPhi;
+
+                // Rotate around Z axis (yaw)
+                const x1 = x * cosTiltZ - y * sinTiltZ;
+                const y1 = x * sinTiltZ + y * cosTiltZ;
+                // Rotate around X axis (pitch)
+                const y2 = y1 * cosTiltX - z * sinTiltX;
+                const z2 = y1 * sinTiltX + z * cosTiltX;
+
+                // Perspective projection
+                const persp = 600;
+                const denom = persp + z2;
+                const sx = cx + (x1 * persp) / denom;
+                const sy = cy + (y2 * persp) / denom;
+
+                if (i === 0) ringCtx.moveTo(sx, sy);
+                else ringCtx.lineTo(sx, sy);
+            }
+
+            // Gradient color per segment ribbon
+            const segNorm = s / SEGMENTS;
+            let col;
+            if (segNorm < 0.33) col = c1;
+            else if (segNorm < 0.66) col = c3;
+            else col = c2;
+
+            ringCtx.strokeStyle = col.replace(/[\d.]+\)$/, alpha + ')');
+            ringCtx.lineWidth = lineWidth;
+            ringCtx.lineCap = 'round';
+            ringCtx.stroke();
+        }
+    }
+
+    // Touch indicator — a small soft glow at the touch point
+    if (state.isTouching) {
+        const tx = state.touchX * w;
+        const ty = state.touchY * h;
+        const tg = ringCtx.createRadialGradient(tx, ty, 0, tx, ty, 40);
+        tg.addColorStop(0, 'rgba(255, 200, 255, 0.45)');
+        tg.addColorStop(1, 'rgba(255, 200, 255, 0)');
+        ringCtx.fillStyle = tg;
+        ringCtx.beginPath();
+        ringCtx.arc(tx, ty, 40, 0, Math.PI * 2);
+        ringCtx.fill();
+    }
+}
+
+// ─── AUDIO ENGINE ───────────────────────────────────────────────────────────
+
+let audio = null;
+
+async function initAudio() {
+    await Tone.start();
+
+    const master = new Tone.Gain(0.8).toDestination();
+    const filter = new Tone.Filter({ frequency: 2000, type: 'lowpass', Q: 1 }).connect(master);
+    const reverb = new Tone.Reverb({ decay: 8, wet: 0.6 }).connect(filter);
+    const chorus = new Tone.Chorus({ frequency: 0.3, depth: 0.7, wet: 0.4 }).start().connect(reverb);
+
+    // Master analyser for the ring visualization
+    const analyser = new Tone.Analyser('waveform', 512);
+    master.connect(analyser);
+
+    // ── HARMONIC ENGINE ──
+    // One fundamental + 7 partials, mixed
+    const harmonic = {
+        partials: [],
+        gains: [],
+        output: new Tone.Gain(0),
+    };
+    const partialRatios = [1, 2, 3, 4, 5, 6, 7, 8];
+    const partialGains = [0.7, 0.4, 0.25, 0.18, 0.12, 0.08, 0.05, 0.03];
+    for (let i = 0; i < partialRatios.length; i++) {
+        const osc = new Tone.Oscillator({
+            frequency: state.fundamental * partialRatios[i],
+            type: 'sine',
+        }).start();
+        const g = new Tone.Gain(partialGains[i]);
+        osc.connect(g);
+        g.connect(harmonic.output);
+        harmonic.partials.push(osc);
+        harmonic.gains.push(g);
+    }
+    harmonic.output.connect(chorus);
+
+    // ── MODULAR ENGINE ──
+    // AM + FM cross-modulation. Two oscillators, each modulates the other's pitch.
+    const modular = {
+        carrier: new Tone.Oscillator({ frequency: state.fundamental, type: 'sawtooth' }).start(),
+        modulator: new Tone.Oscillator({ frequency: state.fundamental * 1.5, type: 'sine' }).start(),
+        modScale: new Tone.Multiply(),
+        modConstant: new Tone.Signal(200),
+        amGain: null,
+        output: new Tone.Gain(0),
+    };
+    // modulator drives carrier frequency
+    modular.modulator.connect(modular.modScale);
+    modular.modConstant.connect(modular.modScale.factor);
+    // modScale -> carrier.frequency (with carrier base freq added via Signal)
+    const carrierFreq = new Tone.Signal(state.fundamental);
+    carrierFreq.connect(modular.carrier.frequency);
+    modular.modScale.connect(modular.carrier.frequency);
+    modular.carrierFreq = carrierFreq;
+    // AM via a tremolo
+    modular.amGain = new Tone.Tremolo({ frequency: 0.4, depth: 0.6, wet: 1 }).start();
+    modular.carrier.connect(modular.amGain);
+    modular.amGain.connect(modular.output);
+    modular.output.connect(chorus);
+
+    // Volume control
+    master.gain.value = Tone.dbToGain(state.volume);
+
+    audio = {
+        master, filter, reverb, chorus, analyser,
+        harmonic, modular,
+    };
+    ringAnalyser = analyser;
+
+    // Apply initial mode
+    setMode(state.mode);
+}
+
+function setMode(mode) {
+    if (!audio) return;
+    state.mode = mode;
+
+    // Smooth gain crossfade
+    const fade = 0.4;
+    if (mode === 'harmonic') {
+        audio.harmonic.output.gain.rampTo(0.5, fade);
+        audio.modular.output.gain.rampTo(0, fade);
+    } else if (mode === 'modular') {
+        audio.harmonic.output.gain.rampTo(0, fade);
+        audio.modular.output.gain.rampTo(0.4, fade);
+    } else if (mode === 'hybrid') {
+        audio.harmonic.output.gain.rampTo(0.35, fade);
+        audio.modular.output.gain.rampTo(0.28, fade);
+    }
+
+    // Sync active button
+    document.querySelectorAll('[data-mode]').forEach(b => {
+        b.classList.toggle('active', b.dataset.mode === mode);
+    });
+}
+
+function updateAudioFromState() {
+    if (!audio) return;
+
+    // X axis (0..1) maps to filter cutoff: low to high
+    const cutoff = 80 * Math.pow(70, state.touchX);   // 80 .. ~5600 Hz exponential
+    audio.filter.frequency.rampTo(cutoff, 0.05);
+
+    // Y axis (0..1) maps to detune amount on partials (higher Y = more detune chaos)
+    const detuneFromTouch = (state.touchY) * state.detune * 20;
+    for (let i = 0; i < audio.harmonic.partials.length; i++) {
+        const drift = Math.sin(state.t * 0.001 * (i + 1) * state.drift) * detuneFromTouch * (i / 8 + 0.2);
+        audio.harmonic.partials[i].frequency.rampTo(
+            state.fundamental * (i + 1) * (1 + drift * 0.001),
+            0.1
+        );
+    }
+
+    // Modular: carrier base freq, modulator freq, AM depth
+    audio.modular.carrierFreq.rampTo(state.fundamental, 0.1);
+    audio.modular.modulator.frequency.rampTo(state.fundamental * (1 + state.touchY * 2), 0.1);
+    audio.modular.modConstant.rampTo(50 + state.touchX * 600, 0.1);
+}
+
+// ─── AUTO MODES ─────────────────────────────────────────────────────────────
+
+function updateAutoMotion(dt) {
+    if (state.autoMode === 'off' || state.isTouching) return;
+
+    const speed = state.autoSpeed * 0.001;
+    const t = state.t * speed;
+
+    let x = state.touchX, y = state.touchY;
+
+    switch (state.autoMode) {
+        case 'sinusoidal':
+            x = 0.5 + 0.4 * Math.sin(t * 1.0);
+            y = 0.5 + 0.35 * Math.sin(t * 0.7 + 1.3);
+            break;
+        case 'random-walk':
+            // Perlin-ish drift via noise of t
+            x = state.touchX + (Math.sin(t * 5.3 + 1.7) * 0.5 + Math.sin(t * 1.1) * 0.5) * 0.005;
+            y = state.touchY + (Math.sin(t * 4.1 + 2.3) * 0.5 + Math.sin(t * 0.9) * 0.5) * 0.005;
+            x = Math.max(0.05, Math.min(0.95, x));
+            y = Math.max(0.05, Math.min(0.95, y));
+            break;
+        case 'wave':
+            // Slow breathing — wide arcs, longer pauses
+            x = 0.5 + 0.45 * Math.sin(t * 0.4);
+            y = 0.5 + 0.3 * Math.cos(t * 0.25);
+            break;
+        case 'pulse':
+            // Discrete jumps every "beat"
+            updateAutoMotion._lastJump = updateAutoMotion._lastJump || 0;
+            if (state.t - updateAutoMotion._lastJump > 1800 / state.autoSpeed) {
+                updateAutoMotion._lastJump = state.t;
+                updateAutoMotion._tx = 0.1 + Math.random() * 0.8;
+                updateAutoMotion._ty = 0.1 + Math.random() * 0.8;
+            }
+            // Lerp toward target
+            const tx = updateAutoMotion._tx || 0.5;
+            const ty = updateAutoMotion._ty || 0.5;
+            x = state.touchX + (tx - state.touchX) * 0.04;
+            y = state.touchY + (ty - state.touchY) * 0.04;
+            break;
+        case 'orbital':
+            x = 0.5 + 0.4 * Math.cos(t * 0.6);
+            y = 0.5 + 0.4 * Math.sin(t * 0.6);
+            break;
+    }
+
+    state.touchX = x;
+    state.touchY = y;
+    updateAudioFromState();
+}
+
+// ─── TOUCH ──────────────────────────────────────────────────────────────────
+
+function setTouchFromEvent(e) {
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const r = ringCanvas.getBoundingClientRect();
+    if (clientY < r.top || clientY > r.bottom) return false;
+    state.touchX = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+    state.touchY = Math.max(0, Math.min(1, (clientY - r.top) / r.height));
+    updateAudioFromState();
+    return true;
+}
+
+ringCanvas.addEventListener('touchstart', e => {
+    if (!state.started) return;
+    if (setTouchFromEvent(e)) {
+        state.isTouching = true;
+        e.preventDefault();
+    }
+}, { passive: false });
+ringCanvas.addEventListener('touchmove', e => {
+    if (!state.isTouching) return;
+    setTouchFromEvent(e);
+    e.preventDefault();
+}, { passive: false });
+ringCanvas.addEventListener('touchend', e => {
+    state.isTouching = false;
+}, { passive: false });
+
+ringCanvas.addEventListener('mousedown', e => {
+    if (!state.started) return;
+    state.isTouching = true;
+    setTouchFromEvent(e);
+});
+window.addEventListener('mousemove', e => {
+    if (!state.isTouching) return;
+    setTouchFromEvent(e);
+});
+window.addEventListener('mouseup', e => state.isTouching = false);
+
+// ─── POWER / START ──────────────────────────────────────────────────────────
+
+powerOverlay.addEventListener('click', async () => {
+    powerOverlay.classList.add('hidden');
+    await initAudio();
+    state.started = true;
+});
+
+// ─── PANEL ──────────────────────────────────────────────────────────────────
+
+const $ = id => document.getElementById(id);
+
+document.querySelectorAll('[data-mode]').forEach(b => {
+    b.addEventListener('click', () => setMode(b.dataset.mode));
+});
+
+$('auto-mode').addEventListener('change', e => {
+    state.autoMode = e.target.value;
+    updateAutoMotion._lastJump = 0;  // reset pulse cooldown
+});
+
+$('speed').addEventListener('input', e => {
+    state.autoSpeed = parseInt(e.target.value, 10) / 100 * 2;  // 0..2
+    $('speed-val').textContent = state.autoSpeed.toFixed(2);
+});
+
+$('freq').addEventListener('input', e => {
+    state.fundamental = parseInt(e.target.value, 10);
+    $('freq-val').textContent = state.fundamental + ' Hz';
+});
+
+$('detune').addEventListener('input', e => {
+    state.detune = parseInt(e.target.value, 10);
+    $('detune-val').textContent = state.detune;
+});
+
+$('drift').addEventListener('input', e => {
+    state.drift = parseInt(e.target.value, 10) / 100;
+    $('drift-val').textContent = state.drift.toFixed(2);
+});
+
+$('vol').addEventListener('input', e => {
+    state.volume = parseInt(e.target.value, 10);
+    $('vol-val').textContent = state.volume + ' dB';
+    if (audio) audio.master.gain.rampTo(Tone.dbToGain(state.volume), 0.05);
+});
+
+// ─── HUD ────────────────────────────────────────────────────────────────────
+function updateHUD() {
+    $('hud-freq').textContent = state.fundamental.toFixed(1) + ' Hz';
+    $('hud-x').textContent = state.touchX.toFixed(3);
+    $('hud-y').textContent = state.touchY.toFixed(3);
+}
+
+// ─── MAIN LOOP ──────────────────────────────────────────────────────────────
+let lastTime = performance.now();
+function loop(now) {
+    const dt = now - lastTime;
+    lastTime = now;
+    state.t += dt;
+
+    drawSky(state.t);
+    drawRing(state.t);
+    updateAutoMotion(dt);
+    updateHUD();
+
+    requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// Prevent iOS double-tap zoom
+let _lastTouchEnd = 0;
+document.addEventListener('touchend', e => {
+    const now = Date.now();
+    if (now - _lastTouchEnd < 350) e.preventDefault();
+    _lastTouchEnd = now;
+}, { passive: false });
+</script>
+
+</body>
+</html>

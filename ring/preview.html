@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ring · preview</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+        background: #04050a;
+        width: 100%;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+    }
+    canvas { display: block; position: absolute; inset: 0; width: 100%; height: 100%; }
+    #ring { z-index: 2; }
+    #sky  { z-index: 1; }
+</style>
+</head>
+<body>
+<canvas id="sky"></canvas>
+<canvas id="ring"></canvas>
+<script>
+// Card preview: ring orbiting silently, with synth-fake "audio waveform" feeding
+// the ring deformation. No sound, no controls. Just hypnotic.
+
+const skyC = document.getElementById('sky');
+const ringC = document.getElementById('ring');
+const skyX = skyC.getContext('2d');
+const ringX = ringC.getContext('2d');
+
+function fit() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    [skyC, ringC].forEach(c => {
+        const r = c.getBoundingClientRect();
+        c.width = Math.floor(r.width * dpr);
+        c.height = Math.floor(r.height * dpr);
+        c.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
+    });
+}
+window.addEventListener('resize', fit);
+fit();
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function drawSky(time) {
+    const w = skyC.clientWidth, h = skyC.clientHeight;
+    const grad = skyX.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0,   '#0c0620');
+    grad.addColorStop(0.5, '#1e1a4b');
+    grad.addColorStop(1,   '#5a3c8c');
+    skyX.fillStyle = grad;
+    skyX.fillRect(0, 0, w, h);
+
+    // Lighter cloud effect — single layer, simpler than the main page
+    const DS = 4;
+    const dsW = Math.ceil(w / DS), dsH = Math.ceil(h / DS);
+    if (!drawSky._buf || drawSky._buf.width !== dsW) {
+        drawSky._buf = document.createElement('canvas');
+        drawSky._buf.width = dsW;
+        drawSky._buf.height = dsH;
+        drawSky._bufCtx = drawSky._buf.getContext('2d');
+        drawSky._imgData = drawSky._bufCtx.createImageData(dsW, dsH);
+    }
+    const data = drawSky._imgData.data;
+    const tt = time * 0.00003;
+    for (let y = 0; y < dsH; y++) {
+        for (let x = 0; x < dsW; x++) {
+            const v = Math.sin((x*DS + tt*100000) * 0.008)
+                    * Math.cos((y*DS + tt*80000) * 0.011)
+                    * 0.5
+                    + Math.sin((x*DS + tt*130000) * 0.018)
+                    * Math.cos((y*DS + tt*60000) * 0.024)
+                    * 0.25
+                    + 0.25;
+            const yBias = 1 - (y/dsH) * 0.6;
+            const amt = Math.max(0, v * yBias * v * 2.2);
+            const a = Math.min(255, amt * 60);
+            const idx = (y*dsW + x) * 4;
+            data[idx]   = 200; data[idx+1] = 180; data[idx+2] = 240;
+            data[idx+3] = a;
+        }
+    }
+    drawSky._bufCtx.putImageData(drawSky._imgData, 0, 0);
+    skyX.imageSmoothingEnabled = true;
+    skyX.drawImage(drawSky._buf, 0, 0, w, h);
+}
+
+// Fake waveform: synthesized sine wave that wobbles
+const fakeWave = new Float32Array(256);
+
+function updateFakeWave(time) {
+    const t = time * 0.001;
+    for (let i = 0; i < fakeWave.length; i++) {
+        const u = i / fakeWave.length;
+        fakeWave[i] = Math.sin(u * 12 + t * 1.5) * 0.4
+                    + Math.sin(u * 4  + t * 0.7) * 0.3
+                    + Math.sin(u * 23 + t * 2.5) * 0.15;
+    }
+}
+
+function drawRing(time) {
+    const w = ringC.clientWidth, h = ringC.clientHeight;
+    const cx = w / 2, cy = h / 2;
+
+    ringX.fillStyle = 'rgba(4, 5, 10, 0.18)';
+    ringX.fillRect(0, 0, w, h);
+
+    // Orbital auto-motion — simulate a touch moving in a circle
+    const t = time * 0.0005;
+    const touchX = 0.5 + 0.35 * Math.cos(t);
+    const touchY = 0.5 + 0.35 * Math.sin(t);
+
+    const baseR = Math.min(w, h) * 0.22;
+    const stretchX = 1 + (touchX - 0.5) * 0.6;
+    const stretchY = 1 - (touchY - 0.5) * 0.4;
+    const Rmaj = baseR * stretchX;
+    const Rmin = baseR * 0.28 * stretchY;
+
+    const tiltX = Math.sin(time * 0.0004) * 0.4 + 0.45;
+    const tiltZ = time * 0.0002;
+    const bright = 0.4 + (1 - touchY) * 0.6;
+
+    const hueShift = Math.sin(time * 0.0008) * 30;
+    const colors = [
+        `hsla(${280 + hueShift}, 100%, ${50 + bright*30}%, 0.95)`,
+        `hsla(${320 + hueShift}, 100%, 70%, 1)`,
+        `hsla(${190 - hueShift}, 100%, ${55 + bright*25}%, 0.95)`,
+    ];
+
+    const POINTS = 140;
+    const SEGMENTS = 16;
+    const cosTiltX = Math.cos(tiltX), sinTiltX = Math.sin(tiltX);
+    const cosTiltZ = Math.cos(tiltZ), sinTiltZ = Math.sin(tiltZ);
+
+    for (let pass = 0; pass < 3; pass++) {
+        const lineWidth = pass === 0 ? 0.6 : (pass === 1 ? 2.5 : 6);
+        const alpha = pass === 0 ? 0.95 : (pass === 1 ? 0.35 : 0.12);
+
+        for (let s = 0; s < SEGMENTS; s++) {
+            ringX.beginPath();
+            const phi = (s / SEGMENTS) * Math.PI * 2;
+            const cosPhi = Math.cos(phi);
+            const sinPhi = Math.sin(phi);
+
+            for (let i = 0; i <= POINTS; i++) {
+                const theta = (i / POINTS) * Math.PI * 2;
+                const widx = Math.floor((i / POINTS) * fakeWave.length) % fakeWave.length;
+                const waveAmp = fakeWave[widx] * 10;
+                const rMin = Rmin + waveAmp;
+                const r3d = Rmaj + rMin * cosPhi;
+                let x = r3d * Math.cos(theta);
+                let y = r3d * Math.sin(theta);
+                let z = rMin * sinPhi;
+                const x1 = x*cosTiltZ - y*sinTiltZ;
+                const y1 = x*sinTiltZ + y*cosTiltZ;
+                const y2 = y1*cosTiltX - z*sinTiltX;
+                const z2 = y1*sinTiltX + z*cosTiltX;
+                const persp = 600;
+                const denom = persp + z2;
+                const sx = cx + (x1 * persp) / denom;
+                const sy = cy + (y2 * persp) / denom;
+                if (i === 0) ringX.moveTo(sx, sy);
+                else ringX.lineTo(sx, sy);
+            }
+            const sn = s / SEGMENTS;
+            let col;
+            if (sn < 0.33) col = colors[0];
+            else if (sn < 0.66) col = colors[1];
+            else col = colors[2];
+            ringX.strokeStyle = col.replace(/[\d.]+\)$/, alpha + ')');
+            ringX.lineWidth = lineWidth;
+            ringX.lineCap = 'round';
+            ringX.stroke();
+        }
+    }
+}
+
+function loop(now) {
+    updateFakeWave(now);
+    drawSky(now);
+    drawRing(now);
+    requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

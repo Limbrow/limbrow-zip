@@ -24,6 +24,13 @@
 export const posts = [
 
     {
+        slug: 'ring',
+        date: '2026-05-14',
+        preview: 'preview.html',  // silent orbital ring with cloud sky
+        scale: 1.0
+    },
+
+    {
         slug: 'fractals',
         date: '2026-05-13',
         preview: 'preview.html',  // auto-zooming Mandelbrot — a deep dive on loop
