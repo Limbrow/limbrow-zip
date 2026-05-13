@@ -42,125 +42,202 @@
         padding-bottom: 2px;
     }
 
-    /* ─── SKY (top half) ─── */
+    /* ─── SKY (full screen background) ─── */
     #sky-canvas {
         position: fixed;
         top: 0; left: 0;
         width: 100%;
-        height: 60%;
+        height: 100%;
         display: block;
         z-index: 1;
     }
 
-    /* ─── RING (overlaid on sky) ─── */
+    /* ─── RING (full screen, centered) ─── */
     #ring-canvas {
         position: fixed;
         top: 0; left: 0;
         width: 100%;
-        height: 60%;
+        height: 100%;
         display: block;
         z-index: 2;
         touch-action: none;
     }
 
-    /* ─── BOX (bottom half) ─── */
-    .box {
+    /* ─── PANEL (floating bottom, minimizable) ─── */
+    .panel {
         position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        height: 40%;
+        bottom: 16px;
+        left: 50%;
+        transform: translateX(-50%);
         z-index: 10;
-        background:
-            linear-gradient(180deg, #0a0c1a 0%, #03040a 100%);
-        border-top: 1px solid rgba(120, 130, 200, 0.15);
-        box-shadow: 0 -20px 50px rgba(0,0,0,0.6);
-        padding: 14px 18px;
+        width: min(560px, calc(100vw - 32px));
+        background: rgba(8, 10, 22, 0.65);
+        backdrop-filter: blur(20px) saturate(140%);
+        -webkit-backdrop-filter: blur(20px) saturate(140%);
+        border: 1px solid rgba(180, 160, 230, 0.15);
+        border-radius: 14px;
+        padding: 14px;
+        box-shadow:
+            0 20px 60px rgba(0,0,0,0.5),
+            0 0 0 1px rgba(255,255,255,0.04) inset;
+        transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+                    opacity 0.28s ease,
+                    border-radius 0.32s ease;
+    }
+    .panel.minimized {
+        transform: translateX(-50%) translateY(calc(100% - 38px));
+        border-radius: 18px 18px 0 0;
+    }
+
+    /* Top bar of panel — drag handle area + minimize button */
+    .panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 12px;
+        margin-bottom: 12px;
+        border-bottom: 1px solid rgba(180, 160, 230, 0.08);
+        cursor: pointer;
+    }
+    .panel.minimized .panel-head {
+        padding-bottom: 0;
+        margin-bottom: 0;
+        border-bottom: none;
+    }
+
+    .panel-title {
+        font-size: 9px;
+        letter-spacing: 0.25em;
+        text-transform: uppercase;
+        color: rgba(220, 200, 255, 0.7);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .panel-title::before {
+        content: '';
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #c8a4ff;
+        box-shadow: 0 0 6px rgba(200, 164, 255, 0.8);
+    }
+
+    .panel-toggle-btn {
+        background: none;
+        border: 0;
+        color: rgba(220, 200, 255, 0.6);
+        font-size: 14px;
+        cursor: pointer;
+        padding: 4px 8px;
+        margin: -4px -8px;
+        font-family: inherit;
+        transition: color 0.15s, transform 0.32s;
+    }
+    .panel-toggle-btn:hover { color: rgba(220, 200, 255, 1); }
+    .panel.minimized .panel-toggle-btn { transform: rotate(180deg); }
+
+    .panel-body {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 12px;
+        gap: 20px;
+        transition: opacity 0.2s, max-height 0.32s ease;
+        max-height: 500px;
         overflow: hidden;
     }
-    .box::before {
-        content: '';
-        position: absolute;
-        inset: 0;
-        background-image:
-            repeating-linear-gradient(0deg, transparent 0px, transparent 3px, rgba(255,255,255,0.012) 3px, rgba(255,255,255,0.012) 4px);
+    .panel.minimized .panel-body {
+        opacity: 0;
+        max-height: 0;
         pointer-events: none;
     }
 
     .col {
         display: flex;
         flex-direction: column;
-        gap: 6px;
-        position: relative;
-        z-index: 2;
+        gap: 10px;
     }
 
+    /* Section header */
     h3 {
         font-size: 8px;
-        font-weight: 400;
-        letter-spacing: 0.22em;
+        font-weight: 500;
+        letter-spacing: 0.28em;
         text-transform: uppercase;
-        color: rgba(180, 190, 230, 0.4);
-        margin-top: 2px;
+        color: rgba(180, 170, 220, 0.5);
+        margin-bottom: 2px;
     }
-    h3:first-child { margin-top: 0; }
 
-    button, select {
-        width: 100%;
-        background: rgba(120, 130, 200, 0.05);
-        border: 1px solid rgba(180, 190, 230, 0.15);
-        color: #d8dcf0;
-        padding: 7px 8px;
+    /* Segmented control for mode buttons */
+    .seg {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 8px;
+        padding: 3px;
+        gap: 0;
+    }
+    .seg button {
+        background: transparent;
+        border: 0;
+        color: rgba(220, 200, 255, 0.55);
+        padding: 7px 4px;
         font-family: inherit;
-        font-size: 10px;
-        letter-spacing: 0.06em;
+        font-size: 9px;
+        letter-spacing: 0.15em;
         text-transform: uppercase;
-        border-radius: 3px;
+        font-weight: 500;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+    .seg button:hover {
+        color: rgba(255, 255, 255, 0.85);
+    }
+    .seg button.active {
+        background: rgba(200, 164, 255, 0.18);
+        color: #fff;
+        box-shadow:
+            0 0 12px rgba(180, 100, 255, 0.25) inset,
+            0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+
+    select {
+        width: 100%;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(180, 160, 230, 0.12);
+        color: rgba(220, 200, 255, 0.9);
+        padding: 8px 28px 8px 10px;
+        font-family: inherit;
+        font-size: 11px;
+        border-radius: 7px;
         cursor: pointer;
         -webkit-appearance: none;
         appearance: none;
-        transition: all 0.1s;
-    }
-    button:hover, select:hover {
-        background: rgba(120, 130, 200, 0.12);
-        border-color: rgba(180, 190, 230, 0.3);
-        color: #fff;
-    }
-    button.active {
-        background: rgba(180, 100, 255, 0.18);
-        border-color: rgba(220, 150, 255, 0.5);
-        color: #fff;
-        box-shadow: 0 0 12px rgba(180, 100, 255, 0.3) inset;
-    }
-    select {
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M0 2 L4 6 L8 2' stroke='%23a0acd0' stroke-width='1' fill='none'/%3E%3C/svg%3E");
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M0 2 L4 6 L8 2' stroke='%23c8a4ff' stroke-width='1.2' fill='none'/%3E%3C/svg%3E");
         background-repeat: no-repeat;
-        background-position: right 8px center;
-        padding-right: 22px;
+        background-position: right 10px center;
+        transition: all 0.15s;
+    }
+    select:hover {
+        background-color: rgba(255, 255, 255, 0.07);
+        border-color: rgba(180, 160, 230, 0.25);
     }
     select option { background: #0a0c1a; color: #d8dcf0; }
-
-    .btn-row {
-        display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
-        gap: 4px;
-    }
 
     label {
         display: flex;
         justify-content: space-between;
+        align-items: baseline;
         font-size: 8px;
-        letter-spacing: 0.15em;
+        letter-spacing: 0.2em;
         text-transform: uppercase;
-        color: rgba(180, 190, 230, 0.4);
+        color: rgba(180, 170, 220, 0.5);
         margin-bottom: 4px;
     }
-    label span.val {
-        color: rgba(255, 255, 255, 0.85);
+    label .val {
+        color: rgba(220, 200, 255, 0.95);
         letter-spacing: 0;
+        font-size: 10px;
     }
 
     input[type=range] {
@@ -168,64 +245,33 @@
         -webkit-appearance: none;
         appearance: none;
         height: 2px;
-        background: rgba(180, 190, 230, 0.15);
+        background: rgba(180, 160, 230, 0.12);
         outline: none;
-        margin-bottom: 6px;
+        border-radius: 1px;
     }
     input[type=range]::-webkit-slider-thumb {
         -webkit-appearance: none;
-        width: 12px;
-        height: 12px;
-        background: linear-gradient(180deg, #c8a4ff 0%, #8060e0 100%);
+        width: 14px;
+        height: 14px;
+        background: radial-gradient(circle at 30% 30%, #e0c8ff 0%, #8060e0 100%);
         border-radius: 50%;
         cursor: pointer;
-        box-shadow: 0 0 8px rgba(180, 100, 255, 0.5);
+        box-shadow: 0 0 12px rgba(180, 100, 255, 0.6);
+        border: 0;
     }
     input[type=range]::-moz-range-thumb {
-        width: 12px;
-        height: 12px;
+        width: 14px;
+        height: 14px;
         background: #c8a4ff;
         border-radius: 50%;
         cursor: pointer;
         border: 0;
+        box-shadow: 0 0 12px rgba(180, 100, 255, 0.6);
     }
 
-    /* ─── POWER BUTTON OVERLAY ─── */
-    #power {
-        position: fixed;
-        inset: 0;
-        z-index: 200;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: rgba(4, 5, 10, 0.92);
-        backdrop-filter: blur(20px);
-        cursor: pointer;
-    }
-    #power.hidden { display: none; }
-    #power .btn {
-        width: 120px;
-        height: 120px;
-        border-radius: 50%;
-        background: radial-gradient(circle at 30% 30%, rgba(220, 200, 255, 0.95) 0%, rgba(140, 100, 220, 0.7) 60%, rgba(60, 40, 120, 0.3) 100%);
-        box-shadow:
-            0 0 40px rgba(180, 130, 255, 0.6),
-            0 0 80px rgba(180, 130, 255, 0.3),
-            inset 0 2px 6px rgba(255, 255, 255, 0.4);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: rgba(40, 20, 80, 0.9);
-        font-size: 11px;
-        letter-spacing: 0.3em;
-        text-transform: uppercase;
-        font-weight: 500;
-        cursor: pointer;
-        animation: pulse 3s ease-in-out infinite;
-    }
-    @keyframes pulse {
-        0%, 100% { transform: scale(1); box-shadow: 0 0 40px rgba(180, 130, 255, 0.6), 0 0 80px rgba(180, 130, 255, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.4); }
-        50%      { transform: scale(1.05); box-shadow: 0 0 60px rgba(180, 130, 255, 0.8), 0 0 120px rgba(180, 130, 255, 0.4), inset 0 2px 6px rgba(255, 255, 255, 0.4); }
+    @media (max-width: 480px) {
+        .panel { padding: 12px; }
+        .panel-body { grid-template-columns: 1fr; gap: 14px; }
     }
 
     /* ─── HUD READOUT ─── */
@@ -262,55 +308,54 @@
     <div><span class="k">y</span> <span id="hud-y">—</span></div>
 </div>
 
-<div class="box">
+<div class="panel" id="panel">
 
-    <div class="col">
-        <h3>Mode</h3>
-        <div class="btn-row">
-            <button id="m-harm" class="active" data-mode="harmonic">HARM</button>
-            <button id="m-mod" data-mode="modular">MOD</button>
-            <button id="m-hyb" data-mode="hybrid">HYBR</button>
-        </div>
-
-        <h3>Auto Motion</h3>
-        <select id="auto-mode">
-            <option value="off">OFF — Manual</option>
-            <option value="sinusoidal">Sinusoidal</option>
-            <option value="random-walk">Random walk</option>
-            <option value="wave">Wave breath</option>
-            <option value="pulse">Pulse jumps</option>
-            <option value="orbital">Orbital</option>
-        </select>
-
-        <div>
-            <label>Speed <span class="val" id="speed-val">0.5</span></label>
-            <input type="range" id="speed" min="0" max="100" value="50">
-        </div>
+    <div class="panel-head" id="panel-head">
+        <div class="panel-title">RING</div>
+        <button class="panel-toggle-btn" id="panel-toggle" aria-label="Minimize">▾</button>
     </div>
 
-    <div class="col">
-        <h3>Tone</h3>
-        <div>
-            <label>Fundamental <span class="val" id="freq-val">110 Hz</span></label>
-            <input type="range" id="freq" min="40" max="220" value="110">
+    <div class="panel-body">
+        <div class="col">
+            <h3>Voice</h3>
+            <div class="seg" id="mode-seg">
+                <button class="active" data-mode="harmonic">Harm</button>
+                <button data-mode="modular">Mod</button>
+                <button data-mode="hybrid">Hybr</button>
+            </div>
+
+            <h3>Auto Motion</h3>
+            <select id="auto-mode">
+                <option value="off">Off — manual</option>
+                <option value="sinusoidal">Sinusoidal</option>
+                <option value="random-walk">Random walk</option>
+                <option value="wave">Wave breath</option>
+                <option value="pulse">Pulse jumps</option>
+                <option value="orbital">Orbital</option>
+            </select>
+
+            <div>
+                <label>Motion speed <span class="val" id="speed-val">0.5</span></label>
+                <input type="range" id="speed" min="0" max="100" value="50">
+            </div>
         </div>
-        <div>
-            <label>Detune <span class="val" id="detune-val">5</span></label>
-            <input type="range" id="detune" min="0" max="50" value="5">
-        </div>
-        <div>
-            <label>Drift <span class="val" id="drift-val">0.3</span></label>
-            <input type="range" id="drift" min="0" max="100" value="30">
-        </div>
-        <div>
-            <label>Volume <span class="val" id="vol-val">-12 dB</span></label>
-            <input type="range" id="vol" min="-40" max="0" value="-12">
+
+        <div class="col">
+            <h3>Tone</h3>
+            <div>
+                <label>Fundamental <span class="val" id="freq-val">110 Hz</span></label>
+                <input type="range" id="freq" min="40" max="220" value="110">
+            </div>
+            <div>
+                <label>Detune <span class="val" id="detune-val">5</span></label>
+                <input type="range" id="detune" min="0" max="50" value="5">
+            </div>
+            <div>
+                <label>Drift <span class="val" id="drift-val">0.30</span></label>
+                <input type="range" id="drift" min="0" max="100" value="30">
+            </div>
         </div>
     </div>
-</div>
-
-<div id="power">
-    <div class="btn">touch<br>to start</div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
@@ -335,7 +380,6 @@ const skyCanvas = document.getElementById('sky-canvas');
 const ringCanvas = document.getElementById('ring-canvas');
 const skyCtx = skyCanvas.getContext('2d');
 const ringCtx = ringCanvas.getContext('2d');
-const powerOverlay = document.getElementById('power');
 
 // ─── STATE ──────────────────────────────────────────────────────────────────
 const state = {
@@ -504,7 +548,7 @@ function drawRing(time) {
     const w = ringCanvas.clientWidth;
     const h = ringCanvas.clientHeight;
     const cx = w / 2;
-    const cy = h * 0.55;
+    const cy = h / 2;     // perfectly centered
 
     // Trail effect: don't fully clear, leave a fading echo of the previous frame
     ringCtx.fillStyle = 'rgba(4, 5, 10, 0.18)';
@@ -804,10 +848,20 @@ function updateAutoMotion(dt) {
 function setTouchFromEvent(e) {
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+    // Ignore touches that land on the panel UI (controls have priority)
+    const panelEl = document.getElementById('panel');
+    if (panelEl) {
+        const pr = panelEl.getBoundingClientRect();
+        if (clientX >= pr.left && clientX <= pr.right &&
+            clientY >= pr.top  && clientY <= pr.bottom) {
+            return false;
+        }
+    }
+
     const r = ringCanvas.getBoundingClientRect();
-    if (clientY < r.top || clientY > r.bottom) return false;
     state.touchX = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
-    state.touchY = Math.max(0, Math.min(1, (clientY - r.top) / r.height));
+    state.touchY = Math.max(0, Math.min(1, (clientY - r.top)  / r.height));
     updateAudioFromState();
     return true;
 }
@@ -839,12 +893,18 @@ window.addEventListener('mousemove', e => {
 });
 window.addEventListener('mouseup', e => state.isTouching = false);
 
-// ─── POWER / START ──────────────────────────────────────────────────────────
+// ─── AUTO-START AUDIO ON FIRST USER GESTURE ─────────────────────────────────
+// Browsers block audio until a user gesture. We listen once on the whole page.
 
-powerOverlay.addEventListener('click', async () => {
-    powerOverlay.classList.add('hidden');
+async function startAudioIfNeeded() {
+    if (state.started) return;
     await initAudio();
     state.started = true;
+}
+
+// Any pointer/click/key event arms the audio. Once.
+['pointerdown', 'touchstart', 'keydown', 'click'].forEach(ev => {
+    window.addEventListener(ev, startAudioIfNeeded, { once: true, passive: true });
 });
 
 // ─── PANEL ──────────────────────────────────────────────────────────────────
@@ -880,10 +940,12 @@ $('drift').addEventListener('input', e => {
     $('drift-val').textContent = state.drift.toFixed(2);
 });
 
-$('vol').addEventListener('input', e => {
-    state.volume = parseInt(e.target.value, 10);
-    $('vol-val').textContent = state.volume + ' dB';
-    if (audio) audio.master.gain.rampTo(Tone.dbToGain(state.volume), 0.05);
+// ─── PANEL MINIMIZE/EXPAND ──────────────────────────────────────────────────
+const panel = $('panel');
+const panelHead = $('panel-head');
+panelHead.addEventListener('click', (e) => {
+    // Avoid double-firing if the user clicked the arrow button itself
+    panel.classList.toggle('minimized');
 });
 
 // ─── HUD ────────────────────────────────────────────────────────────────────
