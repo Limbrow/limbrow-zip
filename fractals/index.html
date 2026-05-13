@@ -9,101 +9,27 @@
 
     html, body {
         background: #000;
+        color: #fff;
         height: 100vh;
         height: 100dvh;
         overflow: hidden;
         font-family: ui-monospace, 'JetBrains Mono', monospace;
-        color: #fff;
         -webkit-user-select: none;
         user-select: none;
         -webkit-tap-highlight-color: transparent;
     }
 
-    /* Scroll-snap container — vertical Tinder swipe */
-    .deck {
-        height: 100%;
-        overflow-y: scroll;
-        scroll-snap-type: y mandatory;
-        scroll-behavior: smooth;
-        -webkit-overflow-scrolling: touch;
-        /* Pan vertical (1 finger) is for slide nav. Pinch is handled in JS. */
-        touch-action: pan-y;
-    }
-    .deck::-webkit-scrollbar { display: none; }
-    .deck { scrollbar-width: none; }
-
-    .slide {
-        height: 100vh;
-        height: 100dvh;
-        width: 100%;
-        scroll-snap-align: start;
-        scroll-snap-stop: always;
-        position: relative;
-        background: #000;
-        overflow: hidden;
-    }
-
-    canvas {
-        display: block;
-        width: 100%;
-        height: 100%;
-        position: absolute;
+    canvas#fractal {
+        position: fixed;
         inset: 0;
-        /* Inside the canvas: 2-finger gestures go to fractal, 1-finger to scroll */
-        touch-action: pan-y pinch-zoom;
+        width: 100%;
+        height: 100%;
+        display: block;
+        touch-action: none;
+        cursor: crosshair;
     }
 
-    /* Slide label — top-right, minimal */
-    .label {
-        position: absolute;
-        top: 16px;
-        right: 16px;
-        z-index: 5;
-        font-size: 11px;
-        letter-spacing: 0.15em;
-        text-transform: uppercase;
-        color: rgba(255, 255, 255, 0.55);
-        mix-blend-mode: difference;
-        font-weight: 400;
-        pointer-events: none;
-    }
-
-    /* Index counter — bottom-right, very small */
-    .index {
-        position: absolute;
-        bottom: 20px;
-        right: 16px;
-        z-index: 5;
-        font-size: 9px;
-        letter-spacing: 0.2em;
-        color: rgba(255, 255, 255, 0.4);
-        mix-blend-mode: difference;
-        pointer-events: none;
-    }
-
-    /* Pinch hint — appears the first time, fades away */
-    .hint {
-        position: absolute;
-        bottom: 40px;
-        left: 50%;
-        transform: translateX(-50%);
-        z-index: 5;
-        font-size: 10px;
-        letter-spacing: 0.15em;
-        text-transform: uppercase;
-        color: rgba(255, 255, 255, 0.4);
-        mix-blend-mode: difference;
-        pointer-events: none;
-        animation: hintFade 6s ease-out forwards;
-    }
-    @keyframes hintFade {
-        0%   { opacity: 0; }
-        15%  { opacity: 1; }
-        70%  { opacity: 1; }
-        100% { opacity: 0; }
-    }
-
-    /* Back to grid — top-left arrow */
+    /* ─── BACK BUTTON ─── */
     .back {
         position: fixed;
         top: 16px;
@@ -115,109 +41,510 @@
         align-items: center;
         justify-content: center;
         background: rgba(0,0,0,0.45);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
         border-radius: 50%;
         color: #fff;
         text-decoration: none;
         font-size: 16px;
         line-height: 1;
         padding-bottom: 2px;
+        border: 1px solid rgba(255,255,255,0.1);
     }
-    .back:hover { background: rgba(0,0,0,0.65); }
+    .back:hover { background: rgba(0,0,0,0.7); }
+
+    /* ─── PANEL ─── */
+    .panel {
+        position: fixed;
+        top: 16px;
+        right: 16px;
+        z-index: 50;
+        width: 240px;
+        max-height: calc(100vh - 100px);
+        max-height: calc(100dvh - 100px);
+        overflow-y: auto;
+        background: rgba(0,0,0,0.55);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 4px;
+        padding: 14px 14px 16px;
+        font-size: 10px;
+        letter-spacing: 0.04em;
+        transition: opacity 0.18s, transform 0.18s;
+    }
+    .panel.hidden {
+        opacity: 0;
+        transform: translateX(8px);
+        pointer-events: none;
+    }
+    .panel::-webkit-scrollbar { width: 4px; }
+    .panel::-webkit-scrollbar-track { background: transparent; }
+    .panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+
+    .panel h3 {
+        font-size: 9px;
+        font-weight: 400;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: rgba(255,255,255,0.4);
+        margin-top: 14px;
+        margin-bottom: 8px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .panel h3:first-child { margin-top: 0; }
+
+    .panel button,
+    .panel select {
+        width: 100%;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.1);
+        color: #fff;
+        padding: 7px 8px;
+        font-family: inherit;
+        font-size: 10px;
+        letter-spacing: 0.04em;
+        border-radius: 2px;
+        cursor: pointer;
+        transition: background 0.1s, border-color 0.1s;
+        -webkit-appearance: none;
+        appearance: none;
+    }
+    .panel button:hover,
+    .panel select:hover {
+        background: rgba(255,255,255,0.08);
+        border-color: rgba(255,255,255,0.2);
+    }
+    .panel button:active {
+        background: rgba(255,255,255,0.15);
+    }
+
+    .panel select {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M0 2 L4 6 L8 2' stroke='%23fff' stroke-width='1' fill='none' opacity='0.5'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 8px center;
+        padding-right: 24px;
+    }
+    .panel select option { background: #111; color: #fff; }
+
+    .panel .row {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 6px;
+    }
+    .panel .row:last-child { margin-bottom: 0; }
+
+    .panel label {
+        display: block;
+        font-size: 9px;
+        letter-spacing: 0.1em;
+        color: rgba(255,255,255,0.5);
+        margin-bottom: 5px;
+        display: flex;
+        justify-content: space-between;
+    }
+    .panel label span.val { color: #fff; }
+
+    .panel input[type=range] {
+        width: 100%;
+        -webkit-appearance: none;
+        appearance: none;
+        height: 2px;
+        background: rgba(255,255,255,0.15);
+        outline: none;
+        margin-bottom: 6px;
+    }
+    .panel input[type=range]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 12px;
+        height: 12px;
+        background: #fff;
+        border-radius: 50%;
+        cursor: pointer;
+    }
+    .panel input[type=range]::-moz-range-thumb {
+        width: 12px;
+        height: 12px;
+        background: #fff;
+        border-radius: 50%;
+        cursor: pointer;
+        border: 0;
+    }
+
+    .checkbox-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+        cursor: pointer;
+        padding: 4px 0;
+    }
+    .checkbox-row input { display: none; }
+    .checkbox-row .box {
+        width: 12px;
+        height: 12px;
+        border: 1px solid rgba(255,255,255,0.3);
+        border-radius: 2px;
+        position: relative;
+        flex-shrink: 0;
+    }
+    .checkbox-row input:checked + .box::after {
+        content: '';
+        position: absolute;
+        inset: 2px;
+        background: #fff;
+        border-radius: 1px;
+    }
+    .checkbox-row span.lbl {
+        font-size: 10px;
+        letter-spacing: 0.04em;
+        color: rgba(255,255,255,0.75);
+    }
+
+    /* Palette swatches */
+    .palette-row {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 6px;
+    }
+    .palette-swatch {
+        height: 28px;
+        border-radius: 2px;
+        cursor: pointer;
+        border: 1px solid rgba(255,255,255,0.1);
+        transition: border-color 0.1s, transform 0.1s;
+    }
+    .palette-swatch:hover { transform: translateY(-1px); }
+    .palette-swatch.active {
+        border-color: #fff;
+        box-shadow: 0 0 0 1px rgba(255,255,255,0.3);
+    }
+
+    /* ─── COORDINATES READOUT ─── */
+    .coords {
+        position: fixed;
+        bottom: 16px;
+        left: 16px;
+        z-index: 50;
+        font-size: 9px;
+        letter-spacing: 0.08em;
+        color: rgba(255,255,255,0.4);
+        line-height: 1.5;
+        mix-blend-mode: difference;
+        pointer-events: none;
+    }
+    .coords span.k { color: rgba(255,255,255,0.3); display: inline-block; width: 22px; }
+    .coords span.v { color: rgba(255,255,255,0.7); }
+
+    /* ─── PANEL TOGGLE ─── */
+    .panel-toggle {
+        position: fixed;
+        top: 16px;
+        right: 16px;
+        z-index: 60;
+        width: 36px;
+        height: 36px;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0,0,0,0.45);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border-radius: 50%;
+        border: 1px solid rgba(255,255,255,0.1);
+        color: #fff;
+        cursor: pointer;
+        font-size: 12px;
+    }
+    .panel-toggle.visible {
+        display: flex;
+    }
+
+    /* ─── HINT — fades out ─── */
+    .hint {
+        position: fixed;
+        bottom: 50%;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 40;
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: rgba(255,255,255,0.5);
+        mix-blend-mode: difference;
+        pointer-events: none;
+        animation: hintFade 5s ease-out forwards;
+        text-align: center;
+        white-space: nowrap;
+    }
+    @keyframes hintFade {
+        0%   { opacity: 0; }
+        15%  { opacity: 1; }
+        70%  { opacity: 1; }
+        100% { opacity: 0; transform: translate(-50%, -10px); }
+    }
+
+    @media (max-width: 600px) {
+        .panel {
+            top: auto;
+            bottom: 70px;
+            right: 16px;
+            left: 16px;
+            width: auto;
+            max-height: 50vh;
+        }
+        .coords { bottom: 16px; }
+    }
 </style>
 </head>
 <body>
 
 <a class="back" href="/" aria-label="Back to grid">←</a>
 
-<div class="deck" id="deck">
+<canvas id="fractal"></canvas>
 
-    <section class="slide" data-fractal="mandelbrot">
-        <canvas></canvas>
-        <div class="label">Mandelbrot</div>
-        <div class="index">01 / 03</div>
-        <div class="hint">pinch to zoom · two fingers to pan</div>
-    </section>
+<button class="panel-toggle" id="panel-toggle" aria-label="Toggle controls">⚙</button>
 
-    <section class="slide" data-fractal="julia">
-        <canvas></canvas>
-        <div class="label">Julia</div>
-        <div class="index">02 / 03</div>
-    </section>
+<aside class="panel" id="panel">
 
-    <section class="slide" data-fractal="burning-ship">
-        <canvas></canvas>
-        <div class="label">Burning Ship</div>
-        <div class="index">03 / 03</div>
-    </section>
+    <h3>Formula</h3>
+    <select id="formula">
+        <option value="mandelbrot">Mandelbrot</option>
+        <option value="mandelbrot3">Mandelbrot³</option>
+        <option value="burning-ship">Burning Ship</option>
+        <option value="julia">Julia</option>
+        <option value="phoenix">Phoenix</option>
+        <option value="newton">Newton</option>
+    </select>
 
+    <h3>Iterations <span id="iter-val" style="float:right;font-weight:normal;color:#fff;letter-spacing:0;">200</span></h3>
+    <input type="range" id="iter" min="32" max="1000" value="200" step="8">
+
+    <h3>Coloring</h3>
+    <label class="checkbox-row">
+        <input type="checkbox" id="smooth" checked>
+        <span class="box"></span>
+        <span class="lbl">Smooth</span>
+    </label>
+    <label class="checkbox-row">
+        <input type="checkbox" id="banded">
+        <span class="box"></span>
+        <span class="lbl">Banded</span>
+    </label>
+
+    <h3>Palette</h3>
+    <div class="palette-row" id="palettes"></div>
+
+    <h3>Actions</h3>
+    <div class="row">
+        <button id="randomize">Randomize</button>
+    </div>
+    <div class="row">
+        <button id="reset">Reset View</button>
+    </div>
+
+</aside>
+
+<div class="coords">
+    <div><span class="k">x</span> <span class="v" id="c-x">—</span></div>
+    <div><span class="k">y</span> <span class="v" id="c-y">—</span></div>
+    <div><span class="k">zoom</span> <span class="v" id="c-z">—</span></div>
 </div>
+
+<div class="hint">tap to zoom · shift-tap to zoom out</div>
 
 <script>
 // ═══════════════════════════════════════════════════════════════════════════
-// FRACTAL VISUALIZER — 3 WebGL shaders, slide-by-slide
+// FRACTAL LAB — Mandelbrot-family explorer
 //
-// Architecture:
-//   - One <canvas> per slide
-//   - One FractalView instance per canvas, holding its own WebGL context,
-//     shader program, and viewport state (center, zoom).
-//   - Slides outside the viewport stop rendering to save battery.
-//   - 1-finger drag → scroll-snap (browser handles slide change)
-//   - 2-finger pinch → zoom in/out (center on pinch midpoint)
-//   - 2-finger drag → pan in fractal space
+// Inspired by zazow.com structurally: multiple formulas, smooth/banded coloring,
+// palette switching, randomize, click-to-zoom. Visually: minimal monospace,
+// blurred panel, mix-blend coords readout, no chrome.
 // ═══════════════════════════════════════════════════════════════════════════
 
-// ─── Color palette: classic Mandelbrot rainbow ──────────────────────────────
-// Implemented as a sinusoidal function of escape iterations.
-// Returns smooth blues → pinks → oranges → white.
+const canvas = document.getElementById('fractal');
+const gl = canvas.getContext('webgl', { antialias: false, preserveDrawingBuffer: false });
 
-const VERTEX_SHADER = `
+if (!gl) {
+    document.body.innerHTML = '<p style="padding:40px;color:#fff;font-family:monospace;">WebGL is required to view this artwork. Try a different browser.</p>';
+} else {
+
+const VS = `
 attribute vec2 a_pos;
 varying vec2 v_uv;
 void main() {
     v_uv = a_pos * 0.5 + 0.5;
     gl_Position = vec4(a_pos, 0.0, 1.0);
-}
-`;
+}`;
 
-// Common fragment shader template. The fractal-specific iteration is injected.
-function makeFragmentShader(iterationCode, init) {
+// ─── PALETTES ────────────────────────────────────────────────────────────────
+// Each palette is described by 4 vec3 coefficients (Inigo Quilez style).
+// palette(t) = a + b * cos( 2π * (c*t + d) )
+// This gives infinite smooth periodic palettes from just 12 numbers.
+const PALETTES = [
+    {
+        name: 'classic',
+        // Blue → magenta → orange → white (Mandelbrot classic)
+        a: [0.5, 0.5, 0.5], b: [0.5, 0.5, 0.5], c: [1.0, 1.0, 1.0], d: [0.00, 0.33, 0.67]
+    },
+    {
+        name: 'ember',
+        // Red → orange → yellow (fire-y)
+        a: [0.5, 0.5, 0.5], b: [0.5, 0.5, 0.5], c: [1.0, 1.0, 0.5], d: [0.80, 0.90, 0.30]
+    },
+    {
+        name: 'ice',
+        // Deep blue → cyan → white
+        a: [0.5, 0.5, 0.7], b: [0.5, 0.5, 0.3], c: [1.0, 1.0, 1.0], d: [0.50, 0.55, 0.65]
+    },
+    {
+        name: 'mono',
+        // Pure black-to-white with one gentle gray dip
+        a: [0.5, 0.5, 0.5], b: [0.5, 0.5, 0.5], c: [1.0, 1.0, 1.0], d: [0.00, 0.00, 0.00]
+    },
+];
+
+// ─── FORMULA SHADERS ─────────────────────────────────────────────────────────
+// Each fractal contributes only the iteration body and the initial state.
+// The shared scaffolding (palette, smooth coloring, escape detection) is identical.
+
+const FORMULAS = {
+    'mandelbrot': {
+        init: `vec2 c = p; vec2 z = vec2(0.0);`,
+        iter: `z = vec2(z.x*z.x - z.y*z.y, 2.0*z.x*z.y) + c;`,
+        defaultView: { cx: -0.5, cy: 0.0, zoom: 1.5 },
+    },
+    'mandelbrot3': {
+        init: `vec2 c = p; vec2 z = vec2(0.0);`,
+        // z³ via (a+bi)³ = (a³ - 3ab²) + (3a²b - b³)i
+        iter: `
+            float x2 = z.x*z.x, y2 = z.y*z.y;
+            z = vec2(z.x*(x2 - 3.0*y2), z.y*(3.0*x2 - y2)) + c;
+        `,
+        defaultView: { cx: 0.0, cy: 0.0, zoom: 1.5 },
+    },
+    'burning-ship': {
+        init: `vec2 c = p; vec2 z = vec2(0.0);`,
+        iter: `z = vec2(z.x*z.x - z.y*z.y, 2.0*abs(z.x*z.y)) + c;`,
+        defaultView: { cx: -0.4, cy: -0.5, zoom: 1.6 },
+    },
+    'julia': {
+        init: `vec2 z = p; vec2 c = vec2(-0.7, 0.27015);`,
+        iter: `z = vec2(z.x*z.x - z.y*z.y, 2.0*z.x*z.y) + c;`,
+        defaultView: { cx: 0.0, cy: 0.0, zoom: 1.7 },
+    },
+    'phoenix': {
+        init: `
+            vec2 c = vec2(0.5667, -0.5);
+            float pp = -0.5;
+            vec2 z = p;
+            vec2 zp = vec2(0.0);
+        `,
+        iter: `
+            vec2 newZ = vec2(z.x*z.x - z.y*z.y, 2.0*z.x*z.y) + c + pp * zp;
+            zp = z;
+            z = newZ;
+        `,
+        defaultView: { cx: 0.0, cy: 0.0, zoom: 1.7 },
+    },
+    'newton': {
+        // z = z - (z³-1)/(3z²) — Newton's method on z³-1
+        init: `vec2 z = p;`,
+        iter: `
+            vec2 z2 = vec2(z.x*z.x - z.y*z.y, 2.0*z.x*z.y);
+            vec2 z3 = vec2(z2.x*z.x - z2.y*z.y, z2.x*z.y + z2.y*z.x);
+            vec2 num = vec2(z3.x - 1.0, z3.y);
+            vec2 den = 3.0 * z2;
+            float d2 = den.x*den.x + den.y*den.y;
+            vec2 div = vec2(num.x*den.x + num.y*den.y, num.y*den.x - num.x*den.y) / d2;
+            z = z - div;
+        `,
+        defaultView: { cx: 0.0, cy: 0.0, zoom: 1.8 },
+        // Newton converges to roots rather than escapes — we detect convergence
+        convergent: true,
+    },
+};
+
+function buildFragmentShader(formulaKey, smooth, banded) {
+    const f = FORMULAS[formulaKey];
+    // Newton uses convergence detection instead of escape
+    const escapeCheck = f.convergent
+        ? `
+            vec2 dz = z - prevZ;
+            if (dot(dz, dz) < 1e-6) {
+                escaped = true;
+                n = float(i);
+                break;
+            }
+            prevZ = z;
+        `
+        : `
+            if (dot(z, z) > 4.0) {
+                escaped = true;
+                n = float(i);
+                break;
+            }
+        `;
+
+    const prevZDecl = f.convergent ? `vec2 prevZ = z;` : '';
+
+    // Smoothing only makes sense for escape-time fractals
+    const smoothCode = (smooth && !f.convergent)
+        ? `
+            float log_zn = log(dot(z, z)) / 2.0;
+            float nu = log(log_zn / log(2.0)) / log(2.0);
+            float smoothed = n + 1.0 - nu;
+        `
+        : `float smoothed = n;`;
+
+    const bandedCode = banded
+        ? `t = floor(t * 20.0) / 20.0;`
+        : ``;
+
+    // Newton fractals look better when colored by which root they converge to
+    const colorMap = f.convergent
+        ? `
+            // Color by the angle of the converged point (which root)
+            float angle = atan(z.y, z.x);
+            float t = (angle + 3.14159) / 6.28318;
+            t = t + smoothed / 200.0;  // brightness by speed of convergence
+            ${bandedCode}
+        `
+        : `
+            float t = smoothed / 80.0;
+            ${bandedCode}
+        `;
+
     return `
 precision highp float;
 varying vec2 v_uv;
 uniform vec2  u_resolution;
-uniform vec2  u_center;       // fractal-space center
-uniform float u_zoom;         // fractal-space half-height
-uniform float u_maxIter;      // animated up during reveal
-uniform vec2  u_julia_c;      // Julia parameter (only used by Julia shader)
+uniform vec2  u_center;
+uniform float u_zoom;
+uniform float u_maxIter;
+uniform vec3  u_pal_a;
+uniform vec3  u_pal_b;
+uniform vec3  u_pal_c;
+uniform vec3  u_pal_d;
 
 vec3 palette(float t) {
-    // Smooth rainbow palette — sin-based, classic Mandelbrot look
-    vec3 a = vec3(0.5, 0.5, 0.5);
-    vec3 b = vec3(0.5, 0.5, 0.5);
-    vec3 c = vec3(1.0, 1.0, 1.0);
-    vec3 d = vec3(0.00, 0.33, 0.67);  // R, G, B phase offsets — gives blue→pink→orange
-    return a + b * cos(6.28318 * (c * t + d));
+    return u_pal_a + u_pal_b * cos(6.28318 * (u_pal_c * t + u_pal_d));
 }
 
 void main() {
     float aspect = u_resolution.x / u_resolution.y;
-    // Pixel position in fractal space
     vec2 p = vec2((v_uv.x - 0.5) * 2.0 * aspect, (v_uv.y - 0.5) * 2.0) * u_zoom + u_center;
 
-    ${init}
+    ${f.init}
+    ${prevZDecl}
 
     float n = 0.0;
     bool escaped = false;
-    for (int i = 0; i < 512; i++) {
+    for (int i = 0; i < 1000; i++) {
         if (float(i) >= u_maxIter) break;
-        ${iterationCode}
-        if (dot(z, z) > 4.0) {
-            escaped = true;
-            n = float(i);
-            break;
-        }
+        ${f.iter}
+        ${escapeCheck}
     }
 
     if (!escaped) {
@@ -225,354 +552,363 @@ void main() {
         return;
     }
 
-    // Smooth coloring: continuous escape time
-    float log_zn = log(dot(z, z)) / 2.0;
-    float nu = log(log_zn / log(2.0)) / log(2.0);
-    float smoothed = n + 1.0 - nu;
+    ${smoothCode}
+    ${colorMap}
 
-    float t = smoothed / 80.0;  // controls color cycle frequency
     vec3 col = palette(t);
-
-    // Slight gamma touch
     col = pow(col, vec3(0.85));
-
     gl_FragColor = vec4(col, 1.0);
-}
-`;
+}`;
 }
 
-// ─── Shader sources for each fractal ────────────────────────────────────────
+// ─── State ──────────────────────────────────────────────────────────────────
 
-const SHADERS = {
-    mandelbrot: makeFragmentShader(
-        // iteration: z = z² + c, where c = pixel position, z starts at 0
-        `z = vec2(z.x*z.x - z.y*z.y, 2.0*z.x*z.y) + c;`,
-        `vec2 c = p; vec2 z = vec2(0.0);`
-    ),
-    julia: makeFragmentShader(
-        // iteration: z = z² + c, where c is fixed and z starts at pixel position
-        `z = vec2(z.x*z.x - z.y*z.y, 2.0*z.x*z.y) + c;`,
-        `vec2 z = p; vec2 c = u_julia_c;`
-    ),
-    'burning-ship': makeFragmentShader(
-        // iteration: z = (|x| + i|y|)² + c
-        `z = vec2(z.x*z.x - z.y*z.y, 2.0*abs(z.x*z.y)) + c;`,
-        `vec2 c = p; vec2 z = vec2(0.0);`
-    ),
+let state = {
+    formula: 'mandelbrot',
+    iterations: 200,
+    smooth: true,
+    banded: false,
+    palette: 0,
+    cx: -0.5,
+    cy: 0.0,
+    zoom: 1.5,
 };
 
-// Default view per fractal (center & zoom that show the fractal nicely)
-const DEFAULTS = {
-    mandelbrot:     { cx: -0.5, cy:  0.0, zoom: 1.5, juliaC: [0, 0] },
-    julia:          { cx:  0.0, cy:  0.0, zoom: 1.7, juliaC: [-0.7, 0.27015] },
-    'burning-ship': { cx: -0.4, cy: -0.5, zoom: 1.6, juliaC: [0, 0] },
-};
+let program = null;
+let uniforms = {};
+let renderScale = 1.0;     // lower while interacting
 
-// ─── WebGL helpers ──────────────────────────────────────────────────────────
+// ─── Compile & link ─────────────────────────────────────────────────────────
 
-function compileShader(gl, source, type) {
-    const shader = gl.createShader(type);
-    gl.shaderSource(shader, source);
-    gl.compileShader(shader);
-    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-        console.error('shader compile error:', gl.getShaderInfoLog(shader));
+function compile(src, type) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+        console.error('Shader error:', gl.getShaderInfoLog(s));
         return null;
     }
-    return shader;
+    return s;
 }
 
-function createProgram(gl, vsSource, fsSource) {
-    const vs = compileShader(gl, vsSource, gl.VERTEX_SHADER);
-    const fs = compileShader(gl, fsSource, gl.FRAGMENT_SHADER);
-    const program = gl.createProgram();
-    gl.attachShader(program, vs);
-    gl.attachShader(program, fs);
+function rebuildProgram() {
+    if (program) gl.deleteProgram(program);
+    const fsSource = buildFragmentShader(state.formula, state.smooth, state.banded);
+    program = gl.createProgram();
+    gl.attachShader(program, compile(VS, gl.VERTEX_SHADER));
+    gl.attachShader(program, compile(fsSource, gl.FRAGMENT_SHADER));
     gl.linkProgram(program);
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-        console.error('program link error:', gl.getProgramInfoLog(program));
-        return null;
+        console.error('Link error:', gl.getProgramInfoLog(program));
+        return;
     }
-    return program;
-}
+    gl.useProgram(program);
 
-// ─── FractalView: one per slide ─────────────────────────────────────────────
-
-class FractalView {
-    constructor(canvas, fractalKey) {
-        this.canvas = canvas;
-        this.key = fractalKey;
-        this.gl = canvas.getContext('webgl', { antialias: false, preserveDrawingBuffer: false });
-        if (!this.gl) {
-            console.warn('No WebGL on', canvas);
-            return;
-        }
-
-        const d = DEFAULTS[fractalKey];
-        this.cx = d.cx;
-        this.cy = d.cy;
-        this.zoom = d.zoom;
-        this.zoomHome = d.zoom;
-        this.juliaC = [...d.juliaC];
-
-        // Reveal animation state
-        this.maxIter = 4;        // grows to MAX_ITER over REVEAL_MS
-        this.targetMaxIter = 4;
-        this.MAX_ITER = 200;
-        this.REVEAL_MS = 1800;
-        this.revealStart = 0;
-        this.revealed = false;
-
-        // Render scaling: lower while interacting (smoother)
-        this.renderScale = 1.0;
-        this.interacting = false;
-
-        this._initGL();
-        this._setupGestures();
-        this._resize();
-        window.addEventListener('resize', () => this._resize());
-
-        this.active = false;       // whether to render (set externally)
-        this._loop = this._loop.bind(this);
-        requestAnimationFrame(this._loop);
-    }
-
-    _initGL() {
-        const gl = this.gl;
-        this.program = createProgram(gl, VERTEX_SHADER, SHADERS[this.key]);
-        gl.useProgram(this.program);
-
-        // Fullscreen quad
-        const buf = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    // Vertex buffer (only on first run)
+    if (!rebuildProgram._buf) {
+        rebuildProgram._buf = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, rebuildProgram._buf);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
             -1,-1,  1,-1,  -1, 1,
             -1, 1,  1,-1,   1, 1,
         ]), gl.STATIC_DRAW);
-        const aPos = gl.getAttribLocation(this.program, 'a_pos');
-        gl.enableVertexAttribArray(aPos);
-        gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
-
-        // Uniform locations
-        this.u_res     = gl.getUniformLocation(this.program, 'u_resolution');
-        this.u_center  = gl.getUniformLocation(this.program, 'u_center');
-        this.u_zoom    = gl.getUniformLocation(this.program, 'u_zoom');
-        this.u_maxIter = gl.getUniformLocation(this.program, 'u_maxIter');
-        this.u_juliaC  = gl.getUniformLocation(this.program, 'u_julia_c');
     }
+    gl.bindBuffer(gl.ARRAY_BUFFER, rebuildProgram._buf);
+    const aPos = gl.getAttribLocation(program, 'a_pos');
+    gl.enableVertexAttribArray(aPos);
+    gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
 
-    _resize() {
-        const dpr = window.devicePixelRatio || 1;
-        const w = this.canvas.clientWidth;
-        const h = this.canvas.clientHeight;
-        const scale = this.renderScale * dpr;
-        this.canvas.width  = Math.max(1, Math.floor(w * scale));
-        this.canvas.height = Math.max(1, Math.floor(h * scale));
-        if (this.gl) {
-            this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
-        }
-    }
-
-    _setupGestures() {
-        const c = this.canvas;
-        let pinchStart = null;   // { dist, midX, midY, zoom, cx, cy }
-
-        const getTouchPair = (e) => {
-            const t1 = e.touches[0], t2 = e.touches[1];
-            const r = c.getBoundingClientRect();
-            const x1 = t1.clientX - r.left, y1 = t1.clientY - r.top;
-            const x2 = t2.clientX - r.left, y2 = t2.clientY - r.top;
-            const dx = x1 - x2, dy = y1 - y2;
-            return {
-                dist: Math.hypot(dx, dy),
-                midX: (x1 + x2) / 2,
-                midY: (y1 + y2) / 2,
-                w: r.width, h: r.height,
-            };
-        };
-
-        const screenToFractal = (sx, sy, w, h) => {
-            const aspect = w / h;
-            const fx = ((sx / w) - 0.5) * 2.0 * aspect * this.zoom + this.cx;
-            const fy = -((sy / h) - 0.5) * 2.0 * this.zoom + this.cy;
-            return [fx, fy];
-        };
-
-        c.addEventListener('touchstart', (e) => {
-            if (e.touches.length === 2) {
-                const p = getTouchPair(e);
-                pinchStart = {
-                    dist: p.dist,
-                    midX: p.midX, midY: p.midY,
-                    cx: this.cx, cy: this.cy,
-                    zoom: this.zoom,
-                    w: p.w, h: p.h,
-                    // Anchor point in fractal space — the point under the midpoint
-                    anchor: screenToFractal(p.midX, p.midY, p.w, p.h),
-                };
-                this.interacting = true;
-                e.preventDefault();
-            }
-        }, { passive: false });
-
-        c.addEventListener('touchmove', (e) => {
-            if (e.touches.length === 2 && pinchStart) {
-                const p = getTouchPair(e);
-                // Zoom factor
-                const factor = pinchStart.dist / p.dist;
-                this.zoom = pinchStart.zoom * factor;
-                // Clamp zoom — float32 precision starts breaking around 1e-6
-                this.zoom = Math.max(1e-6, Math.min(8.0, this.zoom));
-
-                // Translate so the anchor point stays under the midpoint
-                const aspect = p.w / p.h;
-                const offsetX = (p.midX / p.w - 0.5) * 2.0 * aspect * this.zoom;
-                const offsetY = -(p.midY / p.h - 0.5) * 2.0 * this.zoom;
-                this.cx = pinchStart.anchor[0] - offsetX;
-                this.cy = pinchStart.anchor[1] - offsetY;
-
-                e.preventDefault();
-            }
-        }, { passive: false });
-
-        c.addEventListener('touchend', (e) => {
-            if (e.touches.length < 2) {
-                pinchStart = null;
-                this.interacting = false;
-            }
-        });
-
-        // Mouse equivalent: wheel for zoom, click+drag for pan
-        c.addEventListener('wheel', (e) => {
-            e.preventDefault();
-            const r = c.getBoundingClientRect();
-            const sx = e.clientX - r.left, sy = e.clientY - r.top;
-            const anchor = screenToFractal(sx, sy, r.width, r.height);
-
-            const factor = Math.exp(e.deltaY * 0.001);
-            this.zoom = Math.max(1e-6, Math.min(8.0, this.zoom * factor));
-
-            const aspect = r.width / r.height;
-            const offsetX = (sx / r.width - 0.5) * 2.0 * aspect * this.zoom;
-            const offsetY = -(sy / r.height - 0.5) * 2.0 * this.zoom;
-            this.cx = anchor[0] - offsetX;
-            this.cy = anchor[1] - offsetY;
-        }, { passive: false });
-
-        // Right-click + drag for pan on desktop
-        let dragging = null;
-        c.addEventListener('mousedown', (e) => {
-            if (e.button === 2 || e.shiftKey) {
-                const r = c.getBoundingClientRect();
-                dragging = { x: e.clientX, y: e.clientY, cx: this.cx, cy: this.cy, w: r.width, h: r.height };
-                e.preventDefault();
-            }
-        });
-        window.addEventListener('mousemove', (e) => {
-            if (dragging) {
-                const aspect = dragging.w / dragging.h;
-                const dx = (e.clientX - dragging.x) / dragging.w * 2.0 * aspect * this.zoom;
-                const dy = (e.clientY - dragging.y) / dragging.h * 2.0 * this.zoom;
-                this.cx = dragging.cx - dx;
-                this.cy = dragging.cy + dy;
-            }
-        });
-        window.addEventListener('mouseup', () => dragging = null);
-        c.addEventListener('contextmenu', (e) => e.preventDefault());
-
-        // Double-tap → reset view
-        let lastTap = 0;
-        c.addEventListener('touchend', (e) => {
-            const now = Date.now();
-            if (now - lastTap < 350 && e.touches.length === 0) {
-                this._reset();
-            }
-            lastTap = now;
-        });
-        c.addEventListener('dblclick', () => this._reset());
-    }
-
-    _reset() {
-        const d = DEFAULTS[this.key];
-        this.cx = d.cx;
-        this.cy = d.cy;
-        this.zoom = d.zoom;
-    }
-
-    activate() {
-        if (this.active) return;
-        this.active = true;
-        if (!this.revealed) {
-            this.revealStart = performance.now();
-            this.targetMaxIter = this.MAX_ITER;
-        }
-    }
-
-    deactivate() {
-        this.active = false;
-    }
-
-    _loop(now) {
-        if (this.active) {
-            // Reveal animation: ease maxIter from 4 → MAX_ITER
-            if (!this.revealed) {
-                const t = Math.min(1, (now - this.revealStart) / this.REVEAL_MS);
-                const eased = 1 - Math.pow(1 - t, 3);
-                this.maxIter = 4 + (this.MAX_ITER - 4) * eased;
-                if (t >= 1) this.revealed = true;
-            } else {
-                this.maxIter = this.MAX_ITER;
-            }
-            this._render();
-        }
-        requestAnimationFrame(this._loop);
-    }
-
-    _render() {
-        const gl = this.gl;
-        if (!gl) return;
-        gl.uniform2f(this.u_res, this.canvas.width, this.canvas.height);
-        gl.uniform2f(this.u_center, this.cx, this.cy);
-        gl.uniform1f(this.u_zoom, this.zoom);
-        gl.uniform1f(this.u_maxIter, this.maxIter);
-        gl.uniform2f(this.u_juliaC, this.juliaC[0], this.juliaC[1]);
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
-    }
+    uniforms = {
+        res:     gl.getUniformLocation(program, 'u_resolution'),
+        center:  gl.getUniformLocation(program, 'u_center'),
+        zoom:    gl.getUniformLocation(program, 'u_zoom'),
+        maxIter: gl.getUniformLocation(program, 'u_maxIter'),
+        pal_a:   gl.getUniformLocation(program, 'u_pal_a'),
+        pal_b:   gl.getUniformLocation(program, 'u_pal_b'),
+        pal_c:   gl.getUniformLocation(program, 'u_pal_c'),
+        pal_d:   gl.getUniformLocation(program, 'u_pal_d'),
+    };
 }
 
-// ─── Boot: one FractalView per slide, observe which one is visible ──────────
+function fit() {
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    const s = renderScale * dpr;
+    canvas.width  = Math.max(1, Math.floor(w * s));
+    canvas.height = Math.max(1, Math.floor(h * s));
+    gl.viewport(0, 0, canvas.width, canvas.height);
+}
 
-const slides = document.querySelectorAll('.slide');
-const views = [];
+function render() {
+    if (!program) return;
+    const pal = PALETTES[state.palette];
+    gl.uniform2f(uniforms.res, canvas.width, canvas.height);
+    gl.uniform2f(uniforms.center, state.cx, state.cy);
+    gl.uniform1f(uniforms.zoom, state.zoom);
+    gl.uniform1f(uniforms.maxIter, state.iterations);
+    gl.uniform3fv(uniforms.pal_a, pal.a);
+    gl.uniform3fv(uniforms.pal_b, pal.b);
+    gl.uniform3fv(uniforms.pal_c, pal.c);
+    gl.uniform3fv(uniforms.pal_d, pal.d);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    updateCoords();
+}
 
-slides.forEach(slide => {
-    const canvas = slide.querySelector('canvas');
-    const key = slide.dataset.fractal;
-    const v = new FractalView(canvas, key);
-    views.push({ slide, view: v });
+function updateCoords() {
+    document.getElementById('c-x').textContent = state.cx.toFixed(6);
+    document.getElementById('c-y').textContent = state.cy.toFixed(6);
+    const z = state.zoom;
+    // Show zoom as exponent (more readable than tiny decimals)
+    const expo = -Math.log10(z);
+    if (z > 0.1) document.getElementById('c-z').textContent = (1.5/z).toFixed(2) + '×';
+    else document.getElementById('c-z').textContent = (1.5/z).toExponential(1).replace('e+','e');
+}
+
+// ─── Interaction ────────────────────────────────────────────────────────────
+
+function screenToFractal(sx, sy) {
+    const r = canvas.getBoundingClientRect();
+    const aspect = r.width / r.height;
+    const fx = ((sx / r.width) - 0.5) * 2.0 * aspect * state.zoom + state.cx;
+    const fy = -((sy / r.height) - 0.5) * 2.0 * state.zoom + state.cy;
+    return [fx, fy];
+}
+
+function zoomAt(sx, sy, factor) {
+    const [fx, fy] = screenToFractal(sx, sy);
+    state.zoom *= factor;
+    state.zoom = Math.max(1e-7, Math.min(8.0, state.zoom));
+    // Recompute center so (fx,fy) stays under (sx,sy)
+    const r = canvas.getBoundingClientRect();
+    const aspect = r.width / r.height;
+    const offsetX = ((sx / r.width) - 0.5) * 2.0 * aspect * state.zoom;
+    const offsetY = -((sy / r.height) - 0.5) * 2.0 * state.zoom;
+    state.cx = fx - offsetX;
+    state.cy = fy - offsetY;
+    render();
+}
+
+// Click to zoom in, shift-click to zoom out
+canvas.addEventListener('click', (e) => {
+    if (e.shiftKey || e.altKey) {
+        zoomAt(e.clientX, e.clientY, 2.0);
+    } else {
+        zoomAt(e.clientX, e.clientY, 0.5);
+    }
 });
 
-// Activate the slide currently in viewport, deactivate others
-const io = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-        const v = views.find(x => x.slide === entry.target)?.view;
-        if (!v) return;
-        if (entry.intersectionRatio > 0.5) v.activate();
-        else v.deactivate();
+// Double-click to reset
+canvas.addEventListener('dblclick', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const d = FORMULAS[state.formula].defaultView;
+    state.cx = d.cx; state.cy = d.cy; state.zoom = d.zoom;
+    render();
+});
+
+// Wheel zoom (smooth)
+canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const factor = Math.exp(e.deltaY * 0.001);
+    zoomAt(e.clientX, e.clientY, factor);
+}, { passive: false });
+
+// Touch: 1-finger tap = zoom in (centered); 2-finger pinch = smooth zoom
+let lastTap = 0;
+let touchStart = null;
+
+canvas.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 1) {
+        touchStart = {
+            x: e.touches[0].clientX,
+            y: e.touches[0].clientY,
+            t: Date.now(),
+            moved: false,
+        };
+    } else if (e.touches.length === 2) {
+        const t1 = e.touches[0], t2 = e.touches[1];
+        const dx = t1.clientX - t2.clientX, dy = t1.clientY - t2.clientY;
+        touchStart = {
+            pinch: true,
+            dist: Math.hypot(dx, dy),
+            midX: (t1.clientX + t2.clientX) / 2,
+            midY: (t1.clientY + t2.clientY) / 2,
+            cx: state.cx, cy: state.cy, zoom: state.zoom,
+            anchor: screenToFractal((t1.clientX + t2.clientX) / 2, (t1.clientY + t2.clientY) / 2),
+        };
+    }
+    e.preventDefault();
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 1 && touchStart && !touchStart.pinch) {
+        const dx = e.touches[0].clientX - touchStart.x;
+        const dy = e.touches[0].clientY - touchStart.y;
+        if (Math.hypot(dx, dy) > 6) touchStart.moved = true;
+        // Pan with one finger
+        const r = canvas.getBoundingClientRect();
+        const aspect = r.width / r.height;
+        state.cx -= (dx / r.width) * 2.0 * aspect * state.zoom;
+        state.cy += (dy / r.height) * 2.0 * state.zoom;
+        touchStart.x = e.touches[0].clientX;
+        touchStart.y = e.touches[0].clientY;
+        render();
+    } else if (e.touches.length === 2 && touchStart && touchStart.pinch) {
+        const t1 = e.touches[0], t2 = e.touches[1];
+        const dx = t1.clientX - t2.clientX, dy = t1.clientY - t2.clientY;
+        const dist = Math.hypot(dx, dy);
+        const factor = touchStart.dist / dist;
+        state.zoom = Math.max(1e-7, Math.min(8.0, touchStart.zoom * factor));
+        const r = canvas.getBoundingClientRect();
+        const aspect = r.width / r.height;
+        const midX = (t1.clientX + t2.clientX) / 2;
+        const midY = (t1.clientY + t2.clientY) / 2;
+        const offsetX = ((midX / r.width) - 0.5) * 2.0 * aspect * state.zoom;
+        const offsetY = -((midY / r.height) - 0.5) * 2.0 * state.zoom;
+        state.cx = touchStart.anchor[0] - offsetX;
+        state.cy = touchStart.anchor[1] - offsetY;
+        render();
+    }
+    e.preventDefault();
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => {
+    // If it was a quick tap that didn't move much → zoom in
+    if (touchStart && !touchStart.pinch && !touchStart.moved && (Date.now() - touchStart.t) < 250) {
+        const now = Date.now();
+        if (now - lastTap < 300) {
+            // Double-tap → reset
+            const d = FORMULAS[state.formula].defaultView;
+            state.cx = d.cx; state.cy = d.cy; state.zoom = d.zoom;
+            render();
+        } else {
+            zoomAt(touchStart.x, touchStart.y, 0.5);
+        }
+        lastTap = now;
+    }
+    if (e.touches.length === 0) touchStart = null;
+    e.preventDefault();
+}, { passive: false });
+
+// ─── Panel controls ─────────────────────────────────────────────────────────
+
+const $ = id => document.getElementById(id);
+
+$('formula').addEventListener('change', (e) => {
+    state.formula = e.target.value;
+    const d = FORMULAS[state.formula].defaultView;
+    state.cx = d.cx; state.cy = d.cy; state.zoom = d.zoom;
+    rebuildProgram();
+    render();
+});
+
+$('iter').addEventListener('input', (e) => {
+    state.iterations = parseInt(e.target.value, 10);
+    $('iter-val').textContent = state.iterations;
+    render();
+});
+
+$('smooth').addEventListener('change', (e) => {
+    state.smooth = e.target.checked;
+    rebuildProgram();
+    render();
+});
+$('banded').addEventListener('change', (e) => {
+    state.banded = e.target.checked;
+    rebuildProgram();
+    render();
+});
+
+// Palettes — build swatches
+const paletteRow = $('palettes');
+PALETTES.forEach((p, i) => {
+    const sw = document.createElement('div');
+    sw.className = 'palette-swatch' + (i === 0 ? ' active' : '');
+    sw.title = p.name;
+    // Build CSS gradient from the palette function evaluated at 8 points
+    const stops = [];
+    for (let t = 0; t <= 8; t++) {
+        const tt = t / 8;
+        const r = Math.round(255 * Math.max(0, Math.min(1, p.a[0] + p.b[0] * Math.cos(2*Math.PI*(p.c[0]*tt + p.d[0])))));
+        const g = Math.round(255 * Math.max(0, Math.min(1, p.a[1] + p.b[1] * Math.cos(2*Math.PI*(p.c[1]*tt + p.d[1])))));
+        const b = Math.round(255 * Math.max(0, Math.min(1, p.a[2] + p.b[2] * Math.cos(2*Math.PI*(p.c[2]*tt + p.d[2])))));
+        stops.push(`rgb(${r},${g},${b}) ${Math.round(tt*100)}%`);
+    }
+    sw.style.background = `linear-gradient(90deg, ${stops.join(', ')})`;
+    sw.addEventListener('click', () => {
+        document.querySelectorAll('.palette-swatch').forEach(s => s.classList.remove('active'));
+        sw.classList.add('active');
+        state.palette = i;
+        render();
     });
-}, { threshold: [0, 0.5, 1] });
+    paletteRow.appendChild(sw);
+});
 
-views.forEach(({ slide }) => io.observe(slide));
+$('reset').addEventListener('click', () => {
+    const d = FORMULAS[state.formula].defaultView;
+    state.cx = d.cx; state.cy = d.cy; state.zoom = d.zoom;
+    render();
+});
 
-// Make sure the first one starts revealed immediately
-views[0]?.view.activate();
+$('randomize').addEventListener('click', () => {
+    const keys = Object.keys(FORMULAS);
+    state.formula = keys[Math.floor(Math.random() * keys.length)];
+    state.palette = Math.floor(Math.random() * PALETTES.length);
+    state.iterations = 100 + Math.floor(Math.random() * 600);
+    state.smooth = Math.random() > 0.3;
+    state.banded = Math.random() > 0.7;
+    const d = FORMULAS[state.formula].defaultView;
+    state.cx = d.cx; state.cy = d.cy; state.zoom = d.zoom;
+    // Sync UI
+    $('formula').value = state.formula;
+    $('iter').value = state.iterations;
+    $('iter-val').textContent = state.iterations;
+    $('smooth').checked = state.smooth;
+    $('banded').checked = state.banded;
+    document.querySelectorAll('.palette-swatch').forEach((s, i) => {
+        s.classList.toggle('active', i === state.palette);
+    });
+    rebuildProgram();
+    render();
+});
 
-// Prevent iOS double-tap zoom on the page itself
-let lastTouchEnd = 0;
+// Panel toggle on mobile
+$('panel-toggle').addEventListener('click', () => {
+    $('panel').classList.toggle('hidden');
+});
+
+// Show toggle button when panel is hidden, hide when open. Always available on small screens.
+function updatePanelToggleVisibility() {
+    $('panel-toggle').classList.add('visible');
+}
+updatePanelToggleVisibility();
+
+// Hide panel after first interaction with the fractal (so the artwork breathes)
+let panelAutoHidden = false;
+canvas.addEventListener('click', () => {
+    if (!panelAutoHidden) {
+        // Don't auto-hide — user might want to keep tweaking. Just leave it.
+        panelAutoHidden = true;
+    }
+});
+
+// ─── Init ───────────────────────────────────────────────────────────────────
+
+window.addEventListener('resize', () => { fit(); render(); });
+fit();
+rebuildProgram();
+render();
+
+// Prevent iOS double-tap zoom on the whole page
+let _lastTap = 0;
 document.addEventListener('touchend', e => {
     const now = Date.now();
-    if (now - lastTouchEnd < 350) e.preventDefault();
-    lastTouchEnd = now;
+    if (now - _lastTap < 350) e.preventDefault();
+    _lastTap = now;
 }, { passive: false });
+
+}  // end if (gl)
 </script>
 
 </body>
