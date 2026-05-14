@@ -10,119 +10,200 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     :root {
-        --bg:           #E2E8E4;
-        --screen-bg:    #C3CD9E;
-        --screen-glow:  #9bbc0f;
-        --screen-dark:  #0F1A0C;
-        --bevel-dark:   #4A5450;
-        --bevel-light:  #FAFAF0;
-        --panel-shadow: rgba(0,0,0,0.18);
+        --lis-body:        #A8B4A8;
+        --lis-bevel-light: #CDD6CE;
+        --lis-bevel-dark:  #7A8A7C;
+        --lis-screen-glow: #9bbc0f;
+        --lis-bg:          #E2E8E4;
+        --lis-step-enabled:#3A4740;
+        --lis-panel-shadow: rgba(0,0,0,0.25);
     }
 
     html, body {
-        background: var(--bg);
         width: 100%;
         height: 100vh;
         height: 100dvh;
         overflow: hidden;
+        background: linear-gradient(175deg, #E8EEE9 0%, #D2DCD4 50%, #C4CEC6 100%);
         font-family: 'Silkscreen', 'VT323', monospace;
     }
 
     body {
         display: flex;
         flex-direction: column;
-        padding: clamp(10px, 4vw, 20px);
-        gap: clamp(8px, 2.5vw, 14px);
-    }
-
-    /* ─── BRAND (tiny, top) ─── */
-    .brand {
-        font-size: clamp(10px, 3vw, 14px);
-        letter-spacing: 0.4em;
-        color: #6a7570;
-        text-align: center;
-        font-weight: 700;
-        padding-top: 4px;
-    }
-
-    /* ─── LCD ─── */
-    .lcd {
-        flex: 1;
-        background: var(--screen-bg);
-        border: 3px solid var(--screen-dark);
-        border-radius: 6px;
-        box-shadow:
-            inset 0 0 30px rgba(0,0,0,0.18),
-            0 2px 4px var(--panel-shadow);
+        padding: clamp(8px, 3vw, 16px);
+        gap: clamp(6px, 1.8vh, 12px);
         position: relative;
-        overflow: hidden;
-        padding: 10px 14px;
     }
-    .lcd::before {
+    body::before {
         content: '';
         position: absolute;
         inset: 0;
-        background-image:
-            repeating-linear-gradient(0deg, transparent 0px, transparent 1px, rgba(15,26,12,0.04) 1px, rgba(15,26,12,0.04) 2px);
+        background-image: url("data:image/svg+xml,%3Csvg width='4' height='4' viewBox='0 0 4 4' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 3h1v1H1V3zm2-2h1v1H3V1z' fill='%23000' fill-opacity='0.03'/%3E%3C/svg%3E");
         pointer-events: none;
+        z-index: 0;
     }
+    body > * { position: relative; z-index: 1; }
 
-    .lcd-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: baseline;
-        font-size: clamp(9px, 2.5vw, 12px);
-        color: var(--screen-dark);
-        position: relative;
-        z-index: 2;
-    }
-
-    canvas#osc {
-        position: absolute;
-        inset: 30px 14px;
-        width: calc(100% - 28px);
-        height: calc(100% - 60px);
-        z-index: 1;
-    }
-
-    /* ─── SEQUENCER ─── */
-    #sequencer {
-        display: grid;
-        grid-template-columns: repeat(16, 1fr);
-        gap: clamp(2px, 0.8vw, 4px);
+    /* ─── BRAND ─── */
+    .brand {
+        font-family: 'Silkscreen', monospace;
+        font-size: clamp(1.6em, 6.5vw, 2.4em);
+        font-weight: 700;
+        color: var(--lis-bevel-dark);
+        text-align: center;
+        letter-spacing: 0.15em;
+        text-shadow: 1px 1px 0px var(--lis-bevel-light);
+        padding: clamp(2px, 0.8vh, 6px) 0;
         flex-shrink: 0;
     }
 
+    /* ─── PAD AREA (real, from index.html) ─── */
+    #pad-area {
+        flex: 1 1 0;
+        min-height: 60px;
+        display: flex;
+        gap: 6px;
+        align-items: stretch;
+    }
+
+    .dub-side {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        flex: 0 0 auto;
+        width: clamp(48px, 14vw, 72px);
+    }
+
+    .dub-pad {
+        flex: 1;
+        background: linear-gradient(180deg, #2a3530 0%, #1a2420 100%);
+        border: 2px solid var(--lis-bevel-dark);
+        border-top-color: #3a4740;
+        border-radius: 8px;
+        color: rgba(155, 188, 15, 0.55);
+        font-family: 'Silkscreen', monospace;
+        font-size: clamp(0.55em, 1.7vw, 0.7em);
+        letter-spacing: 0.06em;
+        position: relative;
+        box-shadow: inset 0 0 12px rgba(0,0,0,0.4), 0 2px 0 #1a2420, 0 3px 4px rgba(0,0,0,0.3);
+        padding: 4px;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.45s ease-out, color 0.18s, transform 0.06s;
+    }
+    .dub-pad::before {
+        content: '';
+        position: absolute;
+        inset: 4px;
+        border-radius: 4px;
+        background:
+            radial-gradient(ellipse at 50% 0%, rgba(155,188,15,0.06) 0%, transparent 60%),
+            repeating-linear-gradient(45deg, transparent 0px, transparent 3px, rgba(155,188,15,0.025) 3px, rgba(155,188,15,0.025) 4px);
+        pointer-events: none;
+    }
+    .dub-pad.firing {
+        background: linear-gradient(180deg, #4a6055 0%, #2a3530 100%);
+        color: var(--lis-screen-glow);
+        transform: translateY(1px);
+        box-shadow: inset 0 0 16px rgba(0,0,0,0.6), 0 1px 0 #1a2420, 0 1px 2px rgba(0,0,0,0.3);
+    }
+    .dub-label { position: relative; z-index: 1; }
+
+    #touch-pad {
+        flex: 1 1 0;
+        min-height: 60px;
+        background-color: #080C0A;
+        border-radius: 8px;
+        position: relative;
+        border: 2px solid var(--lis-bevel-dark);
+        box-shadow: inset 0 0 20px rgba(0,0,0,0.5), 0 2px 4px var(--lis-panel-shadow);
+        overflow: hidden;
+    }
+    #touch-pad-grid { position: absolute; inset: 0; pointer-events: none; }
+
+    .touch-indicator {
+        position: absolute;
+        width: 30px; height: 30px;
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+    }
+    #touch-indicator-1 {
+        border: 2px solid rgba(155, 188, 15, 0.6);
+        background: radial-gradient(circle, rgba(155,188,15,0.25) 0%, transparent 70%);
+        box-shadow: 0 0 15px rgba(155,188,15,0.2);
+    }
+    #touch-indicator-2 {
+        border: 2px solid rgba(217, 38, 61, 0.6);
+        background: radial-gradient(circle, rgba(217,38,61,0.25) 0%, transparent 70%);
+        box-shadow: 0 0 15px rgba(217,38,61,0.2);
+    }
+    .pad-label {
+        position: absolute;
+        font-family: 'VT323', monospace;
+        font-size: clamp(0.65em, 2vw, 0.85em);
+        color: rgba(155, 188, 15, 0.25);
+        pointer-events: none;
+        z-index: 2;
+        letter-spacing: 0.05em;
+    }
+    .pad-label.y-top    { top: 4px; left: 6px; }
+    .pad-label.y-bottom { bottom: 4px; left: 6px; }
+    .pad-label.x-right  { bottom: 4px; right: 6px; }
+
+    /* ─── SEQUENCER ─── */
+    #sequencer {
+        display: flex;
+        gap: 2px;
+        justify-content: center;
+        flex-shrink: 0;
+    }
     .step {
-        aspect-ratio: 1 / 1.4;
-        background: #d6dcc0;
-        border: 1.5px solid #8a8770;
+        flex: 1;
+        max-width: 28px;
+        height: clamp(14px, 2.5vh, 20px);
+        background-color: var(--lis-bg);
+        border: 1px solid var(--lis-bevel-dark);
         border-radius: 2px;
-        transition: all 0.06s;
+        box-shadow: inset 1px 1px 1px rgba(255,255,255,0.4), inset -1px -1px 1px rgba(0,0,0,0.12);
+        transition: background-color 0.08s, box-shadow 0.08s;
     }
     .step.enabled {
-        background: #303a20;
-        border-color: #1a1f10;
+        background-color: var(--lis-step-enabled);
+        box-shadow: inset 0 0 2px rgba(0,0,0,0.4);
     }
-    .step.playing {
-        box-shadow: 0 0 10px rgba(155, 188, 15, 0.7) inset;
-        outline: 1.5px solid rgba(155, 188, 15, 0.85);
+    .step.active {
+        background-color: var(--lis-screen-glow);
+        box-shadow: 0 0 6px var(--lis-screen-glow), 0 0 2px var(--lis-screen-glow);
     }
+    .step.beat-marker { border-bottom: 2px solid var(--lis-screen-glow); }
 </style>
 </head>
 <body>
 
 <div class="brand">LISERIUM</div>
 
-<div class="lcd">
-    <div class="lcd-row">
-        <span>130 BPM</span>
-        <span>DEEP</span>
+<div id="pad-area">
+    <div class="dub-side">
+        <div class="dub-pad" data-pad="0"><span class="dub-label">STAB</span></div>
+        <div class="dub-pad" data-pad="1"><span class="dub-label">CHORD</span></div>
     </div>
-    <canvas id="osc"></canvas>
-    <div class="lcd-row" style="position:absolute; bottom:8px; left:14px; right:14px; z-index:2;">
-        <span>♪ PLAYING</span>
-        <span></span>
+
+    <div id="touch-pad">
+        <canvas id="touch-pad-grid"></canvas>
+        <span class="pad-label y-top">HIGH</span>
+        <span class="pad-label y-bottom">LOW</span>
+        <span class="pad-label x-right">VIBRATO ▸</span>
+        <div id="touch-indicator-1" class="touch-indicator"></div>
+        <div id="touch-indicator-2" class="touch-indicator"></div>
+    </div>
+
+    <div class="dub-side">
+        <div class="dub-pad" data-pad="2"><span class="dub-label">BELL</span></div>
+        <div class="dub-pad" data-pad="3"><span class="dub-label">VOX</span></div>
     </div>
 </div>
 
@@ -130,93 +211,122 @@
 
 <script>
 // ════════════════════════════════════════════════════════════════════════════
-// LISERIUM PREVIEW — square crop of LCD + sequencer
-// No external libs. Visual-only fake waveform that "runs" at 130 BPM.
+// LISERIUM PREVIEW — actual UI, no fake waveform.
+// Pad-area + sequencer from index.html. Indicators trace real XY paths;
+// sequencer plays the same preset pattern at 130 BPM. Dub pads occasionally
+// fire (the same flash the real device uses).
 // ════════════════════════════════════════════════════════════════════════════
 
 (function() {
-    const STEPS = 16;
-    const ENABLED = [0, 4, 8, 12];        // 4-on-the-floor kick
-    const ACCENT  = [3, 7, 11, 14];       // off-beat accents
     const BPM = 130;
-    const STEP_MS = (60000 / BPM) / 4;    // 16th note duration
+    const STEP_MS = (60000 / BPM) / 4;
+    const STEPS = 16;
 
-    // Build sequencer cells
+    // Real Liserium preset (from index.html loadPreset)
+    const PRESET = {
+        kick:  [1,0,0,0, 0,0,1,0, 1,0,0,1, 0,0,0,0],
+        snare: [0,0,0,0, 0,0,1,0, 0,0,0,0, 0,1,0,1],
+        hats:  [1,0,1,1, 0,1,1,0, 1,0,1,1, 0,1,0,1],
+        bass:  [1,0,0,0, 0,0,0,1, 0,0,1,0, 0,0,0,0],
+    };
+    // What's enabled in the visible sequencer row = kick (most iconic)
+    const ENABLED = PRESET.kick;
+
+    // ─── Sequencer cells ───
     const seq = document.getElementById('sequencer');
     const cells = [];
     for (let i = 0; i < STEPS; i++) {
         const c = document.createElement('div');
         c.className = 'step';
-        if (ENABLED.includes(i)) c.classList.add('enabled');
-        if (ACCENT.includes(i))  c.classList.add('accent');
+        if (i % 4 === 0) c.classList.add('beat-marker');
+        if (ENABLED[i]) c.classList.add('enabled');
         seq.appendChild(c);
         cells.push(c);
     }
 
-    // Oscilloscope canvas
-    const osc = document.getElementById('osc');
-    const ctx = osc.getContext('2d');
-    function fit() {
-        const r = osc.getBoundingClientRect();
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        osc.width  = Math.max(1, Math.floor(r.width * dpr));
-        osc.height = Math.max(1, Math.floor(r.height * dpr));
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    }
-    window.addEventListener('resize', fit);
-    fit();
+    // ─── Touch pad grid (same dot pattern + crosshair as the real one) ───
+    const touchPad = document.getElementById('touch-pad');
+    const padCanvas = document.getElementById('touch-pad-grid');
+    const padCtx = padCanvas.getContext('2d');
 
-    const t0 = performance.now();
-    let currentStep = -1;
-    let lastKickAt = 0;
-
-    function drawWave(now, kickEnv) {
-        const w = osc.clientWidth, h = osc.clientHeight;
-        ctx.clearRect(0, 0, w, h);
-
-        const mid = h / 2;
-        const baseAmp = h * 0.32;
-        const kickAmp = h * 0.22 * kickEnv;
-        const t = (now - t0) / 1000;
-
-        // Layered components for a dub-techno feel
-        ctx.strokeStyle = 'rgba(48, 58, 32, 0.85)';
-        ctx.lineWidth = 1.4;
-        ctx.lineJoin = 'round';
-        ctx.beginPath();
-        for (let x = 0; x < w; x += 1) {
-            const u = x / w;
-            const swell   = Math.sin(u * 4  + t * 0.7) * 0.45;
-            const lead    = Math.sin(u * 11 + t * 1.6 + Math.sin(t * 0.3) * 0.8) * 0.32;
-            const shimmer = Math.sin(u * 38 + t * 6.0) * 0.10 * (0.5 + 0.5 * Math.sin(t * 0.6));
-            const dubPulse = Math.sin(u * 2.0 - t * 0.4) * 0.15 * kickEnv;
-            const y = mid + (swell + lead + shimmer) * baseAmp + dubPulse * kickAmp;
-            if (x === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
+    function drawPadGrid() {
+        const w = padCanvas.width = touchPad.clientWidth;
+        const h = padCanvas.height = touchPad.clientHeight;
+        padCtx.clearRect(0, 0, w, h);
+        padCtx.fillStyle = 'rgba(155, 188, 15, 0.08)';
+        for (let x = 30; x < w; x += 30) {
+            for (let y = 30; y < h; y += 30) {
+                padCtx.beginPath();
+                padCtx.arc(x, y, 1, 0, Math.PI * 2);
+                padCtx.fill();
+            }
         }
-        ctx.stroke();
-
-        // Soft glow trail
-        ctx.strokeStyle = `rgba(48, 58, 32, ${0.20 + kickEnv * 0.15})`;
-        ctx.lineWidth = 3;
-        ctx.stroke();
+        padCtx.strokeStyle = 'rgba(155, 188, 15, 0.1)';
+        padCtx.lineWidth = 1;
+        padCtx.setLineDash([4, 4]);
+        padCtx.beginPath();
+        padCtx.moveTo(w / 2, 0); padCtx.lineTo(w / 2, h);
+        padCtx.moveTo(0, h / 2); padCtx.lineTo(w, h / 2);
+        padCtx.stroke();
+        padCtx.setLineDash([]);
     }
+    drawPadGrid();
+    window.addEventListener('resize', drawPadGrid);
+
+    // ─── Indicators tracing slow XY paths (Lissajous-ish) ───
+    const ind1 = document.getElementById('touch-indicator-1');
+    const ind2 = document.getElementById('touch-indicator-2');
+    const t0 = performance.now();
+
+    // ─── Dub pads + sequencer playhead ───
+    const dubPads = Array.from(document.querySelectorAll('.dub-pad'));
+    let currentStep = -1;
+    let nextDubAt = 1800;     // first dub flash ~1.8s in
+    let nextDubPad = 0;
 
     function tick(now) {
-        const elapsed = now - t0;
-        const step = Math.floor(elapsed / STEP_MS) % STEPS;
+        const t = (now - t0) / 1000;
+        const r = touchPad.getBoundingClientRect();
 
-        if (step !== currentStep) {
-            if (currentStep >= 0 && cells[currentStep]) cells[currentStep].classList.remove('playing');
-            if (cells[step]) cells[step].classList.add('playing');
-            currentStep = step;
-            if (ENABLED.includes(step)) lastKickAt = now;
+        // Two indicators, gentle Lissajous so they feel like real playing
+        // Indicator 1 — slower, broader sweep
+        const x1 = (Math.sin(t * 0.42) * 0.5 + 0.5) * r.width;
+        const y1 = (Math.sin(t * 0.71 + 1.3) * 0.5 + 0.5) * r.height;
+        ind1.style.left = x1 + 'px';
+        ind1.style.top  = y1 + 'px';
+
+        // Indicator 2 — fades in/out (as if a second finger comes and goes)
+        const presence = 0.5 + 0.5 * Math.sin(t * 0.28 - 1.1);
+        const showSecond = presence > 0.55;
+        ind2.style.display = showSecond ? 'block' : 'none';
+        if (showSecond) {
+            const x2 = (Math.sin(t * 0.55 + 2.4) * 0.5 + 0.5) * r.width;
+            const y2 = (Math.cos(t * 0.34 + 0.6) * 0.5 + 0.5) * r.height;
+            ind2.style.left = x2 + 'px';
+            ind2.style.top  = y2 + 'px';
+            ind2.style.opacity = Math.min(1, (presence - 0.55) * 4);
         }
 
-        const sinceKick = (now - lastKickAt) / 1000;
-        const kickEnv = Math.max(0, Math.exp(-sinceKick * 4));
+        // Sequencer playhead — every 16th note advance
+        const elapsed = now - t0;
+        const step = Math.floor(elapsed / STEP_MS) % STEPS;
+        if (step !== currentStep) {
+            if (currentStep >= 0 && cells[currentStep]) cells[currentStep].classList.remove('active');
+            if (cells[step]) cells[step].classList.add('active');
+            currentStep = step;
+        }
 
-        drawWave(now, kickEnv);
+        // Occasional dub pad fire — natural rhythm, not on the grid
+        if (elapsed > nextDubAt) {
+            const pad = dubPads[nextDubPad];
+            if (pad) {
+                pad.classList.add('firing');
+                setTimeout(() => pad.classList.remove('firing'), 450);
+            }
+            nextDubAt = elapsed + 1600 + Math.random() * 2400;
+            nextDubPad = (nextDubPad + 1 + Math.floor(Math.random() * 3)) % 4;
+        }
+
         requestAnimationFrame(tick);
     }
     requestAnimationFrame(tick);
