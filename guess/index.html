@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0">
+<title>guess · limbrow.zip</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+        background: #050505;
+        color: #e8e8e8;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+        font-family: ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+        -webkit-user-select: none; user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-text-size-adjust: 100%;
+    }
+
+    .back {
+        position: fixed;
+        top: 16px; left: 16px;
+        z-index: 100;
+        width: 36px; height: 36px;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 50%;
+        color: rgba(255,255,255,0.65);
+        text-decoration: none;
+        font-size: 16px;
+        line-height: 1;
+        padding-bottom: 2px;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+    }
+
+    #stream {
+        position: fixed;
+        top: 0;
+        left: 0; right: 0;
+        bottom: 56px;
+        padding: 68px 24px 16px;
+        overflow-y: auto;
+        overflow-x: hidden;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        gap: 4px;
+        font-size: 15px;
+        line-height: 1.55;
+        letter-spacing: 0.005em;
+    }
+    #stream::-webkit-scrollbar { display: none; }
+    #stream { scrollbar-width: none; }
+
+    .line {
+        white-space: pre-wrap;
+        word-break: break-word;
+        min-height: 1.55em;
+    }
+    .line.bot     { color: rgba(232, 232, 232, 0.95); }
+    .line.user    { color: rgba(120, 120, 120, 0.85); }
+    .line.reveal  { color: #fff; font-style: italic; }
+
+    .prompt {
+        position: fixed;
+        bottom: 0; left: 0; right: 0;
+        padding: 14px 24px max(14px, env(safe-area-inset-bottom));
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: linear-gradient(180deg, rgba(5,5,5,0) 0%, #050505 35%);
+        font-size: 15px;
+        z-index: 10;
+    }
+    .prompt::before {
+        content: '>';
+        color: rgba(140, 140, 140, 0.7);
+        font-family: inherit;
+        flex-shrink: 0;
+    }
+    .prompt input {
+        flex: 1;
+        background: transparent;
+        border: 0;
+        outline: none;
+        color: rgba(232, 232, 232, 0.95);
+        font-family: inherit;
+        font-size: 15px;
+        padding: 0;
+        caret-color: rgba(232, 232, 232, 0.95);
+        -webkit-user-select: text; user-select: text;
+        min-width: 0;
+    }
+    .prompt input::placeholder { color: rgba(120, 120, 120, 0); }
+    .prompt input:disabled { color: rgba(120, 120, 120, 0.5); }
+
+    /* Block cursor that appears AFTER the input. It only shows when the input
+       is empty — once you start typing, the native caret takes over.        */
+    .cursor {
+        display: inline-block;
+        width: 0.5em;
+        height: 1.05em;
+        background: rgba(232, 232, 232, 0.9);
+        animation: blink 1.05s steps(1, end) infinite;
+        flex-shrink: 0;
+        margin-left: -6px;
+    }
+    .cursor.hidden { display: none; }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    .done { display: none !important; }
+
+    @media (max-width: 480px) {
+        #stream  { padding: 60px 16px 12px; font-size: 14px; }
+        .prompt  { padding: 12px 16px max(12px, env(safe-area-inset-bottom)); font-size: 14px; }
+        .cursor  { height: 1em; }
+    }
+</style>
+</head>
+<body>
+
+<a class="back" href="/" aria-label="Back to grid">←</a>
+
+<div id="stream"></div>
+
+<form class="prompt" id="prompt" autocomplete="off">
+    <input id="input"
+           type="text"
+           autocomplete="off"
+           autocorrect="off"
+           autocapitalize="off"
+           spellcheck="false"
+           inputmode="text"
+           disabled>
+    <span class="cursor" id="cursor"></span>
+</form>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+// GUESS — a tiny scripted "chatbot" with one trick.
+//
+// The bot opens: "hola" → "oye" → "¿adivinas en quién estoy pensando?"
+// The user types guesses. The bot deflects with progressively warmer hints.
+// The reveal triggers the moment the user types a self-reference
+// (yo / me / mí / soy yo / the user / el usuario / piensas en mí / ...).
+// On reveal the bot says "indeed." and the input closes.
+//
+// No LLM, no API call, no cost. Just a hand-written guion.
+// ════════════════════════════════════════════════════════════════════════════
+
+const stream    = document.getElementById('stream');
+const input     = document.getElementById('input');
+const promptEl  = document.getElementById('prompt');
+const cursorEl  = document.getElementById('cursor');
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function addLine(text, cls) {
+    const el = document.createElement('div');
+    el.className = 'line ' + cls;
+    el.textContent = text;
+    stream.appendChild(el);
+    stream.scrollTop = stream.scrollHeight;
+    return el;
+}
+
+async function typewriter(el, text, perChar = 32) {
+    for (const ch of text) {
+        el.textContent += ch;
+        stream.scrollTop = stream.scrollHeight;
+        await sleep(perChar + Math.random() * 30);
+    }
+}
+
+async function botSay(text, opts = {}) {
+    const el = addLine('', opts.cls || 'bot');
+    await typewriter(el, text, opts.speed != null ? opts.speed : 32);
+}
+
+function userSay(text) {
+    addLine('> ' + text, 'user');
+}
+
+// ─── HINTS — escalate every turn ────────────────────────────────────────────
+const HINTS = [
+    'frío.',
+    'no.',
+    'más cerca.',
+    'tibio.',
+    'más cerca.',
+    'más cerca de lo que crees.',
+    'está leyendo esto.',
+    'respira cuando tú respiras.',
+    'es quien pregunta.',
+    'y quien responde.',
+    'eres tú.',
+];
+
+// ─── REVEAL TRIGGERS ────────────────────────────────────────────────────────
+function normalize(s) {
+    return s.toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/[¿?¡!.,;:"'`´]/g, '')
+        .trim()
+        .replace(/\s+/g, ' ');
+}
+
+function isSelfRef(raw) {
+    const t = normalize(raw);
+    if (!t) return false;
+
+    // Exact one-word/short answers
+    const exact = [
+        'yo','mi','me','i','myself','soy yo','yo mismo','mi mismo','yo misma','mi misma',
+        'soy','it is me','its me','el usuario','the user','en mi','en mi mismo','en mi misma',
+        'yo soy','soy yo mismo','soy yo misma','yo claro','en mi persona',
+    ];
+    if (exact.includes(t)) return true;
+
+    // Phrase patterns
+    const patterns = [
+        /\bsoy yo\b/,
+        /\bpiensas en mi\b/,
+        /\bestas pensando en mi\b/,
+        /\bme piensas\b/,
+        /\bme lo preguntas\b/,
+        /\bme preguntas\b/,
+        /\bme escribes\b/,
+        /\bel que pregunta\b/,
+        /\bla que pregunta\b/,
+        /\bquien pregunta\b/,
+        /\bquien escribe\b/,
+        /\bel que escribe\b/,
+        /\bel que lee\b/,
+        /\bquien lee\b/,
+        /\bel usuario\b/,
+        /\bthe user\b/,
+        /\bthinking of me\b/,
+        /\babout me\b/,
+        /\bin me\b/,
+        /\beres yo\b/,        // weird grammar but possible
+    ];
+    return patterns.some(p => p.test(t));
+}
+
+// ─── STATE ──────────────────────────────────────────────────────────────────
+let turnIdx = 0;
+let revealed = false;
+
+async function reveal() {
+    revealed = true;
+    input.disabled = true;
+    cursorEl.classList.add('hidden');
+    await sleep(700);
+    await botSay('indeed.', { cls: 'bot reveal', speed: 70 });
+    await sleep(400);
+    promptEl.classList.add('done');
+}
+
+// ─── OPENING ────────────────────────────────────────────────────────────────
+async function opening() {
+    await sleep(900);
+    await botSay('Hola!');
+    await sleep(1400);
+    await botSay('...');
+    await sleep(900);
+    await botSay('oye');
+    await sleep(550);
+    await botSay('¿adivinas en quién estoy pensando?');
+    input.disabled = false;
+    cursorEl.classList.remove('hidden');
+    input.focus();
+}
+
+// ─── INPUT ──────────────────────────────────────────────────────────────────
+promptEl.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text || revealed || input.disabled) return;
+    input.value = '';
+    userSay(text);
+
+    if (isSelfRef(text)) {
+        await reveal();
+        return;
+    }
+
+    input.disabled = true;
+    cursorEl.classList.add('hidden');
+    await sleep(550 + Math.random() * 350);
+    const hint = HINTS[Math.min(turnIdx, HINTS.length - 1)];
+    await botSay(hint);
+    turnIdx++;
+
+    if (!revealed) {
+        input.disabled = false;
+        cursorEl.classList.remove('hidden');
+        input.focus();
+    }
+});
+
+// Hide the trailing block cursor while the user is typing — the native caret
+// takes over visually. Show it again when the field empties.
+input.addEventListener('input', () => {
+    cursorEl.classList.toggle('hidden', input.value.length > 0 || input.disabled);
+});
+
+// Tap anywhere outside the back button to refocus the input on mobile.
+document.addEventListener('click', (e) => {
+    if (input.disabled || revealed) return;
+    if (e.target.closest('.back')) return;
+    input.focus();
+});
+
+// iOS Safari sometimes double-fires touchend → zoom. Guard.
+let _lastTouchEnd = 0;
+document.addEventListener('touchend', e => {
+    const now = Date.now();
+    if (now - _lastTouchEnd < 350) e.preventDefault();
+    _lastTouchEnd = now;
+}, { passive: false });
+
+opening();
+</script>
+
+</body>
+</html>

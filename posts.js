@@ -24,6 +24,13 @@
 export const posts = [
 
     {
+        slug: 'guess',
+        date: '2026-05-15',
+        preview: 'preview.html',  // looping opening — "¿adivinas en quién estoy pensando?"
+        scale: 1.0
+    },
+
+    {
         slug: 'aviary',
         date: '2026-05-14',
         preview: 'preview.html',  // animated sky + flock auto-singing

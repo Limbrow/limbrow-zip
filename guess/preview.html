@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>guess · preview</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+        background: #050505;
+        color: #e8e8e8;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+        font-family: ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+    }
+    #stream {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        padding: clamp(14px, 5vw, 28px);
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        gap: 4px;
+        font-size: clamp(10px, 3.4vw, 14px);
+        line-height: 1.55;
+    }
+    .line { white-space: pre-wrap; min-height: 1.55em; }
+    .line.bot { color: rgba(232, 232, 232, 0.95); }
+    .cursor {
+        display: inline-block;
+        width: 0.5em;
+        height: 1em;
+        background: rgba(232, 232, 232, 0.9);
+        animation: blink 1.05s steps(1, end) infinite;
+        margin-left: 2px;
+        vertical-align: -2px;
+    }
+    .cursor.hidden { display: none; }
+    @keyframes blink { 50% { opacity: 0; } }
+</style>
+</head>
+<body>
+
+<div id="stream"></div>
+<span class="cursor" id="cursor" style="position: fixed; left: clamp(14px, 5vw, 28px); bottom: clamp(14px, 5vw, 28px);"></span>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+// GUESS PREVIEW — loops the opening: hola → oye → ¿adivinas en quién estoy
+// pensando? then fades and restarts. No interaction; just a teaser.
+// ════════════════════════════════════════════════════════════════════════════
+
+const stream = document.getElementById('stream');
+const cursor = document.getElementById('cursor');
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+const LINES = [
+    { text: 'Hola!',                             wait: 1200 },
+    { text: '...',                               wait: 800 },
+    { text: 'oye',                               wait: 500 },
+    { text: '¿adivinas en quién estoy pensando?', wait: 2800 },
+];
+
+async function typewriter(el, text, perChar = 36) {
+    cursor.classList.add('hidden');
+    for (const ch of text) {
+        el.textContent += ch;
+        await sleep(perChar + Math.random() * 30);
+    }
+    // Reposition cursor right after the typed text
+    placeCursorAfter(el);
+    cursor.classList.remove('hidden');
+}
+
+function placeCursorAfter(el) {
+    const r = el.getBoundingClientRect();
+    cursor.style.left = (r.right + 2) + 'px';
+    cursor.style.bottom = 'auto';
+    cursor.style.top = (r.top + r.height * 0.05) + 'px';
+}
+
+async function loop() {
+    while (true) {
+        stream.innerHTML = '';
+        // Cursor at the bottom-left while waiting
+        cursor.style.left = 'clamp(14px, 5vw, 28px)';
+        cursor.style.top  = 'auto';
+        cursor.style.bottom = 'clamp(14px, 5vw, 28px)';
+        cursor.classList.remove('hidden');
+        await sleep(900);
+
+        for (const L of LINES) {
+            const el = document.createElement('div');
+            el.className = 'line bot';
+            stream.appendChild(el);
+            await typewriter(el, L.text);
+            await sleep(L.wait);
+        }
+        // Fade and restart
+        stream.style.transition = 'opacity 0.7s ease';
+        stream.style.opacity = '0';
+        cursor.style.transition = 'opacity 0.4s ease';
+        cursor.style.opacity = '0';
+        await sleep(900);
+        stream.style.transition = '';
+        stream.style.opacity = '';
+        cursor.style.transition = '';
+        cursor.style.opacity = '';
+    }
+}
+
+loop();
+</script>
+
+</body>
+</html>
