@@ -23,24 +23,83 @@
 // FRACTALS PREVIEW
 // Picks a random fractal + palette + parameters every time it loads.
 // Shows in the limbrow.zip grid card — implies variety inside the post.
+//
+// If WebGL isn't available (rare, but happens when GPU accel is off),
+// fall back to a CPU-rendered Mandelbrot in 2D canvas at low res. The
+// grid card never breaks.
 // ════════════════════════════════════════════════════════════════════════════
 
 const canvas = document.getElementById('c');
-const gl =
-       canvas.getContext('webgl2', { antialias: false })
-    || canvas.getContext('webgl',  { antialias: false })
-    || canvas.getContext('webgl2')
-    || canvas.getContext('webgl')
-    || canvas.getContext('experimental-webgl');
-if (!gl) { document.body.style.background = '#000'; throw new Error('no webgl'); }
 
-// ─── PALETTES (same as the main fractal post) ──────────────────────────────
+// Palettes — Inigo Quilez form: a + b * cos(2π * (c*t + d))
 const PALETTES = [
     { a:[0.3,0.35,0.55], b:[0.55,0.55,0.5], c:[0.85,0.9,1.0], d:[0.20,0.18,0.05] },
     { a:[0.5,0.5,0.5],   b:[0.5,0.5,0.5],   c:[1.0,1.0,1.0],  d:[0.00,0.33,0.67] },
     { a:[0.5,0.5,0.5],   b:[0.5,0.5,0.5],   c:[1.0,1.0,0.5],  d:[0.80,0.90,0.30] },
     { a:[0.5,0.5,0.7],   b:[0.5,0.5,0.3],   c:[1.0,1.0,1.0],  d:[0.50,0.55,0.65] },
 ];
+
+const gl =
+       canvas.getContext('webgl2', { antialias: false })
+    || canvas.getContext('webgl',  { antialias: false })
+    || canvas.getContext('webgl2')
+    || canvas.getContext('webgl')
+    || canvas.getContext('experimental-webgl');
+
+if (!gl) {
+    // ─── CPU FALLBACK ─────────────────────────────────────────────────────
+    // Render the classic Mandelbrot at 240x240 with a random palette.
+    // Browser scales the canvas up via CSS — looks soft but always works.
+    const ctx2 = canvas.getContext('2d');
+    const W = 240, H = 240;
+    canvas.width = W;
+    canvas.height = H;
+    const pal = PALETTES[Math.floor(Math.random() * PALETTES.length)];
+    const cx = -0.5, cy = 0, zoom = 1.5;
+    const maxIter = 90;
+    const compression = 40 + Math.floor(Math.random() * 60);
+    const img = ctx2.createImageData(W, H);
+    const data = img.data;
+    const TWO_PI = 6.28318;
+    const LOG2 = Math.log(2);
+    for (let py = 0; py < H; py++) {
+        for (let px = 0; px < W; px++) {
+            const x0 = ((px + 0.5) / W - 0.5) * 2 * zoom + cx;
+            const y0 = ((py + 0.5) / H - 0.5) * 2 * zoom + cy;
+            let x = 0, y = 0, x2 = 0, y2 = 0, i;
+            for (i = 0; i < maxIter; i++) {
+                if (x2 + y2 > 4) break;
+                y = 2 * x * y + y0;
+                x = x2 - y2 + x0;
+                x2 = x * x;
+                y2 = y * y;
+            }
+            const idx = (py * W + px) * 4;
+            if (i === maxIter) {
+                data[idx] = 0; data[idx+1] = 0; data[idx+2] = 0;
+            } else {
+                const logZn = Math.log(x2 + y2) / 2;
+                const nu = Math.log(logZn / LOG2) / LOG2;
+                const smoothed = i + 1 - nu;
+                const t = smoothed / compression;
+                let r = (pal.a[0] + pal.b[0] * Math.cos(TWO_PI * (pal.c[0] * t + pal.d[0])));
+                let g = (pal.a[1] + pal.b[1] * Math.cos(TWO_PI * (pal.c[1] * t + pal.d[1])));
+                let b = (pal.a[2] + pal.b[2] * Math.cos(TWO_PI * (pal.c[2] * t + pal.d[2])));
+                r = Math.pow(Math.max(0, Math.min(1, r)), 0.85);
+                g = Math.pow(Math.max(0, Math.min(1, g)), 0.85);
+                b = Math.pow(Math.max(0, Math.min(1, b)), 0.85);
+                data[idx]   = (r * 255) | 0;
+                data[idx+1] = (g * 255) | 0;
+                data[idx+2] = (b * 255) | 0;
+            }
+            data[idx+3] = 255;
+        }
+    }
+    ctx2.putImageData(img, 0, 0);
+
+} else {
+
+// ─── WEBGL PATH (preferred) ────────────────────────────────────────────────
 
 // ─── FRACTAL FAMILY — pick a random one each load ──────────────────────────
 const FRACTALS = [
@@ -222,6 +281,8 @@ function render() {
     if (!revealed) requestAnimationFrame(render);
 }
 render();
+
+}
 </script>
 </body>
 </html>
