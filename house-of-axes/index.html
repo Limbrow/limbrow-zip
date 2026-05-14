@@ -41,32 +41,6 @@
     border: 1px solid #1c1a16;
   }
 
-  /* On narrow screens, scale paddings down so it doesn't break */
-  @media (max-width: 740px) {
-    body { padding: 1.5rem 0.6rem; }
-    .header { padding: 1.8rem 1.4rem 1.4rem; }
-    .diagram-section,
-    .limits-section,
-    .asym-section,
-    .props-section,
-    .concept-section { padding: 0 1.4rem; }
-    .rule-mid { margin: 0 1.4rem; }
-    .footer { padding: 1.4rem 1.4rem 1.8rem; }
-    .title-large { font-size: 2.1rem; }
-    .title-eq { font-size: 1.3rem; }
-    .lim-val { font-size: 1.1rem; }
-    .sig-name { font-size: 1.5rem; }
-  }
-  @media (max-width: 520px) {
-    .limits-grid {
-      grid-template-columns: 1fr 1px 1fr;
-    }
-    .limits-grid > .lim-col-divider:nth-of-type(2),
-    .limits-grid > .lim-col-divider:nth-of-type(4) { display: none; }
-    .props-row { grid-template-columns: 1fr; gap: 1.4rem; }
-    .prop-item { padding-right: 0; }
-  }
-
   /* grain */
   .poster::after {
     content: '';
@@ -448,6 +422,72 @@
   }
 
   .fade-late { animation: fadeIn 1s ease 1.8s both; }
+
+  /* ═══ RESPONSIVE — must come LAST to override base rules ═══ */
+  @media (max-width: 740px) {
+    body { padding: 1rem 0.4rem; }
+    .header {
+        padding: 1.4rem 1.2rem 1.1rem;
+        grid-template-columns: 1fr;
+        gap: 0.6rem;
+    }
+    .diagram-section,
+    .limits-section,
+    .asym-section,
+    .props-section,
+    .concept-section { padding: 0 1.2rem; }
+    .footer { padding: 1.2rem 1.2rem 1.4rem; flex-direction: column; align-items: flex-start; gap: 1rem; }
+    .footer-right { text-align: left; align-items: flex-start; }
+
+    .title-large { font-size: 2rem; line-height: 1.0; }
+    .title-eq { font-size: 1.2rem; text-align: left; padding-top: 0.2rem; }
+    .subtitle { font-size: 0.5rem; }
+    .plate-no { font-size: 0.46rem; }
+
+    /* The 4 limits → 2×2 grid */
+    .limits-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 1.2rem 1rem;
+    }
+    .lim-col-divider { display: none; }
+    .lim-col {
+        padding: 0 0 1rem 0;
+        border-bottom: 1px solid var(--rule);
+    }
+    .limits-grid > .lim-col:nth-last-of-type(-n+2) {
+        border-bottom: none;
+        padding-bottom: 0;
+    }
+    .lim-val { font-size: 1.1rem; }
+    .lim-tag { font-size: 0.42rem; }
+    .lim-expr { font-size: 0.78rem; }
+    .lim-note { font-size: 0.42rem; line-height: 1.55; }
+
+    .limits-header { flex-direction: column; gap: 0.4rem; align-items: flex-start; }
+
+    /* Asymptotes stack vertically */
+    .asym-grid { grid-template-columns: 1fr; gap: 1rem; padding: 1rem 0; }
+    .asym-col { padding: 0 0 1rem 0; border-bottom: 1px solid var(--rule); }
+    .asym-col:last-child { border-bottom: none; padding-bottom: 0; }
+    .asym-col-div { display: none; }
+
+    /* Properties stack vertically */
+    .props-row { grid-template-columns: 1fr; gap: 1.2rem; padding: 1rem 0; }
+    .prop-item { padding-right: 0; }
+
+    /* Concept block */
+    .concept-body { font-size: 0.85rem; line-height: 1.7; }
+    .concept-inner { padding: 1rem 0 1rem 1rem; }
+
+    .sig-name { font-size: 1.4rem; }
+  }
+
+  @media (max-width: 380px) {
+    .title-large { font-size: 1.7rem; }
+    .limits-grid { grid-template-columns: 1fr; }
+    .lim-col { border-bottom: 1px solid var(--rule); padding-bottom: 1rem; }
+    .limits-grid > .lim-col:last-child { border-bottom: none; padding-bottom: 0; }
+  }
 </style>
 </head>
 <body>

@@ -47,8 +47,8 @@ export const posts = [
     {
         slug: 'liserium',
         date: '2026-04-15',
-        preview: 'preview.html',  // synth chassis + animated oscilloscope (no audio)
-        scale: 0.4
+        preview: 'preview.html',  // LCD + sequencer crop, native 1:1
+        scale: 1.0
     },
 
     {

@@ -53,172 +53,299 @@
     }
     .back:hover { background: rgba(0,0,0,0.7); }
 
-    /* ─── PANEL ─── */
+    /* ─── PANEL (Ring-style, floating bottom, minimizable) ─── */
     .panel {
         position: fixed;
-        top: 16px;
-        right: 16px;
+        bottom: 16px;
+        left: 50%;
+        transform: translateX(-50%);
         z-index: 50;
-        width: 240px;
-        max-height: calc(100vh - 100px);
-        max-height: calc(100dvh - 100px);
-        overflow-y: auto;
-        background: rgba(0,0,0,0.55);
-        backdrop-filter: blur(14px);
-        -webkit-backdrop-filter: blur(14px);
-        border: 1px solid rgba(255,255,255,0.08);
-        border-radius: 4px;
-        padding: 14px 14px 16px;
-        font-size: 10px;
-        letter-spacing: 0.04em;
-        transition: opacity 0.18s, transform 0.18s;
+        width: min(560px, calc(100vw - 32px));
+        max-height: calc(100vh - 80px);
+        max-height: calc(100dvh - 80px);
+        background: rgba(8, 10, 22, 0.65);
+        backdrop-filter: blur(20px) saturate(140%);
+        -webkit-backdrop-filter: blur(20px) saturate(140%);
+        border: 1px solid rgba(180, 160, 230, 0.15);
+        border-radius: 14px;
+        padding: 14px;
+        box-shadow:
+            0 20px 60px rgba(0,0,0,0.5),
+            0 0 0 1px rgba(255,255,255,0.04) inset;
+        transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+                    opacity 0.28s ease,
+                    border-radius 0.32s ease;
+        overflow: hidden;
     }
-    .panel.hidden {
+    .panel.minimized {
+        transform: translateX(-50%) translateY(calc(100% - 38px));
+        border-radius: 18px 18px 0 0;
+    }
+
+    .panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 12px;
+        margin-bottom: 12px;
+        border-bottom: 1px solid rgba(180, 160, 230, 0.08);
+        cursor: pointer;
+    }
+    .panel.minimized .panel-head {
+        padding-bottom: 0;
+        margin-bottom: 0;
+        border-bottom: none;
+    }
+
+    .panel-title {
+        font-size: 9px;
+        letter-spacing: 0.25em;
+        text-transform: uppercase;
+        color: rgba(220, 200, 255, 0.7);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .panel-title::before {
+        content: '';
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #c8a4ff;
+        box-shadow: 0 0 6px rgba(200, 164, 255, 0.8);
+    }
+
+    .panel-toggle-btn {
+        background: none;
+        border: 0;
+        color: rgba(220, 200, 255, 0.6);
+        font-size: 14px;
+        cursor: pointer;
+        padding: 4px 8px;
+        margin: -4px -8px;
+        font-family: inherit;
+        transition: color 0.15s, transform 0.32s;
+    }
+    .panel-toggle-btn:hover { color: rgba(220, 200, 255, 1); }
+    .panel.minimized .panel-toggle-btn { transform: rotate(180deg); }
+
+    .panel-body {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        transition: opacity 0.2s, max-height 0.32s ease;
+        max-height: 60vh;
+        overflow-y: auto;
+    }
+    .panel.minimized .panel-body {
         opacity: 0;
-        transform: translateX(8px);
+        max-height: 0;
         pointer-events: none;
     }
-    .panel::-webkit-scrollbar { width: 4px; }
-    .panel::-webkit-scrollbar-track { background: transparent; }
-    .panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+    .panel-body::-webkit-scrollbar { width: 4px; }
+    .panel-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
 
-    .panel h3 {
-        font-size: 9px;
-        font-weight: 400;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
-        color: rgba(255,255,255,0.4);
-        margin-top: 14px;
-        margin-bottom: 8px;
-        padding-bottom: 6px;
-        border-bottom: 1px solid rgba(255,255,255,0.06);
+    .col {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
     }
-    .panel h3:first-child { margin-top: 0; }
 
-    .panel button,
-    .panel select {
-        width: 100%;
-        background: rgba(255,255,255,0.04);
-        border: 1px solid rgba(255,255,255,0.1);
-        color: #fff;
-        padding: 7px 8px;
+    h3 {
+        font-size: 8px;
+        font-weight: 500;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+        color: rgba(180, 170, 220, 0.5);
+        margin-bottom: 2px;
+    }
+
+    /* Segmented control */
+    .seg {
+        display: grid;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 8px;
+        padding: 3px;
+        gap: 0;
+    }
+    .seg.seg-2 { grid-template-columns: 1fr 1fr; }
+    .seg.seg-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .seg button {
+        background: transparent;
+        border: 0;
+        color: rgba(220, 200, 255, 0.55);
+        padding: 7px 4px;
         font-family: inherit;
-        font-size: 10px;
-        letter-spacing: 0.04em;
-        border-radius: 2px;
+        font-size: 9px;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        font-weight: 500;
+        border-radius: 5px;
         cursor: pointer;
-        transition: background 0.1s, border-color 0.1s;
+        transition: all 0.15s;
+    }
+    .seg button:hover { color: rgba(255, 255, 255, 0.85); }
+    .seg button.active {
+        background: rgba(200, 164, 255, 0.18);
+        color: #fff;
+        box-shadow:
+            0 0 12px rgba(180, 100, 255, 0.25) inset,
+            0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+
+    select {
+        width: 100%;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(180, 160, 230, 0.12);
+        color: rgba(220, 200, 255, 0.9);
+        padding: 8px 28px 8px 10px;
+        font-family: inherit;
+        font-size: 11px;
+        border-radius: 7px;
+        cursor: pointer;
         -webkit-appearance: none;
         appearance: none;
-    }
-    .panel button:hover,
-    .panel select:hover {
-        background: rgba(255,255,255,0.08);
-        border-color: rgba(255,255,255,0.2);
-    }
-    .panel button:active {
-        background: rgba(255,255,255,0.15);
-    }
-
-    .panel select {
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M0 2 L4 6 L8 2' stroke='%23fff' stroke-width='1' fill='none' opacity='0.5'/%3E%3C/svg%3E");
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M0 2 L4 6 L8 2' stroke='%23c8a4ff' stroke-width='1.2' fill='none'/%3E%3C/svg%3E");
         background-repeat: no-repeat;
-        background-position: right 8px center;
-        padding-right: 24px;
+        background-position: right 10px center;
+        transition: all 0.15s;
     }
-    .panel select option { background: #111; color: #fff; }
-
-    .panel .row {
-        display: flex;
-        gap: 6px;
-        margin-bottom: 6px;
+    select:hover {
+        background-color: rgba(255, 255, 255, 0.07);
+        border-color: rgba(180, 160, 230, 0.25);
     }
-    .panel .row:last-child { margin-bottom: 0; }
+    select option { background: #0a0c1a; color: #d8dcf0; }
 
-    .panel label {
-        display: block;
-        font-size: 9px;
-        letter-spacing: 0.1em;
-        color: rgba(255,255,255,0.5);
-        margin-bottom: 5px;
+    /* Action buttons (Randomize, Reset) */
+    button.action {
+        width: 100%;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(180, 160, 230, 0.15);
+        color: rgba(220, 200, 255, 0.9);
+        padding: 8px 10px;
+        font-family: inherit;
+        font-size: 10px;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        font-weight: 500;
+        border-radius: 7px;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+    button.action:hover {
+        background: rgba(200, 164, 255, 0.12);
+        border-color: rgba(200, 164, 255, 0.35);
+        color: #fff;
+    }
+
+    label {
         display: flex;
         justify-content: space-between;
+        align-items: baseline;
+        font-size: 8px;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: rgba(180, 170, 220, 0.5);
+        margin-bottom: 4px;
     }
-    .panel label span.val { color: #fff; }
+    label .val {
+        color: rgba(220, 200, 255, 0.95);
+        letter-spacing: 0;
+        font-size: 10px;
+    }
 
-    .panel input[type=range] {
+    input[type=range] {
         width: 100%;
         -webkit-appearance: none;
         appearance: none;
         height: 2px;
-        background: rgba(255,255,255,0.15);
+        background: rgba(180, 160, 230, 0.12);
         outline: none;
-        margin-bottom: 6px;
+        border-radius: 1px;
     }
-    .panel input[type=range]::-webkit-slider-thumb {
+    input[type=range]::-webkit-slider-thumb {
         -webkit-appearance: none;
-        width: 12px;
-        height: 12px;
-        background: #fff;
+        width: 14px;
+        height: 14px;
+        background: radial-gradient(circle at 30% 30%, #e0c8ff 0%, #8060e0 100%);
         border-radius: 50%;
         cursor: pointer;
+        box-shadow: 0 0 12px rgba(180, 100, 255, 0.6);
+        border: 0;
     }
-    .panel input[type=range]::-moz-range-thumb {
-        width: 12px;
-        height: 12px;
-        background: #fff;
+    input[type=range]::-moz-range-thumb {
+        width: 14px;
+        height: 14px;
+        background: #c8a4ff;
         border-radius: 50%;
         cursor: pointer;
         border: 0;
+        box-shadow: 0 0 12px rgba(180, 100, 255, 0.6);
     }
 
-    .checkbox-row {
+    /* Toggle row (smooth, banded) */
+    .toggle-row {
         display: flex;
         align-items: center;
-        gap: 8px;
-        margin-bottom: 6px;
+        justify-content: space-between;
         cursor: pointer;
         padding: 4px 0;
     }
-    .checkbox-row input { display: none; }
-    .checkbox-row .box {
-        width: 12px;
-        height: 12px;
-        border: 1px solid rgba(255,255,255,0.3);
-        border-radius: 2px;
+    .toggle-row input { display: none; }
+    .toggle-row .lbl {
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        color: rgba(220, 200, 255, 0.8);
+    }
+    .toggle-row .sw {
+        width: 28px;
+        height: 16px;
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 9px;
         position: relative;
+        transition: background 0.15s;
         flex-shrink: 0;
     }
-    .checkbox-row input:checked + .box::after {
+    .toggle-row .sw::after {
         content: '';
         position: absolute;
-        inset: 2px;
-        background: #fff;
-        border-radius: 1px;
+        top: 2px;
+        left: 2px;
+        width: 12px;
+        height: 12px;
+        background: rgba(220, 200, 255, 0.6);
+        border-radius: 50%;
+        transition: transform 0.15s, background 0.15s;
     }
-    .checkbox-row span.lbl {
-        font-size: 10px;
-        letter-spacing: 0.04em;
-        color: rgba(255,255,255,0.75);
+    .toggle-row input:checked ~ .sw {
+        background: rgba(200, 164, 255, 0.3);
+    }
+    .toggle-row input:checked ~ .sw::after {
+        transform: translateX(12px);
+        background: #fff;
+        box-shadow: 0 0 8px rgba(200, 164, 255, 0.7);
     }
 
     /* Palette swatches */
     .palette-row {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(5, 1fr);
         gap: 6px;
     }
     .palette-swatch {
         height: 28px;
-        border-radius: 2px;
+        border-radius: 5px;
         cursor: pointer;
-        border: 1px solid rgba(255,255,255,0.1);
-        transition: border-color 0.1s, transform 0.1s;
+        border: 1px solid rgba(180, 160, 230, 0.12);
+        transition: all 0.15s;
     }
-    .palette-swatch:hover { transform: translateY(-1px); }
+    .palette-swatch:hover {
+        transform: translateY(-1px);
+        border-color: rgba(200, 164, 255, 0.4);
+    }
     .palette-swatch.active {
-        border-color: #fff;
-        box-shadow: 0 0 0 1px rgba(255,255,255,0.3);
+        border-color: rgba(200, 164, 255, 0.8);
+        box-shadow: 0 0 12px rgba(180, 100, 255, 0.4);
     }
 
     /* ─── COORDINATES READOUT ─── */
@@ -226,75 +353,47 @@
         position: fixed;
         bottom: 16px;
         left: 16px;
-        z-index: 50;
+        z-index: 40;
         font-size: 9px;
         letter-spacing: 0.08em;
-        color: rgba(255,255,255,0.4);
+        color: rgba(220, 200, 255, 0.5);
         line-height: 1.5;
         mix-blend-mode: difference;
         pointer-events: none;
     }
-    .coords span.k { color: rgba(255,255,255,0.3); display: inline-block; width: 22px; }
-    .coords span.v { color: rgba(255,255,255,0.7); }
-
-    /* ─── PANEL TOGGLE ─── */
-    .panel-toggle {
-        position: fixed;
-        top: 16px;
-        right: 16px;
-        z-index: 60;
-        width: 36px;
-        height: 36px;
-        display: none;
-        align-items: center;
-        justify-content: center;
-        background: rgba(0,0,0,0.45);
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
-        border-radius: 50%;
-        border: 1px solid rgba(255,255,255,0.1);
-        color: #fff;
-        cursor: pointer;
-        font-size: 12px;
-    }
-    .panel-toggle.visible {
-        display: flex;
-    }
+    .coords span.k { color: rgba(180, 160, 220, 0.45); display: inline-block; width: 28px; }
+    .coords span.v { color: rgba(220, 200, 255, 0.8); }
 
     /* ─── HINT — fades out ─── */
     .hint {
         position: fixed;
-        bottom: 50%;
+        top: 30%;
         left: 50%;
         transform: translateX(-50%);
         z-index: 40;
         font-size: 10px;
         letter-spacing: 0.18em;
         text-transform: uppercase;
-        color: rgba(255,255,255,0.5);
+        color: rgba(220, 200, 255, 0.5);
         mix-blend-mode: difference;
         pointer-events: none;
         animation: hintFade 5s ease-out forwards;
         text-align: center;
         white-space: nowrap;
     }
+
+    @media (max-width: 480px) {
+        .panel {
+            padding: 12px;
+            width: calc(100vw - 24px);
+        }
+        .panel-body { grid-template-columns: 1fr; gap: 14px; }
+    }
     @keyframes hintFade {
         0%   { opacity: 0; }
         15%  { opacity: 1; }
         70%  { opacity: 1; }
         100% { opacity: 0; transform: translate(-50%, -10px); }
-    }
-
-    @media (max-width: 600px) {
-        .panel {
-            top: auto;
-            bottom: 70px;
-            right: 16px;
-            left: 16px;
-            width: auto;
-            max-height: 50vh;
-        }
-        .coords { bottom: 16px; }
     }
 </style>
 </head>
@@ -304,52 +403,61 @@
 
 <canvas id="fractal"></canvas>
 
-<button class="panel-toggle" id="panel-toggle" aria-label="Toggle controls">⚙</button>
-
 <aside class="panel" id="panel">
 
-    <h3>Formula</h3>
-    <select id="formula">
-        <option value="mandelbrot">Mandelbrot</option>
-        <option value="mandelbrot3">Mandelbrot³</option>
-        <option value="mandelbrot4">Mandelbrot⁴</option>
-        <option value="mandelbrot5">Mandelbrot⁵</option>
-        <option value="mandelbrot6">Mandelbrot⁶</option>
-        <option value="mandelbrot7">Mandelbrot⁷</option>
-        <option value="mandelbrot-2">Mandelbrot⁻²</option>
-        <option value="burning-ship">Burning Ship</option>
-        <option value="julia">Julia</option>
-        <option value="phoenix">Phoenix</option>
-        <option value="newton">Newton</option>
-    </select>
-
-    <h3>Iterations <span id="iter-val" style="float:right;font-weight:normal;color:#fff;letter-spacing:0;">200</span></h3>
-    <input type="range" id="iter" min="32" max="1000" value="200" step="8">
-
-    <h3>Color Compression <span id="comp-val" style="float:right;font-weight:normal;color:#fff;letter-spacing:0;">80</span></h3>
-    <input type="range" id="comp" min="5" max="300" value="80" step="1">
-
-    <h3>Coloring</h3>
-    <label class="checkbox-row">
-        <input type="checkbox" id="smooth" checked>
-        <span class="box"></span>
-        <span class="lbl">Smooth</span>
-    </label>
-    <label class="checkbox-row">
-        <input type="checkbox" id="banded">
-        <span class="box"></span>
-        <span class="lbl">Banded</span>
-    </label>
-
-    <h3>Palette</h3>
-    <div class="palette-row" id="palettes"></div>
-
-    <h3>Actions</h3>
-    <div class="row">
-        <button id="randomize">Randomize</button>
+    <div class="panel-head" id="panel-head">
+        <div class="panel-title">FRACTALS</div>
+        <button class="panel-toggle-btn" id="panel-toggle" aria-label="Minimize">▾</button>
     </div>
-    <div class="row">
-        <button id="reset">Reset View</button>
+
+    <div class="panel-body">
+        <div class="col">
+            <h3>Formula</h3>
+            <select id="formula">
+                <option value="mandelbrot">Mandelbrot</option>
+                <option value="mandelbrot3">Mandelbrot³</option>
+                <option value="mandelbrot4">Mandelbrot⁴</option>
+                <option value="mandelbrot5">Mandelbrot⁵</option>
+                <option value="mandelbrot6">Mandelbrot⁶</option>
+                <option value="mandelbrot7">Mandelbrot⁷</option>
+                <option value="mandelbrot-2">Mandelbrot⁻²</option>
+                <option value="burning-ship">Burning Ship</option>
+                <option value="julia">Julia</option>
+                <option value="phoenix">Phoenix</option>
+                <option value="newton">Newton</option>
+            </select>
+
+            <div>
+                <label>Iterations <span class="val" id="iter-val">200</span></label>
+                <input type="range" id="iter" min="32" max="1000" value="200" step="8">
+            </div>
+
+            <div>
+                <label>Compression <span class="val" id="comp-val">80</span></label>
+                <input type="range" id="comp" min="5" max="300" value="80" step="1">
+            </div>
+
+            <h3>Coloring</h3>
+            <label class="toggle-row">
+                <input type="checkbox" id="smooth" checked>
+                <span class="lbl">Smooth</span>
+                <span class="sw"></span>
+            </label>
+            <label class="toggle-row">
+                <input type="checkbox" id="banded">
+                <span class="lbl">Banded</span>
+                <span class="sw"></span>
+            </label>
+        </div>
+
+        <div class="col">
+            <h3>Palette</h3>
+            <div class="palette-row" id="palettes"></div>
+
+            <h3>Actions</h3>
+            <button class="action" id="randomize">Randomize</button>
+            <button class="action" id="reset">Reset view</button>
+        </div>
     </div>
 
 </aside>
@@ -760,8 +868,17 @@ function zoomAt(sx, sy, factor) {
     render();
 }
 
+// Helper: returns true if a screen point is over the panel UI
+function isOverPanel(x, y) {
+    const p = document.getElementById('panel');
+    if (!p) return false;
+    const r = p.getBoundingClientRect();
+    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+}
+
 // Click to zoom in, shift-click to zoom out
 canvas.addEventListener('click', (e) => {
+    if (isOverPanel(e.clientX, e.clientY)) return;
     if (e.shiftKey || e.altKey) {
         zoomAt(e.clientX, e.clientY, 2.0);
     } else {
@@ -790,6 +907,8 @@ let lastTap = 0;
 let touchStart = null;
 
 canvas.addEventListener('touchstart', (e) => {
+    // Ignore touches that land on the panel UI
+    if (e.touches.length === 1 && isOverPanel(e.touches[0].clientX, e.touches[0].clientY)) return;
     if (e.touches.length === 1) {
         touchStart = {
             x: e.touches[0].clientX,
@@ -953,24 +1072,10 @@ $('randomize').addEventListener('click', () => {
     render();
 });
 
-// Panel toggle on mobile
-$('panel-toggle').addEventListener('click', () => {
-    $('panel').classList.toggle('hidden');
-});
-
-// Show toggle button when panel is hidden, hide when open. Always available on small screens.
-function updatePanelToggleVisibility() {
-    $('panel-toggle').classList.add('visible');
-}
-updatePanelToggleVisibility();
-
-// Hide panel after first interaction with the fractal (so the artwork breathes)
-let panelAutoHidden = false;
-canvas.addEventListener('click', () => {
-    if (!panelAutoHidden) {
-        // Don't auto-hide — user might want to keep tweaking. Just leave it.
-        panelAutoHidden = true;
-    }
+// ─── PANEL MINIMIZE/EXPAND ──────────────────────────────────────────────────
+const panel = $('panel');
+$('panel-head').addEventListener('click', () => {
+    panel.classList.toggle('minimized');
 });
 
 // ─── Init ───────────────────────────────────────────────────────────────────
