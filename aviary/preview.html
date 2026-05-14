@@ -13,288 +13,223 @@
         height: 100dvh;
         overflow: hidden;
     }
-    #sky, #birds {
+    #sky {
         position: fixed;
         top: 0; left: 0;
         width: 100%; height: 100%;
         display: block;
     }
-    #sky { z-index: 1; }
-    #birds { z-index: 2; }
 </style>
 </head>
 <body>
 
 <canvas id="sky"></canvas>
-<canvas id="birds"></canvas>
 
 <script>
 // ════════════════════════════════════════════════════════════════════════════
-// AVIARY PREVIEW — silent. Sky cycles through DAWN/DAY/DUSK/NIGHT; birds
-// auto-spawn and fly across. Same visual language as the live post.
+// AVIARY PREVIEW — silent. Same painting language as the live post:
+// gradient sky, sun/moon, soft drifting clouds. Auto-cycles through
+// dawn / day / dusk / night so the grid card reads as a complete piece.
 // ════════════════════════════════════════════════════════════════════════════
 
-const skyCanvas = document.getElementById('sky');
-const birdsCanvas = document.getElementById('birds');
-const skyCtx = skyCanvas.getContext('2d');
-const birdCtx = birdsCanvas.getContext('2d');
+const canvas = document.getElementById('sky');
+const ctx = canvas.getContext('2d');
 
 function resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    [skyCanvas, birdsCanvas].forEach(c => {
-        const r = c.getBoundingClientRect();
-        c.width = Math.floor(r.width * dpr);
-        c.height = Math.floor(r.height * dpr);
-        c.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
-    });
+    const r = canvas.getBoundingClientRect();
+    canvas.width = Math.floor(r.width * dpr);
+    canvas.height = Math.floor(r.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 window.addEventListener('resize', resize);
 resize();
 
 const PALETTES = {
-    dawn: { sky:[[0,'#fcd7a0'],[0.45,'#f6a98a'],[1,'#8a7caa']], cloud:[255,220,200], cloudOpacity:0.35, stars:false, moon:false },
-    day:  { sky:[[0,'#5db5e8'],[0.6,'#b5dff5'],[1,'#dfeef5']], cloud:[255,255,255], cloudOpacity:0.55, stars:false, moon:false },
-    dusk: { sky:[[0,'#1a1442'],[0.4,'#7d3b6b'],[0.75,'#e85a3e'],[1,'#f4a14b']], cloud:[255,170,130], cloudOpacity:0.32, stars:false, moon:false },
-    night:{ sky:[[0,'#02030d'],[0.6,'#0a1030'],[1,'#1a2050']], cloud:[80,90,130], cloudOpacity:0.10, stars:true, moon:true },
+    dawn:  { sky:[[0,'#f9d18a'],[0.42,'#f1907c'],[0.78,'#a87aa0'],[1,'#4a4470']], cloud:[255,220,200], cloudOpacity:0.55, sun:{x:0.18,y:0.66,r:0.075,core:'#ffe6c0',halo:'rgba(255,200,140,0.55)'}, stars:0,    moon:0 },
+    day:   { sky:[[0,'#5cb3e6'],[0.55,'#9fd4f0'],[1,'#dff0f5']],                  cloud:[255,255,255], cloudOpacity:0.75, sun:{x:0.72,y:0.18,r:0.065,core:'#fffbe0',halo:'rgba(255,250,200,0.55)'}, stars:0,    moon:0 },
+    dusk:  { sky:[[0,'#1d1647'],[0.35,'#7a356a'],[0.7,'#e25a3b'],[1,'#f3a04c']],  cloud:[255,165,120], cloudOpacity:0.50, sun:{x:0.83,y:0.74,r:0.085,core:'#ffc888',halo:'rgba(255,130,80,0.55)'},  stars:0.18, moon:0 },
+    night: { sky:[[0,'#02030d'],[0.55,'#080e2a'],[1,'#171b40']],                  cloud:[110,120,160], cloudOpacity:0.18, sun:{x:0.78,y:0.20,r:0.060,core:'#e8eef8',halo:'rgba(200,215,250,0.32)'}, stars:1.0,  moon:1.0 },
 };
-const CYCLE = ['day','dusk','night','dawn'];
-const CYCLE_MS = 8000;     // per palette
+const CYCLE = ['day', 'dusk', 'night', 'dawn'];
+const CYCLE_MS = 7500;
 const FADE_MS  = 1800;
 
-// ─── Birds (visual only) ──────────────────────────────────────────────────
-// Per-mode visual pools matching the live post
-const SPECIES = {
-    blackbird:   { color:'rgba(15,12,22,0.9)',   size:1.0, speed:1.1, wingRate:1.1, lifetime:6500 },
-    robin:       { color:'rgba(30,20,35,0.85)',  size:0.85,speed:1.3, wingRate:1.3, lifetime:5500 },
-    sparrow:     { color:'rgba(30,22,28,0.85)',  size:0.75,speed:1.4, wingRate:1.6, lifetime:5000 },
-    goldfinch:   { color:'rgba(35,25,18,0.9)',   size:0.7, speed:1.7, wingRate:1.8, lifetime:5500 },
-    swallow:     { color:'rgba(20,18,30,0.9)',   size:0.95,speed:2.2, wingRate:2.0, lifetime:4500 },
-    nightingale: { color:'rgba(25,18,30,0.85)',  size:0.9, speed:0.9, wingRate:1.0, lifetime:7500 },
-    woodpigeon:  { color:'rgba(40,35,45,0.85)',  size:1.2, speed:0.7, wingRate:0.7, lifetime:6000 },
-    owl:         { color:'rgba(15,15,25,0.95)',  size:1.3, speed:0.6, wingRate:0.6, lifetime:6500 },
-    nightjar:    { color:'rgba(20,22,32,0.85)',  size:1.0, speed:0.85,wingRate:0.9, lifetime:7000 },
-    cricket:     { color:'rgba(30,30,40,0.6)',   size:0.5, speed:0.3, wingRate:0.4, lifetime:5000 },
-};
-const MODE_SPECIES = {
-    dawn:  ['blackbird','robin'],
-    day:   ['sparrow','goldfinch','swallow'],
-    dusk:  ['nightingale','woodpigeon'],
-    night: ['owl','nightjar','cricket'],
-};
-
-let birds = [];
-
-function spawnBird(modeKey) {
-    const pool = MODE_SPECIES[modeKey];
-    const key = pool[Math.floor(Math.random() * pool.length)];
-    const sp = SPECIES[key];
-    const w = birdsCanvas.clientWidth;
-    const h = birdsCanvas.clientHeight;
-    const x = w * (0.1 + Math.random() * 0.8);
-    const y = h * (0.1 + Math.random() * 0.55);
-    let dir = (x < w * 0.25) ? 1 : (x > w * 0.75 ? -1 : (Math.random() < 0.5 ? -1 : 1));
-    birds.push({
-        sp, x, y, dir,
-        vx: dir * (28 + Math.random()*14) * sp.speed,
-        vy: -8 - Math.random()*12,
-        wing: Math.random() * Math.PI * 2,
-        age: 0,
-        lifetime: sp.lifetime + Math.random()*1500,
-    });
-}
-
-function updateBird(b, dt) {
-    b.age += dt;
-    b.wing += dt * 0.012 * b.sp.wingRate;
-    const bob = Math.sin(b.age * 0.005) * 6;
-    b.x += (b.vx * dt) / 1000;
-    b.y += ((b.vy + bob * 0.05) * dt) / 1000;
-}
-
-function drawBird(ctx, b) {
-    const w = b.sp.size * 14;
-    const wingY = Math.sin(b.wing) * 0.55 + 0.45;
-    const fadeIn = Math.min(1, b.age / 280);
-    const fadeOut = Math.max(0, 1 - Math.max(0, b.age - (b.lifetime - 400)) / 400);
-    ctx.save();
-    ctx.globalAlpha = fadeIn * fadeOut;
-    ctx.translate(b.x, b.y);
-    ctx.scale(b.dir, 1);
-    ctx.fillStyle = b.sp.color;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, w * 0.18, w * 0.10, 0, 0, Math.PI * 2);
-    ctx.fill();
-    const wingLift = w * (0.10 + wingY * 0.55);
-    const wingSpan = w;
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.quadraticCurveTo(-wingSpan * 0.35, -wingLift, -wingSpan, -wingLift * 0.30);
-    ctx.quadraticCurveTo(-wingSpan * 0.5, wingLift * 0.05, 0, w * 0.05);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.quadraticCurveTo(wingSpan * 0.35, -wingLift, wingSpan, -wingLift * 0.30);
-    ctx.quadraticCurveTo(wingSpan * 0.5, wingLift * 0.05, 0, w * 0.05);
-    ctx.fill();
-    ctx.restore();
-}
-
-// ─── SKY ──────────────────────────────────────────────────────────────────
-function applyGrad(g, stops) { for (const [p, c] of stops) g.addColorStop(p, c); }
 function lerp(a, b, t) { return a + (b - a) * t; }
+function applyGrad(g, stops) { for (const [p, c] of stops) g.addColorStop(p, c); }
 
-const _stars = (() => {
-    const out = []; let s = 1337;
-    const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
-    for (let i = 0; i < 220; i++) {
-        out.push({ x: rnd(), y: rnd() * 0.85, r: 0.4 + rnd() * 1.4, phase: rnd() * Math.PI * 2, speed: 0.0007 + rnd() * 0.0015 });
+function parseRgba(c) {
+    if (c.startsWith('#')) {
+        const h = c.slice(1);
+        return h.length === 3
+            ? [parseInt(h[0]+h[0],16), parseInt(h[1]+h[1],16), parseInt(h[2]+h[2],16), 1]
+            : [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16), 1];
     }
-    return out;
-})();
-
-function drawStars(time, alpha) {
-    const w = skyCanvas.clientWidth, h = skyCanvas.clientHeight;
-    skyCtx.save();
-    for (const s of _stars) {
-        const tw = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(time * s.speed + s.phase));
-        skyCtx.globalAlpha = alpha * tw;
-        skyCtx.fillStyle = '#fff';
-        skyCtx.beginPath();
-        skyCtx.arc(s.x * w, s.y * h, s.r, 0, Math.PI * 2);
-        skyCtx.fill();
-    }
-    skyCtx.restore();
+    const m = c.match(/rgba?\(([^)]+)\)/);
+    if (!m) return null;
+    const parts = m[1].split(',').map(s => parseFloat(s));
+    return [parts[0], parts[1], parts[2], parts[3] != null ? parts[3] : 1];
+}
+function mixColor(c1, c2, t, alphaScale) {
+    const p1 = parseRgba(c1), p2 = parseRgba(c2);
+    if (!p1 || !p2) return c2;
+    const r = lerp(p1[0], p2[0], t);
+    const g = lerp(p1[1], p2[1], t);
+    const b = lerp(p1[2], p2[2], t);
+    let a = lerp(p1[3], p2[3], t);
+    if (alphaScale != null) a *= alphaScale;
+    return `rgba(${r|0}, ${g|0}, ${b|0}, ${a.toFixed(3)})`;
 }
 
-function drawMoon(alpha, w, h) {
-    const mx = w * 0.78, my = h * 0.22, R = Math.min(w, h) * 0.06;
-    skyCtx.save();
-    skyCtx.globalAlpha = alpha;
-    const g = skyCtx.createRadialGradient(mx, my, 0, mx, my, R * 3.5);
-    g.addColorStop(0, 'rgba(220,230,255,0.20)');
-    g.addColorStop(1, 'rgba(220,230,255,0)');
-    skyCtx.fillStyle = g;
-    skyCtx.beginPath(); skyCtx.arc(mx, my, R * 3.5, 0, Math.PI * 2); skyCtx.fill();
-    skyCtx.fillStyle = '#dde6f5';
-    skyCtx.beginPath(); skyCtx.arc(mx, my, R, 0, Math.PI * 2); skyCtx.fill();
-    skyCtx.fillStyle = 'rgba(100,110,140,0.18)';
-    skyCtx.beginPath(); skyCtx.arc(mx + R * 0.3, my, R * 0.92, 0, Math.PI * 2); skyCtx.fill();
-    skyCtx.restore();
+// ─── Clouds ─────────────────────────────────────────────────────────────────
+class Cloud {
+    constructor(layer, w, h) {
+        this.layer = layer;
+        const baseSize = layer === 0 ? 0.25 : 0.40;
+        this.size = baseSize * Math.min(w, h) * (0.75 + Math.random() * 0.7);
+        this.x = Math.random() * (w + this.size * 2) - this.size;
+        this.y = h * (0.08 + Math.random() * 0.55);
+        this.speed = (layer === 0 ? 4 : 10) * (0.7 + Math.random() * 0.7);
+        this.alpha = layer === 0 ? 0.45 : 0.75;
+        this.aspectY = 0.45 + Math.random() * 0.25;
+    }
+    update(dt, w) {
+        this.x += (this.speed * dt) / 1000;
+        if (this.x - this.size > w) this.x = -this.size * 2;
+    }
 }
 
-function drawClouds(time, w, h, pPrev, pCurr, blend) {
+let clouds = [];
+function rebuildClouds() {
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    clouds = [];
+    for (let i = 0; i < 6; i++) clouds.push(new Cloud(0, w, h));
+    for (let i = 0; i < 5; i++) clouds.push(new Cloud(1, w, h));
+}
+rebuildClouds();
+window.addEventListener('resize', rebuildClouds);
+
+function drawClouds(w, h, pPrev, pCurr, blend) {
     const tintR = lerp(pPrev.cloud[0], pCurr.cloud[0], blend);
     const tintG = lerp(pPrev.cloud[1], pCurr.cloud[1], blend);
     const tintB = lerp(pPrev.cloud[2], pCurr.cloud[2], blend);
     const op = lerp(pPrev.cloudOpacity, pCurr.cloudOpacity, blend);
     if (op < 0.005) return;
-
-    const DS = 5;
-    const dsW = Math.ceil(w / DS), dsH = Math.ceil(h / DS);
-    if (!drawClouds._buf || drawClouds._buf.width !== dsW || drawClouds._buf.height !== dsH) {
-        drawClouds._buf = document.createElement('canvas');
-        drawClouds._buf.width = dsW;
-        drawClouds._buf.height = dsH;
-        drawClouds._bufCtx = drawClouds._buf.getContext('2d');
-        drawClouds._imgData = drawClouds._bufCtx.createImageData(dsW, dsH);
+    for (const c of clouds) {
+        const rx = c.size;
+        const grad = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, rx);
+        grad.addColorStop(0,    `rgba(${tintR|0},${tintG|0},${tintB|0},${c.alpha * op})`);
+        grad.addColorStop(0.55, `rgba(${tintR|0},${tintG|0},${tintB|0},${c.alpha * op * 0.5})`);
+        grad.addColorStop(1,    `rgba(${tintR|0},${tintG|0},${tintB|0},0)`);
+        ctx.save();
+        ctx.translate(c.x, c.y);
+        ctx.scale(1, c.aspectY);
+        ctx.translate(-c.x, -c.y);
+        ctx.fillStyle = grad;
+        ctx.fillRect(c.x - rx, c.y - rx, rx * 2, rx * 2);
+        ctx.restore();
     }
-    const buf = drawClouds._buf, bufCtx = drawClouds._bufCtx, imgData = drawClouds._imgData;
-    const data = imgData.data;
-
-    const layers = [
-        { scale: 0.008, speed: 0.000020, weight: 0.65 },
-        { scale: 0.018, speed: 0.000045, weight: 0.35 },
-    ];
-    for (let y = 0; y < dsH; y++) {
-        for (let x = 0; x < dsW; x++) {
-            let v = 0;
-            for (const L of layers) {
-                const tt = time * L.speed;
-                v += (
-                    Math.sin((x * DS + tt * 100000) * L.scale)
-                  * Math.cos((y * DS + tt * 80000) * L.scale * 1.3) * 0.5
-                  + Math.sin((x * DS + tt * 130000) * L.scale * 2 + 1.7)
-                  * Math.cos((y * DS + tt * 60000) * L.scale * 2.7 + 0.5) * 0.25
-                  + 0.25
-                ) * L.weight;
-            }
-            const yBias = 1.0 - (y / dsH) * 0.6;
-            const cv = Math.max(0, v * yBias);
-            const cloudAmt = Math.min(1, cv * cv * 1.6);
-            const idx = (y * dsW + x) * 4;
-            data[idx] = tintR; data[idx+1] = tintG; data[idx+2] = tintB;
-            data[idx+3] = cloudAmt * 255;
-        }
-    }
-    bufCtx.putImageData(imgData, 0, 0);
-
-    skyCtx.save();
-    skyCtx.globalAlpha = op;
-    skyCtx.imageSmoothingEnabled = true;
-    skyCtx.imageSmoothingQuality = 'high';
-    skyCtx.drawImage(buf, 0, 0, w, h);
-    skyCtx.restore();
 }
 
-function drawSky(time, pPrev, pCurr, blend) {
-    const w = skyCanvas.clientWidth, h = skyCanvas.clientHeight;
+// ─── Sun / Moon ────────────────────────────────────────────────────────────
+function drawSunOrMoon(w, h, pPrev, pCurr, blend) {
+    const sPrev = pPrev.sun, sCurr = pCurr.sun;
+    const x = lerp(sPrev.x, sCurr.x, blend) * w;
+    const y = lerp(sPrev.y, sCurr.y, blend) * h;
+    const R = lerp(sPrev.r, sCurr.r, blend) * Math.min(w, h);
 
-    let g = skyCtx.createLinearGradient(0, 0, 0, h);
-    applyGrad(g, pPrev.sky);
-    skyCtx.fillStyle = g; skyCtx.fillRect(0, 0, w, h);
+    const halo = ctx.createRadialGradient(x, y, R * 0.6, x, y, R * 6);
+    halo.addColorStop(0, mixColor(sPrev.halo, sCurr.halo, blend));
+    halo.addColorStop(0.55, mixColor(sPrev.halo, sCurr.halo, blend, 0.18));
+    halo.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = halo;
+    ctx.fillRect(x - R * 6, y - R * 6, R * 12, R * 12);
 
-    skyCtx.globalAlpha = blend;
-    g = skyCtx.createLinearGradient(0, 0, 0, h);
-    applyGrad(g, pCurr.sky);
-    skyCtx.fillStyle = g; skyCtx.fillRect(0, 0, w, h);
-    skyCtx.globalAlpha = 1;
+    const disc = ctx.createRadialGradient(x, y, 0, x, y, R);
+    const core = mixColor(sPrev.core, sCurr.core, blend);
+    const edge = mixColor(sPrev.halo, sCurr.halo, blend, 0.7);
+    disc.addColorStop(0,    core);
+    disc.addColorStop(0.65, core);
+    disc.addColorStop(0.95, edge);
+    disc.addColorStop(1,    mixColor(sPrev.halo, sCurr.halo, blend, 0));
+    ctx.fillStyle = disc;
+    ctx.beginPath();
+    ctx.arc(x, y, R * 1.1, 0, Math.PI * 2);
+    ctx.fill();
 
-    const sa = (pPrev.stars ? (1 - blend) : 0) + (pCurr.stars ? blend : 0);
-    if (sa > 0) drawStars(time, sa);
-    const ma = (pPrev.moon ? (1 - blend) : 0) + (pCurr.moon ? blend : 0);
-    if (ma > 0) drawMoon(ma, w, h);
-
-    drawClouds(time, w, h, pPrev, pCurr, blend);
+    const moonAmt = lerp(pPrev.moon, pCurr.moon, blend);
+    if (moonAmt > 0.05) {
+        ctx.save();
+        ctx.globalAlpha = moonAmt * 0.35;
+        ctx.fillStyle = 'rgba(80,90,120,1)';
+        ctx.beginPath();
+        ctx.arc(x + R * 0.32, y - R * 0.08, R * 0.92, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
 }
 
-// ─── LOOP ─────────────────────────────────────────────────────────────────
+// ─── Stars ─────────────────────────────────────────────────────────────────
+const _stars = (() => {
+    const out = []; let s = 1337;
+    const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+    for (let i = 0; i < 240; i++) {
+        out.push({ x: rnd(), y: rnd() * 0.78, r: 0.4 + rnd() * 1.6, phase: rnd() * Math.PI * 2, speed: 0.0008 + rnd() * 0.002 });
+    }
+    return out;
+})();
+
+function drawStars(w, h, alpha, t) {
+    if (alpha <= 0) return;
+    ctx.save();
+    for (const s of _stars) {
+        const tw = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(t * s.speed + s.phase));
+        ctx.globalAlpha = alpha * tw;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(s.x * w, s.y * h, s.r, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+}
+
+// ─── LOOP ──────────────────────────────────────────────────────────────────
 let t = 0;
 let lastTime = performance.now();
-let lastSpawnAt = -1200;
 
 function loop(now) {
     const dt = now - lastTime;
     lastTime = now;
     t += dt;
 
-    // Palette cycle
-    const idx   = Math.floor(t / CYCLE_MS) % CYCLE.length;
-    const into  = (t % CYCLE_MS);
+    const idx = Math.floor(t / CYCLE_MS) % CYCLE.length;
+    const into = t % CYCLE_MS;
     const prevKey = CYCLE[(idx - 1 + CYCLE.length) % CYCLE.length];
     const currKey = CYCLE[idx];
     const blend = Math.min(1, into / FADE_MS);
     const pPrev = PALETTES[prevKey];
     const pCurr = PALETTES[currKey];
 
-    drawSky(t, pPrev, pCurr, blend);
+    const w = canvas.clientWidth, h = canvas.clientHeight;
 
-    // Birds
-    const bw = birdsCanvas.clientWidth, bh = birdsCanvas.clientHeight;
-    birdCtx.clearRect(0, 0, bw, bh);
-    for (let i = birds.length - 1; i >= 0; i--) {
-        const b = birds[i];
-        updateBird(b, dt);
-        if (b.age > b.lifetime || b.x < -60 || b.x > bw + 60 || b.y < -80 || b.y > bh + 60) {
-            birds.splice(i, 1); continue;
-        }
-        drawBird(birdCtx, b);
-    }
+    let g = ctx.createLinearGradient(0, 0, 0, h);
+    applyGrad(g, pPrev.sky);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
 
-    // Spawn birds — use the species pool of the current palette
-    if (t - lastSpawnAt > 1200 + Math.random() * 800) {
-        spawnBird(currKey);
-        lastSpawnAt = t;
-    }
+    g = ctx.createLinearGradient(0, 0, 0, h);
+    applyGrad(g, pCurr.sky);
+    ctx.globalAlpha = blend;
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalAlpha = 1;
+
+    const starAlpha = lerp(pPrev.stars, pCurr.stars, blend);
+    drawStars(w, h, starAlpha, t);
+    drawSunOrMoon(w, h, pPrev, pCurr, blend);
+    for (const c of clouds) c.update(dt, w);
+    drawClouds(w, h, pPrev, pCurr, blend);
 
     requestAnimationFrame(loop);
 }

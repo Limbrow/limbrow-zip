@@ -19,14 +19,13 @@
         touch-action: none;
     }
 
-    /* ─── BACK ─── */
     .back {
         position: fixed;
         top: 16px; left: 16px;
         z-index: 100;
         width: 36px; height: 36px;
         display: flex; align-items: center; justify-content: center;
-        background: rgba(10, 14, 30, 0.65);
+        background: rgba(10, 14, 30, 0.45);
         backdrop-filter: blur(10px);
         -webkit-backdrop-filter: blur(10px);
         border: 1px solid rgba(255,255,255,0.08);
@@ -38,34 +37,39 @@
         padding-bottom: 2px;
     }
 
-    /* ─── CANVASES ─── */
-    #sky, #birds {
+    #sky {
         position: fixed;
         top: 0; left: 0;
         width: 100%; height: 100%;
         display: block;
+        z-index: 1;
     }
-    #sky   { z-index: 1; }
-    #birds { z-index: 2; touch-action: none; }
 
-    /* ─── HINT (centered, fades after first tap) ─── */
-    .hint {
+    /* ─── Big TAP overlay shown until user gesture (browsers gate audio) ─── */
+    .tap-shade {
         position: fixed;
-        top: 50%; left: 50%;
-        transform: translate(-50%, -50%);
-        z-index: 5;
+        inset: 0;
+        z-index: 30;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0,0,0,0);
+        transition: background 0.4s ease, opacity 0.5s ease;
+        cursor: pointer;
+    }
+    .tap-shade.gone {
+        opacity: 0;
+        pointer-events: none;
+    }
+    .tap-shade .label {
         font-size: 11px;
         letter-spacing: 0.3em;
-        color: rgba(255,255,255,0.55);
-        mix-blend-mode: screen;
-        pointer-events: none;
         text-transform: uppercase;
+        color: rgba(255,255,255,0.7);
+        mix-blend-mode: screen;
         text-align: center;
-        transition: opacity 0.6s ease;
     }
-    .hint.gone { opacity: 0; }
 
-    /* ─── HUD READOUT (top right) ─── */
     .hud {
         position: fixed;
         top: 16px; right: 16px;
@@ -73,22 +77,21 @@
         font-size: 9px;
         letter-spacing: 0.1em;
         line-height: 1.5;
-        color: rgba(220, 200, 255, 0.7);
+        color: rgba(255, 255, 255, 0.65);
         text-align: right;
         mix-blend-mode: screen;
         pointer-events: none;
     }
-    .hud .k { color: rgba(180, 160, 220, 0.5); display: inline-block; width: 60px; text-align: right; }
+    .hud .k { color: rgba(220, 220, 230, 0.45); display: inline-block; width: 50px; text-align: right; }
 
-    /* ─── PANEL (floating bottom, minimizable) ─── */
     .panel {
         position: fixed;
         bottom: 16px;
         left: 50%;
         transform: translateX(-50%);
         z-index: 10;
-        width: min(560px, calc(100vw - 32px));
-        background: rgba(8, 10, 22, 0.65);
+        width: min(460px, calc(100vw - 32px));
+        background: rgba(8, 10, 22, 0.55);
         backdrop-filter: blur(20px) saturate(140%);
         -webkit-backdrop-filter: blur(20px) saturate(140%);
         border: 1px solid rgba(180, 160, 230, 0.15);
@@ -152,9 +155,9 @@
     .panel.minimized .panel-toggle-btn { transform: rotate(180deg); }
 
     .panel-body {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
         transition: opacity 0.2s, max-height 0.32s ease;
         max-height: 500px;
         overflow: hidden;
@@ -165,8 +168,6 @@
         pointer-events: none;
     }
 
-    .col { display: flex; flex-direction: column; gap: 10px; }
-
     h3 {
         font-size: 8px;
         font-weight: 500;
@@ -176,14 +177,12 @@
         margin-bottom: 2px;
     }
 
-    /* Segmented control */
     .seg {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
         background: rgba(255, 255, 255, 0.03);
         border-radius: 8px;
         padding: 3px;
-        gap: 0;
     }
     .seg button {
         background: transparent;
@@ -251,7 +250,6 @@
         box-shadow: 0 0 12px rgba(180, 100, 255, 0.6);
     }
 
-    /* iOS-style toggle */
     .toggle-row {
         display: flex;
         justify-content: space-between;
@@ -275,18 +273,11 @@
         background: rgba(220, 200, 255, 0.8);
         transition: transform 0.2s, background 0.2s;
     }
-    .toggle.on {
-        background: rgba(200, 164, 255, 0.35);
-    }
+    .toggle.on { background: rgba(200, 164, 255, 0.35); }
     .toggle.on::after {
         transform: translateX(16px);
         background: #fff;
         box-shadow: 0 0 8px rgba(200, 164, 255, 0.6);
-    }
-
-    @media (max-width: 480px) {
-        .panel { padding: 12px; }
-        .panel-body { grid-template-columns: 1fr; gap: 14px; }
     }
 </style>
 </head>
@@ -295,14 +286,21 @@
 <a class="back" href="/" aria-label="Back to grid">←</a>
 
 <canvas id="sky"></canvas>
-<canvas id="birds"></canvas>
 
-<div class="hint" id="hint">TAP THE SKY</div>
+<!-- One looped track per mode. Files live in audio/. They crossfade
+     in/out on mode change. Falls back gracefully if a file is missing. -->
+<audio id="aud-dawn"  src="audio/dawn.mp3"  loop preload="auto"></audio>
+<audio id="aud-day"   src="audio/day.mp3"   loop preload="auto"></audio>
+<audio id="aud-dusk"  src="audio/dusk.mp3"  loop preload="auto"></audio>
+<audio id="aud-night" src="audio/night.mp3" loop preload="auto"></audio>
+
+<div class="tap-shade" id="tap-shade">
+    <div class="label">TAP TO LISTEN</div>
+</div>
 
 <div class="hud">
     <div><span class="k">mode</span> <span id="hud-mode">DAY</span></div>
-    <div><span class="k">flock</span> <span id="hud-flock">0</span></div>
-    <div><span class="k">pitch</span> <span id="hud-pitch">×1.00</span></div>
+    <div><span class="k">vol</span>  <span id="hud-vol">70%</span></div>
 </div>
 
 <div class="panel" id="panel">
@@ -313,7 +311,7 @@
     </div>
 
     <div class="panel-body">
-        <div class="col">
+        <div>
             <h3>Time of Day</h3>
             <div class="seg" id="mode-seg">
                 <button data-mode="dawn">Dawn</button>
@@ -321,762 +319,393 @@
                 <button data-mode="dusk">Dusk</button>
                 <button data-mode="night">Night</button>
             </div>
-
-            <div class="toggle-row">
-                <h3 style="margin-bottom: 0;">Ambient chorus</h3>
-                <div class="toggle" id="chorus-toggle" aria-label="Toggle ambient chorus"></div>
-            </div>
         </div>
 
-        <div class="col">
-            <h3>Tone</h3>
-            <div>
-                <label>Pitch <span class="val" id="pitch-val">×1.00</span></label>
-                <input type="range" id="pitch" min="50" max="200" value="100">
-            </div>
-            <div>
-                <label>Density <span class="val" id="density-val">0.5</span></label>
-                <input type="range" id="density" min="0" max="100" value="50">
-            </div>
+        <div>
+            <label>Volume <span class="val" id="vol-val">70%</span></label>
+            <input type="range" id="vol" min="0" max="100" value="70">
+        </div>
+
+        <div class="toggle-row">
+            <h3 style="margin-bottom: 0;">Auto cycle</h3>
+            <div class="toggle" id="auto-toggle" aria-label="Toggle auto cycle"></div>
         </div>
     </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
 <script>
 // ════════════════════════════════════════════════════════════════════════════
-// AVIARY — tap the sky to release a bird; it flies and sings.
+// AVIARY — ambient sky. Sun/moon + soft drifting clouds. One bird-song
+// loop per mode (dawn / day / dusk / night). Crossfades audio when the
+// mode changes.
 //
-// Architecture:
-//   - SKY: time-of-day gradient + procedural clouds (DAWN/DAY/DUSK) or stars
-//          (NIGHT). Palette transitions smoothly when the mode changes.
-//   - BIRDS: tap to spawn at that point. Each bird picks a species from the
-//            current mode's pool and renders as a small flapping silhouette
-//            following a soft arc. Sings while alive, then drifts off-screen.
-//   - AUDIO: Tone.js synth voices per species — no samples. Each species
-//            schedules a phrase of pitch-swept chirps with its own timbre.
-//   - PITCH slider transposes every voice.
-//   - AMBIENT CHORUS toggle auto-spawns birds at random sky points; density
-//            slider controls the rate.
+// No tap-to-spawn, no synth — it's a painting that breathes.
 // ════════════════════════════════════════════════════════════════════════════
 
-const skyCanvas = document.getElementById('sky');
-const birdsCanvas = document.getElementById('birds');
-const skyCtx = skyCanvas.getContext('2d');
-const birdCtx = birdsCanvas.getContext('2d');
+const canvas = document.getElementById('sky');
+const ctx = canvas.getContext('2d');
 
-// ─── STATE ──────────────────────────────────────────────────────────────────
-const state = {
-    started: false,
-    mode: 'day',
-    pitch: 1.0,            // 0.5 .. 2.0 transpose factor
-    chorus: false,
-    density: 0.5,          // 0..1 → spawn rate for ambient chorus
-    t: 0,
-    birds: [],
-    nextChorusAt: 0,
-    paletteT: 0,           // mode-crossfade progress 0..1
-    palettePrev: null,
-    paletteCurr: null,
-};
-
-// ─── CANVAS RESIZE ──────────────────────────────────────────────────────────
 function resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    [skyCanvas, birdsCanvas].forEach(c => {
-        const r = c.getBoundingClientRect();
-        c.width = Math.floor(r.width * dpr);
-        c.height = Math.floor(r.height * dpr);
-        c.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
-    });
+    const r = canvas.getBoundingClientRect();
+    canvas.width = Math.floor(r.width * dpr);
+    canvas.height = Math.floor(r.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 window.addEventListener('resize', resize);
 resize();
 
-// ─── PALETTES (per mode) ────────────────────────────────────────────────────
-// Each palette = sky gradient stops (top→bottom) + cloud tint + cloud opacity
-// + "stars" flag.
+// ─── PALETTES ──────────────────────────────────────────────────────────────
 const PALETTES = {
     dawn: {
-        sky:  [[0,'#fcd7a0'], [0.45,'#f6a98a'], [1.0,'#8a7caa']],
-        cloud: [255, 220, 200],
-        cloudOpacity: 0.35,
-        stars: false,
-        moon: false,
+        sky:  [[0,'#f9d18a'], [0.42,'#f1907c'], [0.78,'#a87aa0'], [1,'#4a4470']],
+        cloud:[255, 220, 200], cloudOpacity: 0.55,
+        // Sun position normalized (x, y), radius factor (× min(w,h)), tint
+        sun:  { x: 0.18, y: 0.66, r: 0.075, core: '#ffe6c0', halo: 'rgba(255, 200, 140, 0.55)' },
+        stars: 0, moon: 0,
     },
     day: {
-        sky:  [[0,'#5db5e8'], [0.6,'#b5dff5'], [1.0,'#dfeef5']],
-        cloud: [255, 255, 255],
-        cloudOpacity: 0.55,
-        stars: false,
-        moon: false,
+        sky:  [[0,'#5cb3e6'], [0.55,'#9fd4f0'], [1,'#dff0f5']],
+        cloud:[255, 255, 255], cloudOpacity: 0.75,
+        sun:  { x: 0.72, y: 0.18, r: 0.065, core: '#fffbe0', halo: 'rgba(255, 250, 200, 0.55)' },
+        stars: 0, moon: 0,
     },
     dusk: {
-        sky:  [[0,'#1a1442'], [0.4,'#7d3b6b'], [0.75,'#e85a3e'], [1.0,'#f4a14b']],
-        cloud: [255, 170, 130],
-        cloudOpacity: 0.32,
-        stars: false,
-        moon: false,
+        sky:  [[0,'#1d1647'], [0.35,'#7a356a'], [0.7,'#e25a3b'], [1,'#f3a04c']],
+        cloud:[255, 165, 120], cloudOpacity: 0.50,
+        sun:  { x: 0.83, y: 0.74, r: 0.085, core: '#ffc888', halo: 'rgba(255, 130, 80, 0.55)' },
+        stars: 0.18, moon: 0,
     },
     night: {
-        sky:  [[0,'#02030d'], [0.6,'#0a1030'], [1.0,'#1a2050']],
-        cloud: [80, 90, 130],
-        cloudOpacity: 0.10,
-        stars: true,
-        moon: true,
+        sky:  [[0,'#02030d'], [0.55,'#080e2a'], [1,'#171b40']],
+        cloud:[110, 120, 160], cloudOpacity: 0.18,
+        sun:  { x: 0.78, y: 0.20, r: 0.060, core: '#e8eef8', halo: 'rgba(200, 215, 250, 0.32)' },
+        stars: 1.0, moon: 1.0,
     },
 };
 
-// ─── SPECIES (per mode) ─────────────────────────────────────────────────────
-// Each species:
-//   name       — display name (HUD)
-//   silhouette — drawing function (cx, cy, dir, size, color, wingPhase)
-//   size       — drawn scale
-//   color      — fill color
-//   speed      — horizontal speed multiplier
-//   wingRate   — flap speed multiplier
-//   lifetime   — ms before bird exits naturally
-//   sing(voice, baseFreq, when) — schedule a phrase on the voice (returns total dur)
-//
-// Songs are encoded as arrays of "chirps":
-//   { f1, f2, dur, gap, type, vol }
-//     f1/f2 — start/end frequency for the pitch slide (in absolute Hz, before transpose)
-//     dur   — chirp duration (s)
-//     gap   — silence after this chirp (s)
-//     type  — 'sine' | 'triangle' | 'square' (default sine)
-//     vol   — 0..1 multiplier (default 0.4)
-//
-// A few species use longer, more melodic phrases; others are short staccato.
-
-const SPECIES = {
-    // ─── DAWN ──────────────────────────────────────────────────────────────
-    blackbird: {
-        name: 'BLACKBIRD',
-        color: 'rgba(15, 12, 22, 0.9)',
-        size: 1.0,
-        speed: 1.1,
-        wingRate: 1.1,
-        lifetime: 7000,
-        phrase: [
-            { f1: 2200, f2: 2600, dur: 0.18, gap: 0.10 },
-            { f1: 1700, f2: 2400, dur: 0.22, gap: 0.08 },
-            { f1: 2800, f2: 2400, dur: 0.15, gap: 0.12 },
-            { f1: 2000, f2: 2900, dur: 0.20, gap: 0.18 },
-            { f1: 1800, f2: 1500, dur: 0.30, gap: 0.50 },
-        ],
-    },
-    robin: {
-        name: 'ROBIN',
-        color: 'rgba(30, 20, 35, 0.85)',
-        size: 0.85,
-        speed: 1.3,
-        wingRate: 1.3,
-        lifetime: 6500,
-        phrase: [
-            { f1: 3200, f2: 3800, dur: 0.06, gap: 0.04 },
-            { f1: 3000, f2: 3600, dur: 0.06, gap: 0.04 },
-            { f1: 3500, f2: 4200, dur: 0.07, gap: 0.05 },
-            { f1: 3100, f2: 3700, dur: 0.06, gap: 0.30 },
-            { f1: 2800, f2: 4000, dur: 0.18, gap: 0.20 },
-        ],
-    },
-
-    // ─── DAY ───────────────────────────────────────────────────────────────
-    sparrow: {
-        name: 'SPARROW',
-        color: 'rgba(30, 22, 28, 0.85)',
-        size: 0.75,
-        speed: 1.4,
-        wingRate: 1.6,
-        lifetime: 5000,
-        phrase: [
-            { f1: 3500, f2: 3700, dur: 0.05, gap: 0.10 },
-            { f1: 3500, f2: 3700, dur: 0.05, gap: 0.10 },
-            { f1: 3500, f2: 3700, dur: 0.05, gap: 0.10 },
-            { f1: 3500, f2: 3700, dur: 0.05, gap: 0.30 },
-        ],
-    },
-    goldfinch: {
-        name: 'GOLDFINCH',
-        color: 'rgba(35, 25, 18, 0.9)',
-        size: 0.7,
-        speed: 1.7,
-        wingRate: 1.8,
-        lifetime: 5500,
-        phrase: [
-            { f1: 4200, f2: 4500, dur: 0.04, gap: 0.03 },
-            { f1: 4500, f2: 4200, dur: 0.04, gap: 0.03 },
-            { f1: 4200, f2: 4500, dur: 0.04, gap: 0.03 },
-            { f1: 4500, f2: 4200, dur: 0.04, gap: 0.03 },
-            { f1: 4300, f2: 4700, dur: 0.04, gap: 0.03 },
-            { f1: 4500, f2: 4200, dur: 0.04, gap: 0.15 },
-            { f1: 3800, f2: 4100, dur: 0.08, gap: 0.20 },
-        ],
-    },
-    swallow: {
-        name: 'SWALLOW',
-        color: 'rgba(20, 18, 30, 0.9)',
-        size: 0.95,
-        speed: 2.2,
-        wingRate: 2.0,
-        lifetime: 4500,
-        phrase: [
-            { f1: 5000, f2: 4000, dur: 0.05, gap: 0.06 },
-            { f1: 4500, f2: 5500, dur: 0.06, gap: 0.04 },
-            { f1: 5200, f2: 3800, dur: 0.07, gap: 0.04 },
-            { f1: 4800, f2: 5400, dur: 0.05, gap: 0.20 },
-        ],
-    },
-
-    // ─── DUSK ──────────────────────────────────────────────────────────────
-    nightingale: {
-        name: 'NIGHTINGALE',
-        color: 'rgba(25, 18, 30, 0.85)',
-        size: 0.9,
-        speed: 0.9,
-        wingRate: 1.0,
-        lifetime: 8500,
-        phrase: [
-            { f1: 2400, f2: 2600, dur: 0.10, gap: 0.07 },
-            { f1: 2500, f2: 2700, dur: 0.10, gap: 0.07 },
-            { f1: 2600, f2: 2800, dur: 0.10, gap: 0.07 },
-            { f1: 2800, f2: 2400, dur: 0.25, gap: 0.30 },
-            { f1: 1900, f2: 2900, dur: 0.30, gap: 0.10 },
-            { f1: 3000, f2: 2500, dur: 0.20, gap: 0.10 },
-            { f1: 2700, f2: 2300, dur: 0.40, gap: 0.40 },
-        ],
-    },
-    woodpigeon: {
-        name: 'WOODPIGEON',
-        color: 'rgba(40, 35, 45, 0.85)',
-        size: 1.2,
-        speed: 0.7,
-        wingRate: 0.7,
-        lifetime: 6000,
-        phrase: [
-            { f1: 450, f2: 420, dur: 0.35, gap: 0.05, type: 'triangle', vol: 0.5 },
-            { f1: 420, f2: 380, dur: 0.50, gap: 0.10, type: 'triangle', vol: 0.5 },
-            { f1: 380, f2: 360, dur: 0.35, gap: 0.40, type: 'triangle', vol: 0.5 },
-        ],
-    },
-
-    // ─── NIGHT ─────────────────────────────────────────────────────────────
-    owl: {
-        name: 'OWL',
-        color: 'rgba(15, 15, 25, 0.95)',
-        size: 1.3,
-        speed: 0.6,
-        wingRate: 0.6,
-        lifetime: 7000,
-        phrase: [
-            { f1: 380, f2: 350, dur: 0.45, gap: 0.20, type: 'triangle', vol: 0.55 },
-            { f1: 350, f2: 320, dur: 0.55, gap: 0.40, type: 'triangle', vol: 0.55 },
-            { f1: 360, f2: 340, dur: 0.50, gap: 0.50, type: 'triangle', vol: 0.55 },
-        ],
-    },
-    nightjar: {
-        name: 'NIGHTJAR',
-        color: 'rgba(20, 22, 32, 0.85)',
-        size: 1.0,
-        speed: 0.85,
-        wingRate: 0.9,
-        lifetime: 8000,
-        phrase: [
-            // Long mechanical churr — 30 rapid pulses
-            ...(() => {
-                const out = [];
-                for (let i = 0; i < 30; i++) {
-                    out.push({ f1: 1600, f2: 1700, dur: 0.04, gap: 0.05, type: 'square', vol: 0.18 });
-                }
-                return out;
-            })(),
-            { f1: 1500, f2: 1500, dur: 0.05, gap: 0.40, vol: 0.0 },
-        ],
-    },
-    cricket: {
-        name: 'CRICKET',
-        color: 'rgba(30, 30, 40, 0.6)',  // not really a bird but fits the night
-        size: 0.5,
-        speed: 0.3,
-        wingRate: 0.4,
-        lifetime: 5500,
-        phrase: (() => {
-            const out = [];
-            for (let i = 0; i < 14; i++) {
-                out.push({ f1: 4400, f2: 4500, dur: 0.03, gap: 0.13, type: 'square', vol: 0.15 });
-            }
-            return out;
-        })(),
-    },
+const state = {
+    mode: 'day',
+    paletteCurr: PALETTES.day,
+    palettePrev: PALETTES.day,
+    paletteT: 1,
+    volume: 0.7,
+    auto: false,
+    nextCycleAt: 0,
+    started: false,
+    t: 0,
 };
 
-const MODE_SPECIES = {
-    dawn:  ['blackbird', 'robin'],
-    day:   ['sparrow', 'goldfinch', 'swallow'],
-    dusk:  ['nightingale', 'woodpigeon'],
-    night: ['owl', 'nightjar', 'cricket'],
+// ─── AUDIO ─────────────────────────────────────────────────────────────────
+const AUD = {
+    dawn:  document.getElementById('aud-dawn'),
+    day:   document.getElementById('aud-day'),
+    dusk:  document.getElementById('aud-dusk'),
+    night: document.getElementById('aud-night'),
 };
-
-// ─── AUDIO ──────────────────────────────────────────────────────────────────
-let masterGain, reverb;
-
-async function initAudio() {
-    await Tone.start();
-    masterGain = new Tone.Gain(0.6).toDestination();
-    reverb = new Tone.Reverb({ decay: 4.5, wet: 0.35, preDelay: 0.03 });
-    await reverb.generate();
-    reverb.connect(masterGain);
+for (const k in AUD) {
+    AUD[k].volume = 0;
+    // Hide load errors from the console if files aren't there yet
+    AUD[k].addEventListener('error', () => {}, { once: true });
 }
 
-// Schedule one bird's phrase on a fresh voice. Disposes itself when done.
-function playPhrase(species) {
-    if (!masterGain) return;
-    const t0 = Tone.now() + 0.02;
-    const phrase = species.phrase;
+let activeKey = null;
+let crossfadeFrom = null;
+let crossfadeStart = 0;
+const CROSSFADE_MS = 1500;
 
-    // Per-voice setup: oscillator → env → filter → reverb bus
-    const osc = new Tone.Oscillator({ frequency: phrase[0].f1, type: phrase[0].type || 'sine' });
-    const env = new Tone.AmplitudeEnvelope({ attack: 0.005, decay: 0.04, sustain: 0.7, release: 0.04 });
-    const filt = new Tone.Filter({ frequency: 6000, type: 'lowpass', Q: 1 });
-    osc.connect(env);
-    env.connect(filt);
-    filt.connect(reverb);
-    osc.start(t0);
-
-    let cursor = 0;
-    let totalDur = 0;
-    for (const c of phrase) {
-        const f1 = c.f1 * state.pitch;
-        const f2 = c.f2 * state.pitch;
-        const start = t0 + cursor;
-        osc.frequency.setValueAtTime(f1, start);
-        osc.frequency.linearRampToValueAtTime(f2, start + c.dur);
-        if (c.type) osc.type = c.type;
-        const v = c.vol != null ? c.vol : 0.4;
-        if (v > 0) {
-            env.triggerAttackRelease(c.dur, start, v);
-        }
-        cursor += c.dur + c.gap;
-        totalDur = cursor;
-    }
-    // Stop & dispose
-    const stopAt = t0 + totalDur + 0.5;
-    osc.stop(stopAt);
-    setTimeout(() => {
-        try { osc.dispose(); env.dispose(); filt.dispose(); } catch(e) {}
-    }, (stopAt - Tone.now() + 0.3) * 1000);
-    return totalDur;
+function setAudioMode(key) {
+    if (key === activeKey) return;
+    crossfadeFrom = activeKey;
+    activeKey = key;
+    crossfadeStart = state.t;
+    const target = AUD[key];
+    if (!target) return;
+    // Best-effort start; browsers may reject before user gesture
+    target.play().catch(() => {});
 }
 
-// ─── BIRDS ──────────────────────────────────────────────────────────────────
-class Bird {
-    constructor(speciesKey, x, y, dir) {
-        this.speciesKey = speciesKey;
-        this.species = SPECIES[speciesKey];
-        this.x = x;
-        this.y = y;
-        // Choose direction so the bird flies AWAY (off-screen) eventually
-        const baseDir = dir != null ? dir : (Math.random() < 0.5 ? -1 : 1);
-        this.vx = baseDir * (28 + Math.random() * 14) * this.species.speed; // px/s
-        this.vy = -8 - Math.random() * 12;                                   // gently rising
-        this.dir = baseDir;
-        this.wing = Math.random() * Math.PI * 2;
-        this.age = 0;
-        this.lifetime = this.species.lifetime + Math.random() * 1500;
-        this.fadeIn = 280;       // ms to fade in
-        // Schedule the song
-        this.songDur = (playPhrase(this.species) || 1) * 1000;
-        this.songEnd = this.age + this.songDur;
-    }
-
-    update(dt) {
-        this.age += dt;
-        // Wing flap
-        this.wing += dt * 0.012 * this.species.wingRate;
-        // Path: soft sinusoidal up-down bob + slight gravity at end of life
-        const bob = Math.sin(this.age * 0.005) * 6;
-        this.x += (this.vx * dt) / 1000;
-        this.y += ((this.vy + bob * 0.05) * dt) / 1000;
-        // After song ends, accelerate exit
-        if (this.age > this.songEnd) {
-            this.vx += (this.dir > 0 ? 1 : -1) * dt * 0.05;
-            this.vy -= dt * 0.005;
+function updateAudioGains() {
+    if (!activeKey) return;
+    const elapsed = state.t - crossfadeStart;
+    const t = Math.min(1, elapsed / CROSSFADE_MS);
+    // Equal-power crossfade
+    const gOut = Math.cos((t * Math.PI) / 2);
+    const gIn  = Math.sin((t * Math.PI) / 2);
+    if (AUD[activeKey]) AUD[activeKey].volume = state.volume * gIn;
+    if (crossfadeFrom && AUD[crossfadeFrom]) {
+        AUD[crossfadeFrom].volume = state.volume * gOut;
+        if (t >= 1) {
+            AUD[crossfadeFrom].pause();
+            crossfadeFrom = null;
         }
     }
-
-    isDead(w, h) {
-        return this.age > this.lifetime ||
-               this.x < -60 || this.x > w + 60 ||
-               this.y < -80 || this.y > h + 60;
-    }
-
-    draw(ctx) {
-        const w = this.species.size * 14;
-        const wingY = Math.sin(this.wing) * 0.55 + 0.45; // 0..1, controls wing angle
-        const fade = Math.min(1, this.age / this.fadeIn);
-        const remain = Math.max(0, 1 - Math.max(0, this.age - (this.lifetime - 400)) / 400);
-        const alpha = fade * remain;
-
-        ctx.save();
-        ctx.globalAlpha = alpha;
-        ctx.translate(this.x, this.y);
-        ctx.scale(this.dir, 1);
-        ctx.fillStyle = this.species.color;
-
-        // Simple "M" silhouette — left wing | body | right wing
-        // body
-        ctx.beginPath();
-        ctx.ellipse(0, 0, w * 0.18, w * 0.10, 0, 0, Math.PI * 2);
-        ctx.fill();
-        // wings as two curves meeting at the body
-        const wingLift = w * (0.10 + wingY * 0.55);
-        const wingSpan = w;
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.quadraticCurveTo(-wingSpan * 0.35, -wingLift, -wingSpan, -wingLift * 0.30);
-        ctx.quadraticCurveTo(-wingSpan * 0.5, wingLift * 0.05, 0, w * 0.05);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.quadraticCurveTo(wingSpan * 0.35, -wingLift, wingSpan, -wingLift * 0.30);
-        ctx.quadraticCurveTo(wingSpan * 0.5, wingLift * 0.05, 0, w * 0.05);
-        ctx.fill();
-
-        ctx.restore();
-    }
 }
 
-function spawnBird(x, y) {
-    if (!state.started) return;
-    const pool = MODE_SPECIES[state.mode];
-    const speciesKey = pool[Math.floor(Math.random() * pool.length)];
-    // Direction picked so the bird tends to fly toward more sky (away from edge it spawned near)
-    const w = birdsCanvas.clientWidth;
-    let dir;
-    if (x < w * 0.25) dir = 1;
-    else if (x > w * 0.75) dir = -1;
-    else dir = Math.random() < 0.5 ? -1 : 1;
-    state.birds.push(new Bird(speciesKey, x, y, dir));
-}
-
-// ─── SKY DRAW ───────────────────────────────────────────────────────────────
-// Build gradient from palette stops
-function applyGrad(grad, stops) {
-    for (const [pos, col] of stops) grad.addColorStop(pos, col);
-}
-
-// Smooth crossfade between two palettes by mixing two full draws into the sky canvas.
-function drawSky(time) {
-    const w = skyCanvas.clientWidth;
-    const h = skyCanvas.clientHeight;
-
-    const pCurr = state.paletteCurr;
-    const pPrev = state.palettePrev || pCurr;
-    const blend = state.paletteT;
-
-    // 1. Base sky — draw both gradients, blend with alpha
-    skyCtx.globalAlpha = 1;
-    let g = skyCtx.createLinearGradient(0, 0, 0, h);
-    applyGrad(g, pPrev.sky);
-    skyCtx.fillStyle = g;
-    skyCtx.fillRect(0, 0, w, h);
-
-    if (blend < 1) {
-        skyCtx.globalAlpha = blend;
-    } else {
-        skyCtx.globalAlpha = 1;
+// ─── CLOUDS (soft drifting blobs, no procedural noise) ────────────────────
+class Cloud {
+    constructor(layer, w, h) {
+        this.layer = layer;
+        const baseSize = layer === 0 ? 0.25 : 0.40;   // fraction of min(w,h)
+        this.size = baseSize * Math.min(w, h) * (0.75 + Math.random() * 0.7);
+        this.x = Math.random() * (w + this.size * 2) - this.size;
+        // Cluster in upper-mid sky
+        this.y = h * (0.08 + Math.random() * 0.55);
+        this.speed = (layer === 0 ? 4 : 10) * (0.7 + Math.random() * 0.7);  // px/s
+        this.alpha = layer === 0 ? 0.45 : 0.75;
+        this.aspectY = 0.45 + Math.random() * 0.25;   // squashed vertically
     }
-    g = skyCtx.createLinearGradient(0, 0, 0, h);
-    applyGrad(g, pCurr.sky);
-    skyCtx.fillStyle = g;
-    skyCtx.fillRect(0, 0, w, h);
-    skyCtx.globalAlpha = 1;
-
-    // 2. Stars (only if either palette uses them, fade by their respective alphas)
-    if (pPrev.stars || pCurr.stars) {
-        const ap = pPrev.stars ? (1 - blend) : 0;
-        const ac = pCurr.stars ? blend : 0;
-        const total = ap + ac;
-        if (total > 0) drawStars(time, total);
+    update(dt, w) {
+        this.x += (this.speed * dt) / 1000;
+        if (this.x - this.size > w) this.x = -this.size * 2;
     }
-
-    // 3. Moon (night only)
-    if (pPrev.moon || pCurr.moon) {
-        const ap = pPrev.moon ? (1 - blend) : 0;
-        const ac = pCurr.moon ? blend : 0;
-        const total = ap + ac;
-        if (total > 0) drawMoon(time, total, w, h);
-    }
-
-    // 4. Clouds — blended between palettes
-    drawClouds(time, w, h, pPrev, pCurr, blend);
 }
+let clouds = [];
 
-// Stars: deterministic positions (twinkle by time)
-const _stars = (() => {
-    const out = [];
-    // Seed PRNG to keep stars consistent across renders
-    let s = 1337;
-    const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
-    for (let i = 0; i < 220; i++) {
-        out.push({
-            x: rnd(),
-            y: rnd() * 0.85,           // avoid horizon
-            r: 0.4 + rnd() * 1.4,
-            phase: rnd() * Math.PI * 2,
-            speed: 0.0007 + rnd() * 0.0015,
-        });
-    }
-    return out;
-})();
-
-function drawStars(time, alpha) {
-    const w = skyCanvas.clientWidth;
-    const h = skyCanvas.clientHeight;
-    skyCtx.save();
-    for (const s of _stars) {
-        const tw = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(time * s.speed + s.phase));
-        skyCtx.globalAlpha = alpha * tw;
-        skyCtx.fillStyle = '#fff';
-        skyCtx.beginPath();
-        skyCtx.arc(s.x * w, s.y * h, s.r, 0, Math.PI * 2);
-        skyCtx.fill();
-    }
-    skyCtx.restore();
+function rebuildClouds() {
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    clouds = [];
+    // Two layers: far (smaller, slower, dimmer) + near (bigger, faster, brighter)
+    for (let i = 0; i < 6; i++) clouds.push(new Cloud(0, w, h));
+    for (let i = 0; i < 5; i++) clouds.push(new Cloud(1, w, h));
 }
+rebuildClouds();
+window.addEventListener('resize', rebuildClouds);
 
-function drawMoon(time, alpha, w, h) {
-    const mx = w * 0.78;
-    const my = h * 0.22;
-    const R = Math.min(w, h) * 0.06;
-    skyCtx.save();
-    skyCtx.globalAlpha = alpha;
-    // Halo
-    const g = skyCtx.createRadialGradient(mx, my, 0, mx, my, R * 3.5);
-    g.addColorStop(0, 'rgba(220, 230, 255, 0.20)');
-    g.addColorStop(1, 'rgba(220, 230, 255, 0)');
-    skyCtx.fillStyle = g;
-    skyCtx.beginPath();
-    skyCtx.arc(mx, my, R * 3.5, 0, Math.PI * 2);
-    skyCtx.fill();
-    // Disk
-    skyCtx.fillStyle = '#dde6f5';
-    skyCtx.beginPath();
-    skyCtx.arc(mx, my, R, 0, Math.PI * 2);
-    skyCtx.fill();
-    // Subtle crater shadow on the right edge
-    skyCtx.fillStyle = 'rgba(100, 110, 140, 0.18)';
-    skyCtx.beginPath();
-    skyCtx.arc(mx + R * 0.3, my, R * 0.92, 0, Math.PI * 2);
-    skyCtx.fill();
-    skyCtx.restore();
-}
-
-// Cloud layers — pre-rendered to a downscaled buffer for performance.
-function drawClouds(time, w, h, pPrev, pCurr, blend) {
-    // Mix cloud color + opacity between palettes
+function drawClouds(w, h, pPrev, pCurr, blend) {
     const tintR = lerp(pPrev.cloud[0], pCurr.cloud[0], blend);
     const tintG = lerp(pPrev.cloud[1], pCurr.cloud[1], blend);
     const tintB = lerp(pPrev.cloud[2], pCurr.cloud[2], blend);
     const op = lerp(pPrev.cloudOpacity, pCurr.cloudOpacity, blend);
     if (op < 0.005) return;
-
-    // Build / reuse downscaled buffer
-    const DS = 5;
-    const dsW = Math.ceil(w / DS);
-    const dsH = Math.ceil(h / DS);
-    if (!drawClouds._buf || drawClouds._buf.width !== dsW || drawClouds._buf.height !== dsH) {
-        drawClouds._buf = document.createElement('canvas');
-        drawClouds._buf.width = dsW;
-        drawClouds._buf.height = dsH;
-        drawClouds._bufCtx = drawClouds._buf.getContext('2d');
-        drawClouds._imgData = drawClouds._bufCtx.createImageData(dsW, dsH);
+    ctx.save();
+    for (const c of clouds) {
+        const rx = c.size;
+        const ry = c.size * c.aspectY;
+        // Soft radial gradient → painterly, no procedural look
+        const grad = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, rx);
+        grad.addColorStop(0,    `rgba(${tintR|0}, ${tintG|0}, ${tintB|0}, ${c.alpha * op})`);
+        grad.addColorStop(0.55, `rgba(${tintR|0}, ${tintG|0}, ${tintB|0}, ${c.alpha * op * 0.5})`);
+        grad.addColorStop(1,    `rgba(${tintR|0}, ${tintG|0}, ${tintB|0}, 0)`);
+        ctx.save();
+        ctx.translate(c.x, c.y);
+        ctx.scale(1, c.aspectY);
+        ctx.translate(-c.x, -c.y);
+        ctx.fillStyle = grad;
+        ctx.fillRect(c.x - rx, c.y - rx, rx * 2, rx * 2);
+        ctx.restore();
     }
-    const buf = drawClouds._buf;
-    const bufCtx = drawClouds._bufCtx;
-    const imgData = drawClouds._imgData;
-    const data = imgData.data;
-
-    // Two layers — slow + fast — summed sin "noise"
-    const layers = [
-        { scale: 0.008, speed: 0.000020, weight: 0.65 },
-        { scale: 0.018, speed: 0.000045, weight: 0.35 },
-    ];
-    for (let y = 0; y < dsH; y++) {
-        for (let x = 0; x < dsW; x++) {
-            let v = 0;
-            for (const L of layers) {
-                const tt = time * L.speed;
-                v += (
-                    Math.sin((x * DS + tt * 100000) * L.scale)
-                  * Math.cos((y * DS + tt * 80000) * L.scale * 1.3) * 0.5
-                  + Math.sin((x * DS + tt * 130000) * L.scale * 2 + 1.7)
-                  * Math.cos((y * DS + tt * 60000) * L.scale * 2.7 + 0.5) * 0.25
-                  + 0.25
-                ) * L.weight;
-            }
-            // Top-biased (more clouds up there)
-            const yBias = 1.0 - (y / dsH) * 0.6;
-            const cv = Math.max(0, v * yBias);
-            const cloudAmt = Math.min(1, cv * cv * 1.6);
-
-            const idx = (y * dsW + x) * 4;
-            data[idx]   = tintR;
-            data[idx+1] = tintG;
-            data[idx+2] = tintB;
-            data[idx+3] = cloudAmt * 255;
-        }
-    }
-    bufCtx.putImageData(imgData, 0, 0);
-
-    skyCtx.save();
-    skyCtx.globalAlpha = op;
-    skyCtx.imageSmoothingEnabled = true;
-    skyCtx.imageSmoothingQuality = 'high';
-    skyCtx.drawImage(buf, 0, 0, w, h);
-    skyCtx.restore();
+    ctx.restore();
 }
 
+// ─── SUN / MOON ────────────────────────────────────────────────────────────
+function drawSunOrMoon(w, h, pPrev, pCurr, blend) {
+    const sPrev = pPrev.sun, sCurr = pCurr.sun;
+    const x = lerp(sPrev.x, sCurr.x, blend) * w;
+    const y = lerp(sPrev.y, sCurr.y, blend) * h;
+    const R = lerp(sPrev.r, sCurr.r, blend) * Math.min(w, h);
+
+    // Halo
+    const halo = ctx.createRadialGradient(x, y, R * 0.6, x, y, R * 6);
+    halo.addColorStop(0, mixColor(sPrev.halo, sCurr.halo, blend));
+    halo.addColorStop(0.55, mixColor(sPrev.halo, sCurr.halo, blend, 0.18));
+    halo.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = halo;
+    ctx.fillRect(x - R * 6, y - R * 6, R * 12, R * 12);
+
+    // Disc
+    const disc = ctx.createRadialGradient(x, y, 0, x, y, R);
+    const core = mixColor(sPrev.core, sCurr.core, blend);
+    const edge = mixColor(sPrev.halo, sCurr.halo, blend, 0.7);
+    disc.addColorStop(0,    core);
+    disc.addColorStop(0.65, core);
+    disc.addColorStop(0.95, edge);
+    disc.addColorStop(1,    mixColor(sPrev.halo, sCurr.halo, blend, 0));
+    ctx.fillStyle = disc;
+    ctx.beginPath();
+    ctx.arc(x, y, R * 1.1, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Subtle crater dimple on the moon side (night only, scaled by night blend)
+    const moonAmt = lerp(pPrev.moon, pCurr.moon, blend);
+    if (moonAmt > 0.05) {
+        ctx.save();
+        ctx.globalAlpha = moonAmt * 0.35;
+        ctx.fillStyle = 'rgba(80, 90, 120, 1)';
+        ctx.beginPath();
+        ctx.arc(x + R * 0.32, y - R * 0.08, R * 0.92, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+// ─── STARS (twinkly, in night mode) ────────────────────────────────────────
+const _stars = (() => {
+    const out = []; let s = 1337;
+    const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+    for (let i = 0; i < 240; i++) {
+        out.push({
+            x: rnd(), y: rnd() * 0.78,
+            r: 0.4 + rnd() * 1.6,
+            phase: rnd() * Math.PI * 2,
+            speed: 0.0008 + rnd() * 0.002,
+        });
+    }
+    return out;
+})();
+
+function drawStars(w, h, alpha) {
+    if (alpha <= 0) return;
+    ctx.save();
+    for (const s of _stars) {
+        const tw = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(state.t * s.speed + s.phase));
+        ctx.globalAlpha = alpha * tw;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(s.x * w, s.y * h, s.r, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+}
+
+// ─── DRAW ──────────────────────────────────────────────────────────────────
+function applyGrad(grad, stops) { for (const [p, c] of stops) grad.addColorStop(p, c); }
 function lerp(a, b, t) { return a + (b - a) * t; }
 
-// ─── MODE SWITCH ────────────────────────────────────────────────────────────
+// Mix two rgba color strings (used for sun core/halo crossfade).
+// Optional alphaScale multiplies the result's alpha.
+function mixColor(c1, c2, t, alphaScale) {
+    const p1 = parseRgba(c1);
+    const p2 = parseRgba(c2);
+    if (!p1 || !p2) return c2;
+    const r = lerp(p1[0], p2[0], t);
+    const g = lerp(p1[1], p2[1], t);
+    const b = lerp(p1[2], p2[2], t);
+    let a = lerp(p1[3], p2[3], t);
+    if (alphaScale != null) a *= alphaScale;
+    return `rgba(${r|0}, ${g|0}, ${b|0}, ${a.toFixed(3)})`;
+}
+function parseRgba(c) {
+    if (c.startsWith('#')) {
+        const h = c.slice(1);
+        const v = h.length === 3
+            ? [parseInt(h[0]+h[0],16), parseInt(h[1]+h[1],16), parseInt(h[2]+h[2],16), 1]
+            : [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16), 1];
+        return v;
+    }
+    const m = c.match(/rgba?\(([^)]+)\)/);
+    if (!m) return null;
+    const parts = m[1].split(',').map(s => parseFloat(s));
+    return [parts[0], parts[1], parts[2], parts[3] != null ? parts[3] : 1];
+}
+
+function drawSky() {
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    const pPrev = state.palettePrev, pCurr = state.paletteCurr;
+    const blend = state.paletteT;
+
+    // Base gradient (prev) full, then curr on top with blend alpha
+    let g = ctx.createLinearGradient(0, 0, 0, h);
+    applyGrad(g, pPrev.sky);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+
+    g = ctx.createLinearGradient(0, 0, 0, h);
+    applyGrad(g, pCurr.sky);
+    ctx.globalAlpha = blend;
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalAlpha = 1;
+
+    // Stars under clouds, behind sun/moon
+    const starAlpha = lerp(pPrev.stars, pCurr.stars, blend);
+    drawStars(w, h, starAlpha);
+
+    // Sun / moon
+    drawSunOrMoon(w, h, pPrev, pCurr, blend);
+
+    // Clouds in front (with current blended tint)
+    drawClouds(w, h, pPrev, pCurr, blend);
+}
+
+// ─── MODE SWITCH ───────────────────────────────────────────────────────────
 function setMode(mode) {
-    if (mode === state.mode && state.paletteCurr) return;
-    state.palettePrev = state.paletteCurr || PALETTES[mode];
+    if (mode === state.mode && state.paletteT >= 1) return;
+    state.palettePrev = state.paletteCurr;
     state.paletteCurr = PALETTES[mode];
-    state.paletteT = state.paletteCurr === state.palettePrev ? 1 : 0;
+    state.paletteT = 0;
     state.mode = mode;
     document.querySelectorAll('[data-mode]').forEach(b => {
         b.classList.toggle('active', b.dataset.mode === mode);
     });
     $('hud-mode').textContent = mode.toUpperCase();
+    if (state.started) setAudioMode(mode);
 }
 
-// ─── TOUCH (tap the sky) ────────────────────────────────────────────────────
-function pointFromEvent(e) {
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    // Skip clicks on the panel/back/hud
-    const panelEl = document.getElementById('panel');
-    if (panelEl) {
-        const pr = panelEl.getBoundingClientRect();
-        if (clientX >= pr.left && clientX <= pr.right &&
-            clientY >= pr.top  && clientY <= pr.bottom) return null;
-    }
-    const back = document.querySelector('.back');
-    if (back) {
-        const br = back.getBoundingClientRect();
-        if (clientX >= br.left && clientX <= br.right &&
-            clientY >= br.top && clientY <= br.bottom) return null;
-    }
-    return [clientX, clientY];
-}
-
-function handleTap(e) {
-    const pt = pointFromEvent(e);
-    if (!pt) return;
-    e.preventDefault();
-    hideHint();
-    startAudioIfNeeded().then(() => spawnBird(pt[0], pt[1]));
-}
-
-birdsCanvas.addEventListener('pointerdown', handleTap, { passive: false });
-
-// ─── AUDIO ARM ──────────────────────────────────────────────────────────────
-async function startAudioIfNeeded() {
+// ─── INIT (audio gated until user gesture) ────────────────────────────────
+const tapShade = document.getElementById('tap-shade');
+function start() {
     if (state.started) return;
-    await initAudio();
     state.started = true;
+    tapShade.classList.add('gone');
+    setAudioMode(state.mode);
 }
-['pointerdown', 'touchstart', 'keydown', 'click'].forEach(ev => {
-    window.addEventListener(ev, startAudioIfNeeded, { once: true, passive: true });
-});
+tapShade.addEventListener('click', start);
+tapShade.addEventListener('touchstart', start, { passive: true });
 
-// ─── HINT ───────────────────────────────────────────────────────────────────
-const hintEl = document.getElementById('hint');
-function hideHint() { hintEl.classList.add('gone'); }
-
-// ─── PANEL ──────────────────────────────────────────────────────────────────
+// ─── PANEL ─────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
 
 document.querySelectorAll('[data-mode]').forEach(b => {
     b.addEventListener('click', () => setMode(b.dataset.mode));
 });
 
-const chorusToggle = $('chorus-toggle');
-chorusToggle.addEventListener('click', () => {
-    state.chorus = !state.chorus;
-    chorusToggle.classList.toggle('on', state.chorus);
-    if (state.chorus) {
-        state.nextChorusAt = state.t + 400;
-        startAudioIfNeeded();
-        hideHint();
-    }
+$('vol').addEventListener('input', e => {
+    state.volume = parseInt(e.target.value, 10) / 100;
+    $('vol-val').textContent = Math.round(state.volume * 100) + '%';
+    $('hud-vol').textContent = Math.round(state.volume * 100) + '%';
 });
 
-$('pitch').addEventListener('input', e => {
-    state.pitch = parseInt(e.target.value, 10) / 100;
-    $('pitch-val').textContent = '×' + state.pitch.toFixed(2);
-    $('hud-pitch').textContent = '×' + state.pitch.toFixed(2);
-});
-
-$('density').addEventListener('input', e => {
-    state.density = parseInt(e.target.value, 10) / 100;
-    $('density-val').textContent = state.density.toFixed(2);
+const autoToggle = $('auto-toggle');
+autoToggle.addEventListener('click', () => {
+    state.auto = !state.auto;
+    autoToggle.classList.toggle('on', state.auto);
+    if (state.auto) state.nextCycleAt = state.t + 45000;
 });
 
 const panel = $('panel');
 $('panel-head').addEventListener('click', () => panel.classList.toggle('minimized'));
 
-// Init mode (sets paletteCurr)
 setMode('day');
 
-// ─── MAIN LOOP ──────────────────────────────────────────────────────────────
+// ─── LOOP ──────────────────────────────────────────────────────────────────
 let lastTime = performance.now();
+const CYCLE_ORDER = ['dawn', 'day', 'dusk', 'night'];
+
 function loop(now) {
     const dt = now - lastTime;
     lastTime = now;
     state.t += dt;
 
-    // Palette crossfade — 1.6s
-    if (state.paletteT < 1) {
-        state.paletteT = Math.min(1, state.paletteT + dt / 1600);
+    if (state.paletteT < 1) state.paletteT = Math.min(1, state.paletteT + dt / 1800);
+
+    for (const c of clouds) c.update(dt, canvas.clientWidth);
+
+    drawSky();
+    updateAudioGains();
+
+    if (state.auto && state.t > state.nextCycleAt) {
+        const i = CYCLE_ORDER.indexOf(state.mode);
+        const next = CYCLE_ORDER[(i + 1) % CYCLE_ORDER.length];
+        setMode(next);
+        state.nextCycleAt = state.t + 45000;
     }
-
-    drawSky(state.t);
-
-    // Birds — clear birds canvas, update, draw
-    const bw = birdsCanvas.clientWidth, bh = birdsCanvas.clientHeight;
-    birdCtx.clearRect(0, 0, bw, bh);
-    for (let i = state.birds.length - 1; i >= 0; i--) {
-        const b = state.birds[i];
-        b.update(dt);
-        if (b.isDead(bw, bh)) {
-            state.birds.splice(i, 1);
-            continue;
-        }
-        b.draw(birdCtx);
-    }
-
-    // Ambient chorus auto-spawn
-    if (state.chorus && state.t > state.nextChorusAt) {
-        // Spawn at a random sky position (upper 70% of screen)
-        const x = bw * (0.1 + Math.random() * 0.8);
-        const y = bh * (0.1 + Math.random() * 0.55);
-        spawnBird(x, y);
-        // Rate: density 0 = ~5s between birds, density 1 = ~0.6s
-        const interval = lerp(5000, 600, state.density);
-        state.nextChorusAt = state.t + interval * (0.6 + Math.random() * 0.8);
-    }
-
-    // HUD
-    $('hud-flock').textContent = state.birds.length;
 
     requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
 
-// Prevent iOS double-tap zoom
 let _lastTouchEnd = 0;
 document.addEventListener('touchend', e => {
     const now = Date.now();
