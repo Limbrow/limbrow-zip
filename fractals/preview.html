@@ -26,7 +26,12 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 const canvas = document.getElementById('c');
-const gl = canvas.getContext('webgl', { antialias: false });
+const gl =
+       canvas.getContext('webgl2', { antialias: false })
+    || canvas.getContext('webgl',  { antialias: false })
+    || canvas.getContext('webgl2')
+    || canvas.getContext('webgl')
+    || canvas.getContext('experimental-webgl');
 if (!gl) { document.body.style.background = '#000'; throw new Error('no webgl'); }
 
 // ─── PALETTES (same as the main fractal post) ──────────────────────────────

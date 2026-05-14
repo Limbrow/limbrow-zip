@@ -480,10 +480,24 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 const canvas = document.getElementById('fractal');
-const gl = canvas.getContext('webgl', { antialias: false, preserveDrawingBuffer: false });
+// Try modern WebGL2 first, then WebGL1, then the legacy "experimental-webgl"
+// some older browsers expose. Drop the attribute object on the fallbacks —
+// a few Mac configurations reject context creation when extra opts are set.
+const gl =
+       canvas.getContext('webgl2', { antialias: false, preserveDrawingBuffer: false })
+    || canvas.getContext('webgl',  { antialias: false, preserveDrawingBuffer: false })
+    || canvas.getContext('webgl2')
+    || canvas.getContext('webgl')
+    || canvas.getContext('experimental-webgl');
 
 if (!gl) {
-    document.body.innerHTML = '<p style="padding:40px;color:#fff;font-family:monospace;">WebGL is required to view this artwork. Try a different browser.</p>';
+    document.body.innerHTML =
+        '<p style="padding:40px;color:#fff;font-family:monospace;line-height:1.6;">' +
+        'WebGL is required to view this artwork.<br><br>' +
+        'On macOS Safari, check <em>Develop → Disable WebGL</em> is unticked.<br>' +
+        'On Chrome / Brave, visit <code>chrome://gpu</code> and make sure ' +
+        '"WebGL: Hardware accelerated" is shown.' +
+        '</p>';
 } else {
 
 const VS = `
