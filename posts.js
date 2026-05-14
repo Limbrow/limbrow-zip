@@ -24,6 +24,13 @@
 export const posts = [
 
     {
+        slug: 'aviary',
+        date: '2026-05-14',
+        preview: 'preview.html',  // animated sky + flock auto-singing
+        scale: 1.0
+    },
+
+    {
         slug: 'ring',
         date: '2026-05-14',
         preview: 'preview.html',  // silent orbital ring with cloud sky

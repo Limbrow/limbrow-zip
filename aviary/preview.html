@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>aviary · preview</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+        background: #04050a;
+        width: 100%;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+    }
+    #sky, #birds {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        display: block;
+    }
+    #sky { z-index: 1; }
+    #birds { z-index: 2; }
+</style>
+</head>
+<body>
+
+<canvas id="sky"></canvas>
+<canvas id="birds"></canvas>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+// AVIARY PREVIEW — silent. Sky cycles through DAWN/DAY/DUSK/NIGHT; birds
+// auto-spawn and fly across. Same visual language as the live post.
+// ════════════════════════════════════════════════════════════════════════════
+
+const skyCanvas = document.getElementById('sky');
+const birdsCanvas = document.getElementById('birds');
+const skyCtx = skyCanvas.getContext('2d');
+const birdCtx = birdsCanvas.getContext('2d');
+
+function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    [skyCanvas, birdsCanvas].forEach(c => {
+        const r = c.getBoundingClientRect();
+        c.width = Math.floor(r.width * dpr);
+        c.height = Math.floor(r.height * dpr);
+        c.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
+    });
+}
+window.addEventListener('resize', resize);
+resize();
+
+const PALETTES = {
+    dawn: { sky:[[0,'#fcd7a0'],[0.45,'#f6a98a'],[1,'#8a7caa']], cloud:[255,220,200], cloudOpacity:0.35, stars:false, moon:false },
+    day:  { sky:[[0,'#5db5e8'],[0.6,'#b5dff5'],[1,'#dfeef5']], cloud:[255,255,255], cloudOpacity:0.55, stars:false, moon:false },
+    dusk: { sky:[[0,'#1a1442'],[0.4,'#7d3b6b'],[0.75,'#e85a3e'],[1,'#f4a14b']], cloud:[255,170,130], cloudOpacity:0.32, stars:false, moon:false },
+    night:{ sky:[[0,'#02030d'],[0.6,'#0a1030'],[1,'#1a2050']], cloud:[80,90,130], cloudOpacity:0.10, stars:true, moon:true },
+};
+const CYCLE = ['day','dusk','night','dawn'];
+const CYCLE_MS = 8000;     // per palette
+const FADE_MS  = 1800;
+
+// ─── Birds (visual only) ──────────────────────────────────────────────────
+// Per-mode visual pools matching the live post
+const SPECIES = {
+    blackbird:   { color:'rgba(15,12,22,0.9)',   size:1.0, speed:1.1, wingRate:1.1, lifetime:6500 },
+    robin:       { color:'rgba(30,20,35,0.85)',  size:0.85,speed:1.3, wingRate:1.3, lifetime:5500 },
+    sparrow:     { color:'rgba(30,22,28,0.85)',  size:0.75,speed:1.4, wingRate:1.6, lifetime:5000 },
+    goldfinch:   { color:'rgba(35,25,18,0.9)',   size:0.7, speed:1.7, wingRate:1.8, lifetime:5500 },
+    swallow:     { color:'rgba(20,18,30,0.9)',   size:0.95,speed:2.2, wingRate:2.0, lifetime:4500 },
+    nightingale: { color:'rgba(25,18,30,0.85)',  size:0.9, speed:0.9, wingRate:1.0, lifetime:7500 },
+    woodpigeon:  { color:'rgba(40,35,45,0.85)',  size:1.2, speed:0.7, wingRate:0.7, lifetime:6000 },
+    owl:         { color:'rgba(15,15,25,0.95)',  size:1.3, speed:0.6, wingRate:0.6, lifetime:6500 },
+    nightjar:    { color:'rgba(20,22,32,0.85)',  size:1.0, speed:0.85,wingRate:0.9, lifetime:7000 },
+    cricket:     { color:'rgba(30,30,40,0.6)',   size:0.5, speed:0.3, wingRate:0.4, lifetime:5000 },
+};
+const MODE_SPECIES = {
+    dawn:  ['blackbird','robin'],
+    day:   ['sparrow','goldfinch','swallow'],
+    dusk:  ['nightingale','woodpigeon'],
+    night: ['owl','nightjar','cricket'],
+};
+
+let birds = [];
+
+function spawnBird(modeKey) {
+    const pool = MODE_SPECIES[modeKey];
+    const key = pool[Math.floor(Math.random() * pool.length)];
+    const sp = SPECIES[key];
+    const w = birdsCanvas.clientWidth;
+    const h = birdsCanvas.clientHeight;
+    const x = w * (0.1 + Math.random() * 0.8);
+    const y = h * (0.1 + Math.random() * 0.55);
+    let dir = (x < w * 0.25) ? 1 : (x > w * 0.75 ? -1 : (Math.random() < 0.5 ? -1 : 1));
+    birds.push({
+        sp, x, y, dir,
+        vx: dir * (28 + Math.random()*14) * sp.speed,
+        vy: -8 - Math.random()*12,
+        wing: Math.random() * Math.PI * 2,
+        age: 0,
+        lifetime: sp.lifetime + Math.random()*1500,
+    });
+}
+
+function updateBird(b, dt) {
+    b.age += dt;
+    b.wing += dt * 0.012 * b.sp.wingRate;
+    const bob = Math.sin(b.age * 0.005) * 6;
+    b.x += (b.vx * dt) / 1000;
+    b.y += ((b.vy + bob * 0.05) * dt) / 1000;
+}
+
+function drawBird(ctx, b) {
+    const w = b.sp.size * 14;
+    const wingY = Math.sin(b.wing) * 0.55 + 0.45;
+    const fadeIn = Math.min(1, b.age / 280);
+    const fadeOut = Math.max(0, 1 - Math.max(0, b.age - (b.lifetime - 400)) / 400);
+    ctx.save();
+    ctx.globalAlpha = fadeIn * fadeOut;
+    ctx.translate(b.x, b.y);
+    ctx.scale(b.dir, 1);
+    ctx.fillStyle = b.sp.color;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, w * 0.18, w * 0.10, 0, 0, Math.PI * 2);
+    ctx.fill();
+    const wingLift = w * (0.10 + wingY * 0.55);
+    const wingSpan = w;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(-wingSpan * 0.35, -wingLift, -wingSpan, -wingLift * 0.30);
+    ctx.quadraticCurveTo(-wingSpan * 0.5, wingLift * 0.05, 0, w * 0.05);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(wingSpan * 0.35, -wingLift, wingSpan, -wingLift * 0.30);
+    ctx.quadraticCurveTo(wingSpan * 0.5, wingLift * 0.05, 0, w * 0.05);
+    ctx.fill();
+    ctx.restore();
+}
+
+// ─── SKY ──────────────────────────────────────────────────────────────────
+function applyGrad(g, stops) { for (const [p, c] of stops) g.addColorStop(p, c); }
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+const _stars = (() => {
+    const out = []; let s = 1337;
+    const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+    for (let i = 0; i < 220; i++) {
+        out.push({ x: rnd(), y: rnd() * 0.85, r: 0.4 + rnd() * 1.4, phase: rnd() * Math.PI * 2, speed: 0.0007 + rnd() * 0.0015 });
+    }
+    return out;
+})();
+
+function drawStars(time, alpha) {
+    const w = skyCanvas.clientWidth, h = skyCanvas.clientHeight;
+    skyCtx.save();
+    for (const s of _stars) {
+        const tw = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(time * s.speed + s.phase));
+        skyCtx.globalAlpha = alpha * tw;
+        skyCtx.fillStyle = '#fff';
+        skyCtx.beginPath();
+        skyCtx.arc(s.x * w, s.y * h, s.r, 0, Math.PI * 2);
+        skyCtx.fill();
+    }
+    skyCtx.restore();
+}
+
+function drawMoon(alpha, w, h) {
+    const mx = w * 0.78, my = h * 0.22, R = Math.min(w, h) * 0.06;
+    skyCtx.save();
+    skyCtx.globalAlpha = alpha;
+    const g = skyCtx.createRadialGradient(mx, my, 0, mx, my, R * 3.5);
+    g.addColorStop(0, 'rgba(220,230,255,0.20)');
+    g.addColorStop(1, 'rgba(220,230,255,0)');
+    skyCtx.fillStyle = g;
+    skyCtx.beginPath(); skyCtx.arc(mx, my, R * 3.5, 0, Math.PI * 2); skyCtx.fill();
+    skyCtx.fillStyle = '#dde6f5';
+    skyCtx.beginPath(); skyCtx.arc(mx, my, R, 0, Math.PI * 2); skyCtx.fill();
+    skyCtx.fillStyle = 'rgba(100,110,140,0.18)';
+    skyCtx.beginPath(); skyCtx.arc(mx + R * 0.3, my, R * 0.92, 0, Math.PI * 2); skyCtx.fill();
+    skyCtx.restore();
+}
+
+function drawClouds(time, w, h, pPrev, pCurr, blend) {
+    const tintR = lerp(pPrev.cloud[0], pCurr.cloud[0], blend);
+    const tintG = lerp(pPrev.cloud[1], pCurr.cloud[1], blend);
+    const tintB = lerp(pPrev.cloud[2], pCurr.cloud[2], blend);
+    const op = lerp(pPrev.cloudOpacity, pCurr.cloudOpacity, blend);
+    if (op < 0.005) return;
+
+    const DS = 5;
+    const dsW = Math.ceil(w / DS), dsH = Math.ceil(h / DS);
+    if (!drawClouds._buf || drawClouds._buf.width !== dsW || drawClouds._buf.height !== dsH) {
+        drawClouds._buf = document.createElement('canvas');
+        drawClouds._buf.width = dsW;
+        drawClouds._buf.height = dsH;
+        drawClouds._bufCtx = drawClouds._buf.getContext('2d');
+        drawClouds._imgData = drawClouds._bufCtx.createImageData(dsW, dsH);
+    }
+    const buf = drawClouds._buf, bufCtx = drawClouds._bufCtx, imgData = drawClouds._imgData;
+    const data = imgData.data;
+
+    const layers = [
+        { scale: 0.008, speed: 0.000020, weight: 0.65 },
+        { scale: 0.018, speed: 0.000045, weight: 0.35 },
+    ];
+    for (let y = 0; y < dsH; y++) {
+        for (let x = 0; x < dsW; x++) {
+            let v = 0;
+            for (const L of layers) {
+                const tt = time * L.speed;
+                v += (
+                    Math.sin((x * DS + tt * 100000) * L.scale)
+                  * Math.cos((y * DS + tt * 80000) * L.scale * 1.3) * 0.5
+                  + Math.sin((x * DS + tt * 130000) * L.scale * 2 + 1.7)
+                  * Math.cos((y * DS + tt * 60000) * L.scale * 2.7 + 0.5) * 0.25
+                  + 0.25
+                ) * L.weight;
+            }
+            const yBias = 1.0 - (y / dsH) * 0.6;
+            const cv = Math.max(0, v * yBias);
+            const cloudAmt = Math.min(1, cv * cv * 1.6);
+            const idx = (y * dsW + x) * 4;
+            data[idx] = tintR; data[idx+1] = tintG; data[idx+2] = tintB;
+            data[idx+3] = cloudAmt * 255;
+        }
+    }
+    bufCtx.putImageData(imgData, 0, 0);
+
+    skyCtx.save();
+    skyCtx.globalAlpha = op;
+    skyCtx.imageSmoothingEnabled = true;
+    skyCtx.imageSmoothingQuality = 'high';
+    skyCtx.drawImage(buf, 0, 0, w, h);
+    skyCtx.restore();
+}
+
+function drawSky(time, pPrev, pCurr, blend) {
+    const w = skyCanvas.clientWidth, h = skyCanvas.clientHeight;
+
+    let g = skyCtx.createLinearGradient(0, 0, 0, h);
+    applyGrad(g, pPrev.sky);
+    skyCtx.fillStyle = g; skyCtx.fillRect(0, 0, w, h);
+
+    skyCtx.globalAlpha = blend;
+    g = skyCtx.createLinearGradient(0, 0, 0, h);
+    applyGrad(g, pCurr.sky);
+    skyCtx.fillStyle = g; skyCtx.fillRect(0, 0, w, h);
+    skyCtx.globalAlpha = 1;
+
+    const sa = (pPrev.stars ? (1 - blend) : 0) + (pCurr.stars ? blend : 0);
+    if (sa > 0) drawStars(time, sa);
+    const ma = (pPrev.moon ? (1 - blend) : 0) + (pCurr.moon ? blend : 0);
+    if (ma > 0) drawMoon(ma, w, h);
+
+    drawClouds(time, w, h, pPrev, pCurr, blend);
+}
+
+// ─── LOOP ─────────────────────────────────────────────────────────────────
+let t = 0;
+let lastTime = performance.now();
+let lastSpawnAt = -1200;
+
+function loop(now) {
+    const dt = now - lastTime;
+    lastTime = now;
+    t += dt;
+
+    // Palette cycle
+    const idx   = Math.floor(t / CYCLE_MS) % CYCLE.length;
+    const into  = (t % CYCLE_MS);
+    const prevKey = CYCLE[(idx - 1 + CYCLE.length) % CYCLE.length];
+    const currKey = CYCLE[idx];
+    const blend = Math.min(1, into / FADE_MS);
+    const pPrev = PALETTES[prevKey];
+    const pCurr = PALETTES[currKey];
+
+    drawSky(t, pPrev, pCurr, blend);
+
+    // Birds
+    const bw = birdsCanvas.clientWidth, bh = birdsCanvas.clientHeight;
+    birdCtx.clearRect(0, 0, bw, bh);
+    for (let i = birds.length - 1; i >= 0; i--) {
+        const b = birds[i];
+        updateBird(b, dt);
+        if (b.age > b.lifetime || b.x < -60 || b.x > bw + 60 || b.y < -80 || b.y > bh + 60) {
+            birds.splice(i, 1); continue;
+        }
+        drawBird(birdCtx, b);
+    }
+
+    // Spawn birds — use the species pool of the current palette
+    if (t - lastSpawnAt > 1200 + Math.random() * 800) {
+        spawnBird(currKey);
+        lastSpawnAt = t;
+    }
+
+    requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+
+</body>
+</html>
