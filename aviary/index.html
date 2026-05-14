@@ -25,10 +25,10 @@
         z-index: 100;
         width: 36px; height: 36px;
         display: flex; align-items: center; justify-content: center;
-        background: rgba(10, 14, 30, 0.45);
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
-        border: 1px solid rgba(255,255,255,0.08);
+        background: rgba(0, 0, 0, 0.18);
+        backdrop-filter: blur(14px) saturate(120%);
+        -webkit-backdrop-filter: blur(14px) saturate(120%);
+        border: 1px solid rgba(255,255,255,0.10);
         border-radius: 50%;
         color: #fff;
         text-decoration: none;
@@ -45,239 +45,40 @@
         z-index: 1;
     }
 
-    /* ─── Big TAP overlay shown until user gesture (browsers gate audio) ─── */
-    .tap-shade {
+    /* ─── Floating segmented control (the entire UI) ─── */
+    .seg {
         position: fixed;
-        inset: 0;
-        z-index: 30;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: rgba(0,0,0,0);
-        transition: background 0.4s ease, opacity 0.5s ease;
-        cursor: pointer;
-    }
-    .tap-shade.gone {
-        opacity: 0;
-        pointer-events: none;
-    }
-    .tap-shade .label {
-        font-size: 11px;
-        letter-spacing: 0.3em;
-        text-transform: uppercase;
-        color: rgba(255,255,255,0.7);
-        mix-blend-mode: screen;
-        text-align: center;
-    }
-
-    .hud {
-        position: fixed;
-        top: 16px; right: 16px;
-        z-index: 50;
-        font-size: 9px;
-        letter-spacing: 0.1em;
-        line-height: 1.5;
-        color: rgba(255, 255, 255, 0.65);
-        text-align: right;
-        mix-blend-mode: screen;
-        pointer-events: none;
-    }
-    .hud .k { color: rgba(220, 220, 230, 0.45); display: inline-block; width: 50px; text-align: right; }
-
-    .panel {
-        position: fixed;
-        bottom: 16px;
+        bottom: max(16px, env(safe-area-inset-bottom));
         left: 50%;
         transform: translateX(-50%);
         z-index: 10;
-        width: min(460px, calc(100vw - 32px));
-        background: rgba(8, 10, 22, 0.55);
-        backdrop-filter: blur(20px) saturate(140%);
-        -webkit-backdrop-filter: blur(20px) saturate(140%);
-        border: 1px solid rgba(180, 160, 230, 0.15);
-        border-radius: 14px;
-        padding: 14px;
-        box-shadow:
-            0 20px 60px rgba(0,0,0,0.5),
-            0 0 0 1px rgba(255,255,255,0.04) inset;
-        transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1),
-                    opacity 0.28s ease,
-                    border-radius 0.32s ease;
-    }
-    .panel.minimized {
-        transform: translateX(-50%) translateY(calc(100% - 38px));
-        border-radius: 18px 18px 0 0;
-    }
-
-    .panel-head {
         display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding-bottom: 12px;
-        margin-bottom: 12px;
-        border-bottom: 1px solid rgba(180, 160, 230, 0.08);
-        cursor: pointer;
-    }
-    .panel.minimized .panel-head {
-        padding-bottom: 0;
-        margin-bottom: 0;
-        border-bottom: none;
-    }
-
-    .panel-title {
-        font-size: 9px;
-        letter-spacing: 0.25em;
-        text-transform: uppercase;
-        color: rgba(220, 200, 255, 0.7);
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-    .panel-title::before {
-        content: '';
-        width: 6px; height: 6px;
-        border-radius: 50%;
-        background: #c8a4ff;
-        box-shadow: 0 0 6px rgba(200, 164, 255, 0.8);
-    }
-
-    .panel-toggle-btn {
-        background: none; border: 0;
-        color: rgba(220, 200, 255, 0.6);
-        font-size: 14px;
-        cursor: pointer;
-        padding: 4px 8px;
-        margin: -4px -8px;
-        font-family: inherit;
-        transition: color 0.15s, transform 0.32s;
-    }
-    .panel-toggle-btn:hover { color: rgba(220, 200, 255, 1); }
-    .panel.minimized .panel-toggle-btn { transform: rotate(180deg); }
-
-    .panel-body {
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
-        transition: opacity 0.2s, max-height 0.32s ease;
-        max-height: 500px;
-        overflow: hidden;
-    }
-    .panel.minimized .panel-body {
-        opacity: 0;
-        max-height: 0;
-        pointer-events: none;
-    }
-
-    h3 {
-        font-size: 8px;
-        font-weight: 500;
-        letter-spacing: 0.28em;
-        text-transform: uppercase;
-        color: rgba(180, 170, 220, 0.5);
-        margin-bottom: 2px;
-    }
-
-    .seg {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        background: rgba(255, 255, 255, 0.03);
-        border-radius: 8px;
-        padding: 3px;
+        gap: 0;
+        background: rgba(0, 0, 0, 0.18);
+        backdrop-filter: blur(16px) saturate(120%);
+        -webkit-backdrop-filter: blur(16px) saturate(120%);
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        border-radius: 999px;
+        padding: 4px;
     }
     .seg button {
         background: transparent;
         border: 0;
-        color: rgba(220, 200, 255, 0.55);
-        padding: 7px 4px;
+        color: rgba(255, 255, 255, 0.55);
+        padding: 9px 14px;
         font-family: inherit;
         font-size: 9px;
-        letter-spacing: 0.15em;
+        letter-spacing: 0.22em;
         text-transform: uppercase;
         font-weight: 500;
-        border-radius: 5px;
+        border-radius: 999px;
         cursor: pointer;
         transition: all 0.15s;
     }
     .seg button:hover { color: rgba(255, 255, 255, 0.85); }
     .seg button.active {
-        background: rgba(200, 164, 255, 0.18);
+        background: rgba(255, 255, 255, 0.14);
         color: #fff;
-        box-shadow:
-            0 0 12px rgba(180, 100, 255, 0.25) inset,
-            0 1px 0 rgba(255, 255, 255, 0.05);
-    }
-
-    label {
-        display: flex;
-        justify-content: space-between;
-        align-items: baseline;
-        font-size: 8px;
-        letter-spacing: 0.2em;
-        text-transform: uppercase;
-        color: rgba(180, 170, 220, 0.5);
-        margin-bottom: 4px;
-    }
-    label .val {
-        color: rgba(220, 200, 255, 0.95);
-        letter-spacing: 0;
-        font-size: 10px;
-    }
-
-    input[type=range] {
-        width: 100%;
-        -webkit-appearance: none;
-        appearance: none;
-        height: 2px;
-        background: rgba(180, 160, 230, 0.12);
-        outline: none;
-        border-radius: 1px;
-    }
-    input[type=range]::-webkit-slider-thumb {
-        -webkit-appearance: none;
-        width: 14px; height: 14px;
-        background: radial-gradient(circle at 30% 30%, #e0c8ff 0%, #8060e0 100%);
-        border-radius: 50%;
-        cursor: pointer;
-        box-shadow: 0 0 12px rgba(180, 100, 255, 0.6);
-        border: 0;
-    }
-    input[type=range]::-moz-range-thumb {
-        width: 14px; height: 14px;
-        background: #c8a4ff;
-        border-radius: 50%;
-        cursor: pointer;
-        border: 0;
-        box-shadow: 0 0 12px rgba(180, 100, 255, 0.6);
-    }
-
-    .toggle-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    .toggle {
-        position: relative;
-        width: 36px; height: 20px;
-        background: rgba(180, 160, 230, 0.15);
-        border-radius: 10px;
-        cursor: pointer;
-        transition: background 0.2s;
-        flex-shrink: 0;
-    }
-    .toggle::after {
-        content: '';
-        position: absolute;
-        top: 2px; left: 2px;
-        width: 16px; height: 16px;
-        border-radius: 50%;
-        background: rgba(220, 200, 255, 0.8);
-        transition: transform 0.2s, background 0.2s;
-    }
-    .toggle.on { background: rgba(200, 164, 255, 0.35); }
-    .toggle.on::after {
-        transform: translateX(16px);
-        background: #fff;
-        box-shadow: 0 0 8px rgba(200, 164, 255, 0.6);
     }
 </style>
 </head>
@@ -291,60 +92,27 @@
      All four tracks are CC0 / public domain, downloaded from archive.org:
        dawn.m4a  → various-bird-sounds / dawn-chorus-18265
        day.m4a   → birdsounds_202001 / just birds 3 min
-       dusk.m4a  → nightingale-bird-sounds / NightingaleMay12
+       dusk.m4a  → nightingale-bird-sounds / nightingale-denmark-24282
        night.m4a → frogs-toads-spring-peepers-crickets-sound-effects / frogs-at-night-52041
+     Re-encoded to mono AAC via afconvert to keep total payload ~6 MB.
 -->
-<audio id="aud-dawn"  src="audio/dawn.m4a"  loop preload="auto"></audio>
-<audio id="aud-day"   src="audio/day.m4a"   loop preload="auto"></audio>
-<audio id="aud-dusk"  src="audio/dusk.m4a"  loop preload="auto"></audio>
-<audio id="aud-night" src="audio/night.m4a" loop preload="auto"></audio>
+<audio id="aud-dawn"  src="audio/dawn.m4a"  loop preload="auto" playsinline></audio>
+<audio id="aud-day"   src="audio/day.m4a"   loop preload="auto" playsinline></audio>
+<audio id="aud-dusk"  src="audio/dusk.m4a"  loop preload="auto" playsinline></audio>
+<audio id="aud-night" src="audio/night.m4a" loop preload="auto" playsinline></audio>
 
-<div class="tap-shade" id="tap-shade">
-    <div class="label">TAP TO LISTEN</div>
-</div>
-
-<div class="hud">
-    <div><span class="k">mode</span> <span id="hud-mode">DAY</span></div>
-    <div><span class="k">vol</span>  <span id="hud-vol">70%</span></div>
-</div>
-
-<div class="panel" id="panel">
-
-    <div class="panel-head" id="panel-head">
-        <div class="panel-title">AVIARY</div>
-        <button class="panel-toggle-btn" id="panel-toggle" aria-label="Minimize">▾</button>
-    </div>
-
-    <div class="panel-body">
-        <div>
-            <h3>Time of Day</h3>
-            <div class="seg" id="mode-seg">
-                <button data-mode="dawn">Dawn</button>
-                <button class="active" data-mode="day">Day</button>
-                <button data-mode="dusk">Dusk</button>
-                <button data-mode="night">Night</button>
-            </div>
-        </div>
-
-        <div>
-            <label>Volume <span class="val" id="vol-val">70%</span></label>
-            <input type="range" id="vol" min="0" max="100" value="70">
-        </div>
-
-        <div class="toggle-row">
-            <h3 style="margin-bottom: 0;">Auto cycle</h3>
-            <div class="toggle" id="auto-toggle" aria-label="Toggle auto cycle"></div>
-        </div>
-    </div>
+<div class="seg" id="mode-seg">
+    <button data-mode="dawn">Dawn</button>
+    <button class="active" data-mode="day">Day</button>
+    <button data-mode="dusk">Dusk</button>
+    <button data-mode="night">Night</button>
 </div>
 
 <script>
 // ════════════════════════════════════════════════════════════════════════════
 // AVIARY — ambient sky. Sun/moon + soft drifting clouds. One bird-song
-// loop per mode (dawn / day / dusk / night). Crossfades audio when the
-// mode changes.
-//
-// No tap-to-spawn, no synth — it's a painting that breathes.
+// loop per mode (dawn / day / dusk / night). Audio plays automatically;
+// crossfades on mode change.
 // ════════════════════════════════════════════════════════════════════════════
 
 const canvas = document.getElementById('sky');
@@ -365,7 +133,6 @@ const PALETTES = {
     dawn: {
         sky:  [[0,'#f9d18a'], [0.42,'#f1907c'], [0.78,'#a87aa0'], [1,'#4a4470']],
         cloud:[255, 220, 200], cloudOpacity: 0.55,
-        // Sun position normalized (x, y), radius factor (× min(w,h)), tint
         sun:  { x: 0.18, y: 0.66, r: 0.075, core: '#ffe6c0', halo: 'rgba(255, 200, 140, 0.55)' },
         stars: 0, moon: 0,
     },
@@ -394,14 +161,11 @@ const state = {
     paletteCurr: PALETTES.day,
     palettePrev: PALETTES.day,
     paletteT: 1,
-    volume: 0.7,
-    auto: false,
-    nextCycleAt: 0,
-    started: false,
     t: 0,
 };
 
 // ─── AUDIO ─────────────────────────────────────────────────────────────────
+// Volume is fixed at 1.0 — no slider. Crossfade is equal-power.
 const AUD = {
     dawn:  document.getElementById('aud-dawn'),
     day:   document.getElementById('aud-day'),
@@ -410,7 +174,6 @@ const AUD = {
 };
 for (const k in AUD) {
     AUD[k].volume = 0;
-    // Hide load errors from the console if files aren't there yet
     AUD[k].addEventListener('error', () => {}, { once: true });
 }
 
@@ -426,7 +189,6 @@ function setAudioMode(key) {
     crossfadeStart = state.t;
     const target = AUD[key];
     if (!target) return;
-    // Best-effort start; browsers may reject before user gesture
     target.play().catch(() => {});
 }
 
@@ -434,12 +196,11 @@ function updateAudioGains() {
     if (!activeKey) return;
     const elapsed = state.t - crossfadeStart;
     const t = Math.min(1, elapsed / CROSSFADE_MS);
-    // Equal-power crossfade
     const gOut = Math.cos((t * Math.PI) / 2);
     const gIn  = Math.sin((t * Math.PI) / 2);
-    if (AUD[activeKey]) AUD[activeKey].volume = state.volume * gIn;
+    if (AUD[activeKey]) AUD[activeKey].volume = gIn;
     if (crossfadeFrom && AUD[crossfadeFrom]) {
-        AUD[crossfadeFrom].volume = state.volume * gOut;
+        AUD[crossfadeFrom].volume = gOut;
         if (t >= 1) {
             AUD[crossfadeFrom].pause();
             crossfadeFrom = null;
@@ -447,18 +208,17 @@ function updateAudioGains() {
     }
 }
 
-// ─── CLOUDS (soft drifting blobs, no procedural noise) ────────────────────
+// ─── CLOUDS ────────────────────────────────────────────────────────────────
 class Cloud {
     constructor(layer, w, h) {
         this.layer = layer;
-        const baseSize = layer === 0 ? 0.25 : 0.40;   // fraction of min(w,h)
+        const baseSize = layer === 0 ? 0.25 : 0.40;
         this.size = baseSize * Math.min(w, h) * (0.75 + Math.random() * 0.7);
         this.x = Math.random() * (w + this.size * 2) - this.size;
-        // Cluster in upper-mid sky
         this.y = h * (0.08 + Math.random() * 0.55);
-        this.speed = (layer === 0 ? 4 : 10) * (0.7 + Math.random() * 0.7);  // px/s
+        this.speed = (layer === 0 ? 4 : 10) * (0.7 + Math.random() * 0.7);
         this.alpha = layer === 0 ? 0.45 : 0.75;
-        this.aspectY = 0.45 + Math.random() * 0.25;   // squashed vertically
+        this.aspectY = 0.45 + Math.random() * 0.25;
     }
     update(dt, w) {
         this.x += (this.speed * dt) / 1000;
@@ -470,7 +230,6 @@ let clouds = [];
 function rebuildClouds() {
     const w = canvas.clientWidth, h = canvas.clientHeight;
     clouds = [];
-    // Two layers: far (smaller, slower, dimmer) + near (bigger, faster, brighter)
     for (let i = 0; i < 6; i++) clouds.push(new Cloud(0, w, h));
     for (let i = 0; i < 5; i++) clouds.push(new Cloud(1, w, h));
 }
@@ -486,8 +245,6 @@ function drawClouds(w, h, pPrev, pCurr, blend) {
     ctx.save();
     for (const c of clouds) {
         const rx = c.size;
-        const ry = c.size * c.aspectY;
-        // Soft radial gradient → painterly, no procedural look
         const grad = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, rx);
         grad.addColorStop(0,    `rgba(${tintR|0}, ${tintG|0}, ${tintB|0}, ${c.alpha * op})`);
         grad.addColorStop(0.55, `rgba(${tintR|0}, ${tintG|0}, ${tintB|0}, ${c.alpha * op * 0.5})`);
@@ -510,7 +267,6 @@ function drawSunOrMoon(w, h, pPrev, pCurr, blend) {
     const y = lerp(sPrev.y, sCurr.y, blend) * h;
     const R = lerp(sPrev.r, sCurr.r, blend) * Math.min(w, h);
 
-    // Halo
     const halo = ctx.createRadialGradient(x, y, R * 0.6, x, y, R * 6);
     halo.addColorStop(0, mixColor(sPrev.halo, sCurr.halo, blend));
     halo.addColorStop(0.55, mixColor(sPrev.halo, sCurr.halo, blend, 0.18));
@@ -518,7 +274,6 @@ function drawSunOrMoon(w, h, pPrev, pCurr, blend) {
     ctx.fillStyle = halo;
     ctx.fillRect(x - R * 6, y - R * 6, R * 12, R * 12);
 
-    // Disc
     const disc = ctx.createRadialGradient(x, y, 0, x, y, R);
     const core = mixColor(sPrev.core, sCurr.core, blend);
     const edge = mixColor(sPrev.halo, sCurr.halo, blend, 0.7);
@@ -531,7 +286,6 @@ function drawSunOrMoon(w, h, pPrev, pCurr, blend) {
     ctx.arc(x, y, R * 1.1, 0, Math.PI * 2);
     ctx.fill();
 
-    // Subtle crater dimple on the moon side (night only, scaled by night blend)
     const moonAmt = lerp(pPrev.moon, pCurr.moon, blend);
     if (moonAmt > 0.05) {
         ctx.save();
@@ -544,7 +298,7 @@ function drawSunOrMoon(w, h, pPrev, pCurr, blend) {
     }
 }
 
-// ─── STARS (twinkly, in night mode) ────────────────────────────────────────
+// ─── STARS ─────────────────────────────────────────────────────────────────
 const _stars = (() => {
     const out = []; let s = 1337;
     const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
@@ -577,8 +331,6 @@ function drawStars(w, h, alpha) {
 function applyGrad(grad, stops) { for (const [p, c] of stops) grad.addColorStop(p, c); }
 function lerp(a, b, t) { return a + (b - a) * t; }
 
-// Mix two rgba color strings (used for sun core/halo crossfade).
-// Optional alphaScale multiplies the result's alpha.
 function mixColor(c1, c2, t, alphaScale) {
     const p1 = parseRgba(c1);
     const p2 = parseRgba(c2);
@@ -609,7 +361,6 @@ function drawSky() {
     const pPrev = state.palettePrev, pCurr = state.paletteCurr;
     const blend = state.paletteT;
 
-    // Base gradient (prev) full, then curr on top with blend alpha
     let g = ctx.createLinearGradient(0, 0, 0, h);
     applyGrad(g, pPrev.sky);
     ctx.globalAlpha = 1;
@@ -623,14 +374,9 @@ function drawSky() {
     ctx.fillRect(0, 0, w, h);
     ctx.globalAlpha = 1;
 
-    // Stars under clouds, behind sun/moon
     const starAlpha = lerp(pPrev.stars, pCurr.stars, blend);
     drawStars(w, h, starAlpha);
-
-    // Sun / moon
     drawSunOrMoon(w, h, pPrev, pCurr, blend);
-
-    // Clouds in front (with current blended tint)
     drawClouds(w, h, pPrev, pCurr, blend);
 }
 
@@ -644,71 +390,44 @@ function setMode(mode) {
     document.querySelectorAll('[data-mode]').forEach(b => {
         b.classList.toggle('active', b.dataset.mode === mode);
     });
-    $('hud-mode').textContent = mode.toUpperCase();
-    if (state.started) setAudioMode(mode);
+    setAudioMode(mode);
 }
-
-// ─── INIT (audio gated until user gesture) ────────────────────────────────
-const tapShade = document.getElementById('tap-shade');
-function start() {
-    if (state.started) return;
-    state.started = true;
-    tapShade.classList.add('gone');
-    setAudioMode(state.mode);
-}
-tapShade.addEventListener('click', start);
-tapShade.addEventListener('touchstart', start, { passive: true });
-
-// ─── PANEL ─────────────────────────────────────────────────────────────────
-const $ = id => document.getElementById(id);
 
 document.querySelectorAll('[data-mode]').forEach(b => {
     b.addEventListener('click', () => setMode(b.dataset.mode));
 });
 
-$('vol').addEventListener('input', e => {
-    state.volume = parseInt(e.target.value, 10) / 100;
-    $('vol-val').textContent = Math.round(state.volume * 100) + '%';
-    $('hud-vol').textContent = Math.round(state.volume * 100) + '%';
+// ─── AUTO-PLAY (with first-tap fallback) ───────────────────────────────────
+// Try to start audio right away. Most browsers will let it if the user has
+// previously interacted with the site (revisits); on a cold load they
+// require a user gesture, so we also listen for the first tap as fallback.
+function kickAudio() {
+    setAudioMode(state.mode);
+}
+window.addEventListener('load', kickAudio);
+kickAudio(); // also try synchronously
+['pointerdown', 'touchstart', 'keydown', 'click'].forEach(ev => {
+    window.addEventListener(ev, kickAudio, { once: true, passive: true });
 });
-
-const autoToggle = $('auto-toggle');
-autoToggle.addEventListener('click', () => {
-    state.auto = !state.auto;
-    autoToggle.classList.toggle('on', state.auto);
-    if (state.auto) state.nextCycleAt = state.t + 45000;
-});
-
-const panel = $('panel');
-$('panel-head').addEventListener('click', () => panel.classList.toggle('minimized'));
-
-setMode('day');
 
 // ─── LOOP ──────────────────────────────────────────────────────────────────
 let lastTime = performance.now();
-const CYCLE_ORDER = ['dawn', 'day', 'dusk', 'night'];
-
 function loop(now) {
     const dt = now - lastTime;
     lastTime = now;
     state.t += dt;
 
     if (state.paletteT < 1) state.paletteT = Math.min(1, state.paletteT + dt / 1800);
-
     for (const c of clouds) c.update(dt, canvas.clientWidth);
 
     drawSky();
     updateAudioGains();
 
-    if (state.auto && state.t > state.nextCycleAt) {
-        const i = CYCLE_ORDER.indexOf(state.mode);
-        const next = CYCLE_ORDER[(i + 1) % CYCLE_ORDER.length];
-        setMode(next);
-        state.nextCycleAt = state.t + 45000;
-    }
-
     requestAnimationFrame(loop);
 }
+// Seed state.mode's palette and kick the first audio after one frame
+setMode('day');
+state.paletteT = 1;
 requestAnimationFrame(loop);
 
 let _lastTouchEnd = 0;
