@@ -287,12 +287,17 @@
 
 <canvas id="sky"></canvas>
 
-<!-- One looped track per mode. Files live in audio/. They crossfade
-     in/out on mode change. Falls back gracefully if a file is missing. -->
-<audio id="aud-dawn"  src="audio/dawn.mp3"  loop preload="auto"></audio>
-<audio id="aud-day"   src="audio/day.mp3"   loop preload="auto"></audio>
-<audio id="aud-dusk"  src="audio/dusk.mp3"  loop preload="auto"></audio>
-<audio id="aud-night" src="audio/night.mp3" loop preload="auto"></audio>
+<!-- One looped track per mode. They crossfade on mode change.
+     All four tracks are CC0 / public domain, downloaded from archive.org:
+       dawn.m4a  → various-bird-sounds / dawn-chorus-18265
+       day.m4a   → birdsounds_202001 / just birds 3 min
+       dusk.m4a  → nightingale-bird-sounds / NightingaleMay12
+       night.m4a → frogs-toads-spring-peepers-crickets-sound-effects / frogs-at-night-52041
+-->
+<audio id="aud-dawn"  src="audio/dawn.m4a"  loop preload="auto"></audio>
+<audio id="aud-day"   src="audio/day.m4a"   loop preload="auto"></audio>
+<audio id="aud-dusk"  src="audio/dusk.m4a"  loop preload="auto"></audio>
+<audio id="aud-night" src="audio/night.m4a" loop preload="auto"></audio>
 
 <div class="tap-shade" id="tap-shade">
     <div class="label">TAP TO LISTEN</div>
