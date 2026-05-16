@@ -24,9 +24,16 @@
 export const posts = [
 
     {
+        slug: 'chukovski',
+        date: '2026-05-16',
+        preview: 'preview.html',  // breathing crop of the Repin painting
+        scale: 1.0
+    },
+
+    {
         slug: 'guess',
         date: '2026-05-15',
-        preview: 'preview.html',  // looping opening — "¿adivinas en quién estoy pensando?"
+        preview: 'preview.html',  // looping opening — "Hola!"
         scale: 1.0
     },
 

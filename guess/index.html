@@ -143,11 +143,12 @@
 // ════════════════════════════════════════════════════════════════════════════
 // GUESS — a tiny scripted "chatbot" with one trick.
 //
-// The bot opens: "hola" → "oye" → "¿adivinas en quién estoy pensando?"
-// The user types guesses. The bot deflects with progressively warmer hints.
-// The reveal triggers the moment the user types a self-reference
-// (yo / me / mí / soy yo / the user / el usuario / piensas en mí / ...).
-// On reveal the bot says "indeed." and the input closes.
+// The bot opens with "Hola!" and a couple of casual chitchat beats —
+// "qué tal?" then "yo aquí. pensando en alguien. se te ocurre quién?".
+// Only after that opening does the puzzle activate: every user input
+// gets a progressively warmer hint, and a self-reference (yo / me / mí /
+// soy yo / el usuario / piensas en mí / ...) closes the dialog with
+// "indeed.".
 //
 // No LLM, no API call, no cost. Just a hand-written guion.
 // ════════════════════════════════════════════════════════════════════════════
@@ -185,7 +186,22 @@ function userSay(text) {
     addLine('> ' + text, 'user');
 }
 
-// ─── HINTS — escalate every turn ────────────────────────────────────────────
+// ─── CHAT (greeting beats before the puzzle drops) ─────────────────────────
+// Each entry is the bot's reply to that turn's user input. The puzzle
+// activates after the last entry — only then do self-references reveal.
+const CHAT_TURNS = [
+    { lines: ['qué tal?'] },
+    {
+        lines: [
+            'yo aquí.',
+            'pensando en alguien.',
+            'se te ocurre quién?',
+        ],
+        activatesPuzzle: true,
+    },
+];
+
+// ─── HINTS — escalate every turn once the puzzle is live ───────────────────
 const HINTS = [
     'frío.',
     'no.',
@@ -248,7 +264,9 @@ function isSelfRef(raw) {
 }
 
 // ─── STATE ──────────────────────────────────────────────────────────────────
-let turnIdx = 0;
+let chatIdx = 0;
+let hintIdx = 0;
+let puzzleActive = false;
 let revealed = false;
 
 async function reveal() {
@@ -265,12 +283,6 @@ async function reveal() {
 async function opening() {
     await sleep(900);
     await botSay('Hola!');
-    await sleep(1400);
-    await botSay('...');
-    await sleep(900);
-    await botSay('oye');
-    await sleep(550);
-    await botSay('¿adivinas en quién estoy pensando?');
     input.disabled = false;
     cursorEl.classList.remove('hidden');
     input.focus();
@@ -284,7 +296,8 @@ promptEl.addEventListener('submit', async (e) => {
     input.value = '';
     userSay(text);
 
-    if (isSelfRef(text)) {
+    // Self-ref only counts once the puzzle is on the table.
+    if (puzzleActive && isSelfRef(text)) {
         await reveal();
         return;
     }
@@ -292,9 +305,21 @@ promptEl.addEventListener('submit', async (e) => {
     input.disabled = true;
     cursorEl.classList.add('hidden');
     await sleep(550 + Math.random() * 350);
-    const hint = HINTS[Math.min(turnIdx, HINTS.length - 1)];
-    await botSay(hint);
-    turnIdx++;
+
+    if (chatIdx < CHAT_TURNS.length) {
+        // Greeting beat — bot replies with the next chitchat block.
+        const turn = CHAT_TURNS[chatIdx++];
+        for (let i = 0; i < turn.lines.length; i++) {
+            if (i > 0) await sleep(650);
+            await botSay(turn.lines[i]);
+        }
+        if (turn.activatesPuzzle) puzzleActive = true;
+    } else {
+        // Puzzle is live — drop the next hint.
+        const hint = HINTS[Math.min(hintIdx, HINTS.length - 1)];
+        await botSay(hint);
+        hintIdx++;
+    }
 
     if (!revealed) {
         input.disabled = false;

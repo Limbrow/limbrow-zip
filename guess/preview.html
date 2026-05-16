@@ -56,10 +56,7 @@ const cursor = document.getElementById('cursor');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 const LINES = [
-    { text: 'Hola!',                             wait: 1200 },
-    { text: '...',                               wait: 800 },
-    { text: 'oye',                               wait: 500 },
-    { text: '¿adivinas en quién estoy pensando?', wait: 2800 },
+    { text: 'Hola!', wait: 3200 },
 ];
 
 async function typewriter(el, text, perChar = 36) {
