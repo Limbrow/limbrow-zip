@@ -8,22 +8,14 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;1,400&display=swap" rel="stylesheet">
 
 <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
-    :root {
-        --paper:      #f1e6cd;
-        --paper-warm: #ead9b2;
-        --ink:        #2a2218;
-        --ink-soft:   #5a4f3c;
-        --ink-faint:  #a89876;
-    }
-
     html, body {
-        background: var(--paper);
-        color: var(--ink);
+        background: #1a1208;
+        color: #f3ead4;
         height: 100vh;
         height: 100dvh;
         overflow: hidden;
@@ -35,185 +27,116 @@
         -webkit-text-size-adjust: 100%;
     }
 
-    body {
+    /* ─── BLURRED BACKDROP (the painting itself, oversized + blurred) ─── */
+    .backdrop {
+        position: fixed;
+        inset: -60px;
+        z-index: 1;
+        background-image: url('painting.jpg');
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: cover;
+        filter: blur(48px) saturate(1.15) brightness(0.55);
+        transform: scale(1.15);
+    }
+    .backdrop::after {
+        /* Vignette so the edges fade into deep brown, focusing the painting */
+        content: '';
+        position: absolute;
+        inset: 0;
         background:
-            url("data:image/svg+xml,%3Csvg width='160' height='160' viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.18  0 0 0 0 0.13  0 0 0 0 0.07  0 0 0 0.06 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E"),
-            radial-gradient(ellipse at 50% 18%, var(--paper-warm), var(--paper) 65%);
-        background-attachment: fixed;
+            radial-gradient(ellipse at 50% 50%, transparent 30%, rgba(8, 5, 2, 0.55) 100%);
     }
 
+    /* ─── BACK ─── */
     .back {
         position: fixed;
         top: 16px; left: 16px;
         z-index: 100;
         width: 36px; height: 36px;
         display: flex; align-items: center; justify-content: center;
-        background: rgba(42, 34, 24, 0.06);
-        border: 1px solid rgba(42, 34, 24, 0.10);
+        background: rgba(0, 0, 0, 0.25);
+        border: 1px solid rgba(255, 255, 255, 0.10);
         border-radius: 50%;
-        color: var(--ink-soft);
+        color: rgba(255, 240, 220, 0.75);
         text-decoration: none;
         font-size: 16px;
         line-height: 1;
         padding-bottom: 2px;
-        backdrop-filter: blur(6px);
-        -webkit-backdrop-filter: blur(6px);
-        font-family: ui-monospace, 'JetBrains Mono', monospace;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        font-family: ui-monospace, monospace;
     }
 
-    /* ─── PLATE ─── */
-    .plate {
+    /* ─── MODAL (painting + subtle title) ─── */
+    .modal {
+        position: relative;
+        z-index: 10;
         height: 100%;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        padding: 56px 18px 28px;
-        gap: clamp(10px, 2vh, 18px);
-        text-align: center;
-        overflow-y: auto;
-    }
-    .plate::-webkit-scrollbar { display: none; }
-    .plate { scrollbar-width: none; }
-
-    .painting-wrap {
-        width: 100%;
-        max-width: 480px;
-        flex-shrink: 1;
-        min-height: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        gap: clamp(16px, 3vh, 28px);
+        padding: 56px 24px 36px;
     }
 
     .painting {
-        max-width: 100%;
-        max-height: 56vh;
+        max-width: min(92%, 460px);
+        max-height: 70vh;
         width: auto;
         height: auto;
         display: block;
         box-shadow:
-            0 28px 50px -14px rgba(36, 24, 8, 0.32),
-            0 10px 24px -8px rgba(36, 24, 8, 0.18),
-            0 0 0 1px rgba(42, 34, 24, 0.08);
-    }
-    .painting-wrap::after {
-        /* tiny inner vignette to integrate with paper */
-        content: '';
+            0 40px 70px -10px rgba(0, 0, 0, 0.6),
+            0 12px 30px -8px rgba(0, 0, 0, 0.45),
+            0 0 0 1px rgba(0, 0, 0, 0.4);
     }
 
     .title {
         font-family: 'Cormorant Garamond', Georgia, serif;
-        font-weight: 500;
-        font-size: clamp(20px, 5.4vw, 30px);
-        line-height: 1.15;
-        color: var(--ink);
-        letter-spacing: 0.005em;
-        max-width: 22ch;
-    }
-
-    .attribution {
-        font-family: 'JetBrains Mono', ui-monospace, monospace;
-        font-size: 10.5px;
-        letter-spacing: 0.22em;
-        text-transform: uppercase;
-        color: var(--ink-soft);
-        font-weight: 400;
-    }
-    .attribution .sep { color: var(--ink-faint); padding: 0 4px; }
-    .attribution .year { color: var(--ink); }
-
-    .meta {
-        font-family: 'JetBrains Mono', ui-monospace, monospace;
-        font-size: 9.5px;
-        letter-spacing: 0.22em;
-        text-transform: uppercase;
-        color: var(--ink-faint);
-    }
-
-    .note {
         font-style: italic;
         font-weight: 400;
-        font-size: clamp(14px, 3.6vw, 18px);
-        line-height: 1.5;
-        color: var(--ink-soft);
-        max-width: 30ch;
-        padding: 0 12px;
-    }
-
-    .signature {
-        font-family: 'JetBrains Mono', ui-monospace, monospace;
-        font-size: 9px;
-        letter-spacing: 0.32em;
-        text-transform: uppercase;
-        color: var(--ink-faint);
-        position: relative;
-        padding-top: 10px;
-        margin-top: 6px;
-        min-width: 60px;
-    }
-    .signature::before {
-        content: '';
-        position: absolute;
-        top: 0; left: 50%;
-        transform: translateX(-50%);
-        width: 28px;
-        height: 1px;
-        background: var(--ink-faint);
+        font-size: clamp(14px, 3.5vw, 17px);
+        line-height: 1.4;
+        color: rgba(245, 235, 215, 0.55);
+        letter-spacing: 0.03em;
+        text-align: center;
+        max-width: 28ch;
     }
 
     /* ─── FADE-IN ON LOAD ─── */
-    .painting, .title, .attribution, .meta, .note, .signature {
+    .painting, .title {
         opacity: 0;
         transform: translateY(10px);
-        animation: rise 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        animation: rise 1.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
     }
-    .painting    { animation-delay: 0.10s; }
-    .title       { animation-delay: 0.75s; }
-    .attribution { animation-delay: 0.95s; }
-    .meta        { animation-delay: 1.10s; }
-    .note        { animation-delay: 1.35s; }
-    .signature   { animation-delay: 1.75s; }
+    .painting { animation-delay: 0.15s; }
+    .title    { animation-delay: 0.95s; }
 
     @keyframes rise {
         from { opacity: 0; transform: translateY(10px); }
         to   { opacity: 1; transform: translateY(0); }
     }
 
-    @media (max-height: 740px) {
-        .plate { gap: 8px; padding: 48px 16px 20px; }
-        .painting { max-height: 48vh; }
-    }
-    @media (max-width: 480px) {
-        .plate { padding-top: 56px; }
+    @media (max-height: 700px) {
+        .modal { padding: 48px 20px 24px; gap: 14px; }
+        .painting { max-height: 62vh; }
     }
 </style>
 </head>
 <body>
 
+<div class="backdrop"></div>
+
 <a class="back" href="/" aria-label="Volver">←</a>
 
-<main class="plate">
-    <div class="painting-wrap">
-        <img class="painting"
-             src="painting.jpg"
-             alt="Retrato de Kornéi Chukovski por Iliá Repin, 1910"
-             width="602" height="717">
-    </div>
-
+<main class="modal">
+    <img class="painting"
+         src="painting.jpg"
+         alt="Retrato de Kornéi Chukovski por Iliá Repin, 1910"
+         width="602" height="717">
     <h1 class="title">Retrato de Kornéi Chukovski</h1>
-
-    <div class="attribution">
-        Iliá Repin
-        <span class="sep">·</span>
-        <span class="year">1910</span>
-    </div>
-
-    <div class="meta">óleo sobre lienzo · 76 × 63 cm</div>
-
-    <p class="note">mira hacia algo que no está en el cuadro.</p>
-
-    <div class="signature">Limbrow</div>
 </main>
 
 </body>
