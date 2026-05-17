@@ -216,7 +216,7 @@ class Cloud {
         this.size = baseSize * Math.min(w, h) * (0.75 + Math.random() * 0.7);
         this.x = Math.random() * (w + this.size * 2) - this.size;
         this.y = h * (0.08 + Math.random() * 0.55);
-        this.speed = (layer === 0 ? 4 : 10) * (0.7 + Math.random() * 0.7);
+        this.speed = (layer === 0 ? 18 : 40) * (0.7 + Math.random() * 0.7);
         this.alpha = layer === 0 ? 0.45 : 0.75;
         this.aspectY = 0.45 + Math.random() * 0.25;
     }
@@ -400,12 +400,27 @@ document.querySelectorAll('[data-mode]').forEach(b => {
 // ─── AUTO-PLAY (with first-tap fallback) ───────────────────────────────────
 // Try to start audio right away. Most browsers will let it if the user has
 // previously interacted with the site (revisits); on a cold load they
-// require a user gesture, so we also listen for the first tap as fallback.
+// require a user gesture, so we listen for the first tap as fallback.
+//
+// We can't go through setAudioMode for the retry — it short-circuits when
+// the key hasn't changed, so a blocked first play() would never be retried.
+// Instead, hit play() directly on the active element and reset the crossfade
+// timer so the volume ramps up from silence at the moment of the gesture.
 function kickAudio() {
-    setAudioMode(state.mode);
+    if (!activeKey) {
+        activeKey = state.mode;
+        crossfadeFrom = null;
+    }
+    const el = AUD[activeKey];
+    if (!el) return;
+    if (el.paused) {
+        crossfadeStart = state.t;
+        el.volume = 0;
+        el.play().catch(() => {});
+    }
 }
 window.addEventListener('load', kickAudio);
-kickAudio(); // also try synchronously
+kickAudio(); // try synchronously too
 ['pointerdown', 'touchstart', 'keydown', 'click'].forEach(ev => {
     window.addEventListener(ev, kickAudio, { once: true, passive: true });
 });

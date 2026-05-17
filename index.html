@@ -152,6 +152,14 @@
             main { padding: 0 var(--gap) 24px; }
         }
 
+        /* Desktop: tighter container + smaller avatar so the grid reads
+           like an IG profile, not a sprawling wall.                       */
+        @media (min-width: 700px) {
+            .avatar { width: 48px; height: 48px; }
+            main    { max-width: 720px; }
+            header  { padding: 22px 16px 16px; gap: 10px; }
+        }
+
         /* ── CARDS ── */
         .card {
             display: block;
