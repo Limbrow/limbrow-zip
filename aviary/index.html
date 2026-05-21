@@ -129,29 +129,34 @@ window.addEventListener('resize', resize);
 resize();
 
 // ─── PALETTES ──────────────────────────────────────────────────────────────
+// Sun follows a natural arc east → south → west across the modes:
+//   dawn  → low-east  (rising)
+//   day   → high-south (zenith, near top centre)
+//   dusk  → low-west  (setting)
+//   night → moon high on the opposite (eastern) side, having risen
 const PALETTES = {
     dawn: {
         sky:  [[0,'#f9d18a'], [0.42,'#f1907c'], [0.78,'#a87aa0'], [1,'#4a4470']],
         cloud:[255, 220, 200], cloudOpacity: 0.55,
-        sun:  { x: 0.18, y: 0.66, r: 0.075, core: '#ffe6c0', halo: 'rgba(255, 200, 140, 0.55)' },
+        sun:  { x: 0.12, y: 0.78, r: 0.075, core: '#ffe6c0', halo: 'rgba(255, 200, 140, 0.55)' },
         stars: 0, moon: 0,
     },
     day: {
         sky:  [[0,'#5cb3e6'], [0.55,'#9fd4f0'], [1,'#dff0f5']],
         cloud:[255, 255, 255], cloudOpacity: 0.75,
-        sun:  { x: 0.72, y: 0.18, r: 0.065, core: '#fffbe0', halo: 'rgba(255, 250, 200, 0.55)' },
+        sun:  { x: 0.50, y: 0.14, r: 0.065, core: '#fffbe0', halo: 'rgba(255, 250, 200, 0.55)' },
         stars: 0, moon: 0,
     },
     dusk: {
         sky:  [[0,'#1d1647'], [0.35,'#7a356a'], [0.7,'#e25a3b'], [1,'#f3a04c']],
         cloud:[255, 165, 120], cloudOpacity: 0.50,
-        sun:  { x: 0.83, y: 0.74, r: 0.085, core: '#ffc888', halo: 'rgba(255, 130, 80, 0.55)' },
+        sun:  { x: 0.90, y: 0.78, r: 0.085, core: '#ffc888', halo: 'rgba(255, 130, 80, 0.55)' },
         stars: 0.18, moon: 0,
     },
     night: {
         sky:  [[0,'#02030d'], [0.55,'#080e2a'], [1,'#171b40']],
         cloud:[110, 120, 160], cloudOpacity: 0.18,
-        sun:  { x: 0.78, y: 0.20, r: 0.060, core: '#e8eef8', halo: 'rgba(200, 215, 250, 0.32)' },
+        sun:  { x: 0.20, y: 0.22, r: 0.060, core: '#e8eef8', halo: 'rgba(200, 215, 250, 0.32)' },
         stars: 1.0, moon: 1.0,
     },
 };
