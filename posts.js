@@ -24,6 +24,13 @@
 export const posts = [
 
     {
+        slug: 'heliogabalo',
+        date: '2026-05-16',
+        preview: 'preview.html',  // breathing crop of the Alma-Tadema — the rain of rose petals
+        scale: 1.0
+    },
+
+    {
         slug: 'chukovski',
         date: '2026-05-16',
         preview: 'preview.html',  // breathing crop of the Repin painting
