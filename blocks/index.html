@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0">
+<title>blocks · limbrow.zip</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+        background: #000;
+        color: #e8e8e8;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+        font-family: ui-monospace, 'JetBrains Mono', monospace;
+        -webkit-user-select: none; user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: none;
+    }
+
+    .back {
+        position: fixed;
+        top: 16px; left: 16px;
+        z-index: 100;
+        width: 36px; height: 36px;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0, 0, 0, 0.45);
+        border: 1px solid rgba(255,255,255,0.10);
+        border-radius: 50%;
+        color: rgba(255,255,255,0.90);
+        text-decoration: none;
+        font-size: 16px;
+        line-height: 1;
+        padding-bottom: 2px;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+    }
+
+    #stage {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        display: block;
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+    }
+</style>
+</head>
+<body>
+
+<a class="back" href="/" aria-label="Back to grid">←</a>
+
+<canvas id="stage"></canvas>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+// BLOCKS — flat color, pixel-wipe transitions.
+//
+// A low-res buffer of flat color regions that is continuously overwritten by
+// "wipes": rectangular regions of a new flat color that reveal pixel-by-pixel
+// along one of 8 axes (horizontal ←→, vertical ↑↓, diagonal × 4). Two or three
+// wipes are usually in flight at once, at different scales and speeds, so the
+// composition never settles.
+//
+// Tap anywhere to drop a new wipe at that point.
+// ════════════════════════════════════════════════════════════════════════════
+
+const display = document.getElementById('stage');
+const dctx = display.getContext('2d');
+
+const isMobile = window.matchMedia('(max-width: 600px)').matches;
+const W = isMobile ? 220 : 320;
+const H = Math.max(60, Math.floor(W * (window.innerHeight / window.innerWidth)));
+
+const buffer = document.createElement('canvas');
+buffer.width = W;
+buffer.height = H;
+const bctx = buffer.getContext('2d');
+const imgData = bctx.createImageData(W, H);
+const data = imgData.data;
+
+function fitDisplay() {
+    display.width = window.innerWidth;
+    display.height = window.innerHeight;
+    dctx.imageSmoothingEnabled = false;
+}
+window.addEventListener('resize', fitDisplay);
+fitDisplay();
+
+// ─── PALETTE (saturated flats — Mondrian + neon + Bauhaus mix) ─────────────
+const PALETTE = [
+    [240,  60,  50],   // red
+    [255, 200,  40],   // yellow
+    [ 40, 100, 230],   // cobalt
+    [240, 240, 220],   // cream
+    [ 22,  22,  28],   // near-black
+    [ 50, 190, 100],   // green
+    [255, 110, 200],   // pink
+    [255, 140,  50],   // orange
+    [ 80, 220, 220],   // cyan
+    [180,  80, 240],   // violet
+];
+
+// ─── 8 DIRECTIONS for pixel-wipe phase ─────────────────────────────────────
+//   0  H →     1  H ←
+//   2  V ↓     3  V ↑
+//   4  ↘       5  ↖
+//   6  ↗       7  ↙
+function getPhase(direction, x, y, w, h) {
+    switch (direction) {
+        case 0: return x / (w - 1 || 1);
+        case 1: return 1 - x / (w - 1 || 1);
+        case 2: return y / (h - 1 || 1);
+        case 3: return 1 - y / (h - 1 || 1);
+        case 4: return (x + y) / ((w + h - 2) || 1);
+        case 5: return 1 - (x + y) / ((w + h - 2) || 1);
+        case 6: return ((w - 1 - x) + y) / ((w + h - 2) || 1);
+        case 7: return (x + (h - 1 - y)) / ((w + h - 2) || 1);
+    }
+    return 0;
+}
+
+// ─── INITIAL FILL ──────────────────────────────────────────────────────────
+function fillRect(r, colorIdx) {
+    const c = PALETTE[colorIdx];
+    for (let y = r.y; y < r.y + r.h; y++) {
+        for (let x = r.x; x < r.x + r.w; x++) {
+            const idx = (y * W + x) * 4;
+            data[idx]     = c[0];
+            data[idx + 1] = c[1];
+            data[idx + 2] = c[2];
+            data[idx + 3] = 255;
+        }
+    }
+}
+fillRect({ x: 0, y: 0, w: W, h: H }, 4);  // start on near-black
+
+// ─── WIPES ─────────────────────────────────────────────────────────────────
+const activeWipes = [];
+let lastColorIdx = 4;
+
+function chooseColorIdx() {
+    // Avoid picking the same color back-to-back
+    let idx;
+    do { idx = (Math.random() * PALETTE.length) | 0; } while (idx === lastColorIdx);
+    lastColorIdx = idx;
+    return idx;
+}
+
+function spawnWipe(opts = {}) {
+    const colorIdx  = opts.colorIdx  != null ? opts.colorIdx  : chooseColorIdx();
+    const direction = opts.direction != null ? opts.direction : (Math.random() * 8) | 0;
+
+    let region;
+    if (opts.region) {
+        region = opts.region;
+    } else {
+        const roll = Math.random();
+        if (roll < 0.35) {
+            // Full canvas
+            region = { x: 0, y: 0, w: W, h: H };
+        } else if (roll < 0.70) {
+            // Half / band
+            const r = Math.random();
+            if (r < 0.25) region = { x: 0, y: 0, w: W, h: (H / 2) | 0 };
+            else if (r < 0.5) region = { x: 0, y: H - ((H / 2) | 0), w: W, h: (H / 2) | 0 };
+            else if (r < 0.75) region = { x: 0, y: 0, w: (W / 2) | 0, h: H };
+            else region = { x: W - ((W / 2) | 0), y: 0, w: (W / 2) | 0, h: H };
+        } else {
+            // Smaller block
+            const sw = ((0.22 + Math.random() * 0.45) * W) | 0;
+            const sh = ((0.22 + Math.random() * 0.45) * H) | 0;
+            region = {
+                x: (Math.random() * (W - sw)) | 0,
+                y: (Math.random() * (H - sh)) | 0,
+                w: sw,
+                h: sh,
+            };
+        }
+    }
+
+    activeWipes.push({
+        colorIdx,
+        direction,
+        region,
+        progress: 0,
+        speed: opts.speed != null ? opts.speed : 0.006 + Math.random() * 0.020,
+    });
+}
+
+function sweepWipe(wipe, oldP, newP) {
+    const r = wipe.region;
+    const c = PALETTE[wipe.colorIdx];
+    const dir = wipe.direction;
+    const rw = r.w, rh = r.h;
+    for (let py = 0; py < rh; py++) {
+        const y = r.y + py;
+        for (let px = 0; px < rw; px++) {
+            const phase = getPhase(dir, px, py, rw, rh);
+            if (phase > oldP && phase <= newP) {
+                const x = r.x + px;
+                const idx = (y * W + x) * 4;
+                data[idx]     = c[0];
+                data[idx + 1] = c[1];
+                data[idx + 2] = c[2];
+                data[idx + 3] = 255;
+            }
+        }
+    }
+}
+
+// ─── UPDATE & RENDER ───────────────────────────────────────────────────────
+function update() {
+    for (let i = activeWipes.length - 1; i >= 0; i--) {
+        const w = activeWipes[i];
+        const oldP = w.progress;
+        const newP = Math.min(1, w.progress + w.speed);
+        sweepWipe(w, oldP, newP);
+        w.progress = newP;
+        if (newP >= 1) activeWipes.splice(i, 1);
+    }
+    // Keep 2 wipes in flight, occasionally let a third sneak in
+    while (activeWipes.length < 2) spawnWipe();
+    if (activeWipes.length < 3 && Math.random() < 0.018) spawnWipe();
+}
+
+function render() {
+    update();
+    bctx.putImageData(imgData, 0, 0);
+    dctx.drawImage(buffer, 0, 0, display.width, display.height);
+    requestAnimationFrame(render);
+}
+requestAnimationFrame(render);
+
+// ─── TAP → spawn a wipe centered on the touch ──────────────────────────────
+window.addEventListener('pointerdown', e => {
+    if (e.target.closest('.back')) return;
+    const rect = display.getBoundingClientRect();
+    const cx = ((e.clientX - rect.left) / rect.width) * W;
+    const cy = ((e.clientY - rect.top)  / rect.height) * H;
+    const sw = ((0.30 + Math.random() * 0.40) * W) | 0;
+    const sh = ((0.30 + Math.random() * 0.40) * H) | 0;
+    const region = {
+        x: Math.max(0, Math.min(W - sw, (cx - sw / 2) | 0)),
+        y: Math.max(0, Math.min(H - sh, (cy - sh / 2) | 0)),
+        w: sw, h: sh,
+    };
+    spawnWipe({ region, speed: 0.022 + Math.random() * 0.018 });
+});
+
+// Prevent iOS double-tap zoom
+let _lastTouchEnd = 0;
+document.addEventListener('touchend', e => {
+    const now = Date.now();
+    if (now - _lastTouchEnd < 350) e.preventDefault();
+    _lastTouchEnd = now;
+}, { passive: false });
+</script>
+
+</body>
+</html>

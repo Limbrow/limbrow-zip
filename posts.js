@@ -24,6 +24,13 @@
 export const posts = [
 
     {
+        slug: 'blocks',
+        date: '2026-05-17',
+        preview: 'preview.html',  // flat-color rectangles, pixel-wipe transitions in 8 directions
+        scale: 1.0
+    },
+
+    {
         slug: 'melt',
         date: '2026-05-17',
         preview: 'preview.html',  // pixel-sorted glitch, auto-cycling through modes
@@ -34,13 +41,6 @@ export const posts = [
         slug: 'loops',
         date: '2026-05-17',
         preview: 'preview.html',  // grid of Lissajous patterns auto-cycling through modes
-        scale: 1.0
-    },
-
-    {
-        slug: 'heliogabalo',
-        date: '2026-05-16',
-        preview: 'preview.html',  // breathing crop of the Alma-Tadema — the rain of rose petals
         scale: 1.0
     },
 

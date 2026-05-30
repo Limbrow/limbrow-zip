@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>blocks · preview</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+        background: #000;
+        width: 100%;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+    }
+    #stage {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        display: block;
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+    }
+</style>
+</head>
+<body>
+
+<canvas id="stage"></canvas>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+// BLOCKS PREVIEW — same wipe engine at lower res, slightly more wipes in
+// flight so the card stays visually active for a viewer scrolling past.
+// ════════════════════════════════════════════════════════════════════════════
+
+const display = document.getElementById('stage');
+const dctx = display.getContext('2d');
+
+const W = 160;
+const H = Math.max(60, Math.floor(W * (window.innerHeight / window.innerWidth))) || W;
+
+const buffer = document.createElement('canvas');
+buffer.width = W; buffer.height = H;
+const bctx = buffer.getContext('2d');
+const imgData = bctx.createImageData(W, H);
+const data = imgData.data;
+
+function fitDisplay() {
+    display.width = window.innerWidth;
+    display.height = window.innerHeight;
+    dctx.imageSmoothingEnabled = false;
+}
+window.addEventListener('resize', fitDisplay);
+fitDisplay();
+
+const PALETTE = [
+    [240,  60,  50], [255, 200,  40], [ 40, 100, 230], [240, 240, 220],
+    [ 22,  22,  28], [ 50, 190, 100], [255, 110, 200], [255, 140,  50],
+    [ 80, 220, 220], [180,  80, 240],
+];
+
+function getPhase(d, x, y, w, h) {
+    switch (d) {
+        case 0: return x / (w - 1 || 1);
+        case 1: return 1 - x / (w - 1 || 1);
+        case 2: return y / (h - 1 || 1);
+        case 3: return 1 - y / (h - 1 || 1);
+        case 4: return (x + y) / ((w + h - 2) || 1);
+        case 5: return 1 - (x + y) / ((w + h - 2) || 1);
+        case 6: return ((w - 1 - x) + y) / ((w + h - 2) || 1);
+        case 7: return (x + (h - 1 - y)) / ((w + h - 2) || 1);
+    }
+    return 0;
+}
+
+function fillRect(r, ci) {
+    const c = PALETTE[ci];
+    for (let y = r.y; y < r.y + r.h; y++) {
+        for (let x = r.x; x < r.x + r.w; x++) {
+            const idx = (y * W + x) * 4;
+            data[idx] = c[0]; data[idx+1] = c[1]; data[idx+2] = c[2]; data[idx+3] = 255;
+        }
+    }
+}
+// Start on a random color per card so multiple previews look different
+const startIdx = (Math.random() * PALETTE.length) | 0;
+fillRect({ x: 0, y: 0, w: W, h: H }, startIdx);
+
+const wipes = [];
+let lastColorIdx = startIdx;
+
+function chooseColorIdx() {
+    let idx;
+    do { idx = (Math.random() * PALETTE.length) | 0; } while (idx === lastColorIdx);
+    lastColorIdx = idx;
+    return idx;
+}
+
+function spawnWipe() {
+    const colorIdx  = chooseColorIdx();
+    const direction = (Math.random() * 8) | 0;
+    let region;
+    const roll = Math.random();
+    if (roll < 0.40) {
+        region = { x: 0, y: 0, w: W, h: H };
+    } else if (roll < 0.72) {
+        const r = Math.random();
+        if (r < 0.25) region = { x: 0, y: 0, w: W, h: (H / 2) | 0 };
+        else if (r < 0.5) region = { x: 0, y: H - ((H / 2) | 0), w: W, h: (H / 2) | 0 };
+        else if (r < 0.75) region = { x: 0, y: 0, w: (W / 2) | 0, h: H };
+        else region = { x: W - ((W / 2) | 0), y: 0, w: (W / 2) | 0, h: H };
+    } else {
+        const sw = ((0.22 + Math.random() * 0.45) * W) | 0;
+        const sh = ((0.22 + Math.random() * 0.45) * H) | 0;
+        region = {
+            x: (Math.random() * (W - sw)) | 0,
+            y: (Math.random() * (H - sh)) | 0,
+            w: sw, h: sh,
+        };
+    }
+    wipes.push({
+        colorIdx, direction, region,
+        progress: 0,
+        speed: 0.010 + Math.random() * 0.025,
+    });
+}
+
+function sweep(w, oldP, newP) {
+    const r = w.region, c = PALETTE[w.colorIdx], d = w.direction;
+    for (let py = 0; py < r.h; py++) {
+        const y = r.y + py;
+        for (let px = 0; px < r.w; px++) {
+            const phase = getPhase(d, px, py, r.w, r.h);
+            if (phase > oldP && phase <= newP) {
+                const idx = (y * W + (r.x + px)) * 4;
+                data[idx] = c[0]; data[idx+1] = c[1]; data[idx+2] = c[2]; data[idx+3] = 255;
+            }
+        }
+    }
+}
+
+function frame() {
+    for (let i = wipes.length - 1; i >= 0; i--) {
+        const w = wipes[i];
+        const oldP = w.progress;
+        const newP = Math.min(1, w.progress + w.speed);
+        sweep(w, oldP, newP);
+        w.progress = newP;
+        if (newP >= 1) wipes.splice(i, 1);
+    }
+    while (wipes.length < 2) spawnWipe();
+    if (wipes.length < 3 && Math.random() < 0.030) spawnWipe();
+
+    bctx.putImageData(imgData, 0, 0);
+    dctx.drawImage(buffer, 0, 0, display.width, display.height);
+    requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+
+</body>
+</html>
