@@ -24,6 +24,13 @@
 export const posts = [
 
     {
+        slug: 'loops',
+        date: '2026-05-17',
+        preview: 'preview.html',  // grid of Lissajous patterns auto-cycling through modes
+        scale: 1.0
+    },
+
+    {
         slug: 'heliogabalo',
         date: '2026-05-16',
         preview: 'preview.html',  // breathing crop of the Alma-Tadema — the rain of rose petals

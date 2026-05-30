@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0">
+<title>loops · limbrow.zip</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+        background: #000;
+        color: #e8e8e8;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+        font-family: ui-monospace, 'JetBrains Mono', monospace;
+        -webkit-user-select: none; user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: none;
+    }
+
+    .back {
+        position: fixed;
+        top: 16px; left: 16px;
+        z-index: 100;
+        width: 36px; height: 36px;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 50%;
+        color: rgba(255,255,255,0.65);
+        text-decoration: none;
+        font-size: 16px;
+        line-height: 1;
+        padding-bottom: 2px;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+    }
+
+    #canvas {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        display: block;
+    }
+
+    /* ─── Floating segmented control ─── */
+    .seg {
+        position: fixed;
+        bottom: max(16px, env(safe-area-inset-bottom));
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10;
+        display: flex;
+        gap: 0;
+        background: rgba(0, 0, 0, 0.45);
+        backdrop-filter: blur(16px) saturate(120%);
+        -webkit-backdrop-filter: blur(16px) saturate(120%);
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        border-radius: 999px;
+        padding: 4px;
+    }
+    .seg button {
+        background: transparent;
+        border: 0;
+        color: rgba(255, 255, 255, 0.55);
+        padding: 9px 14px;
+        font-family: inherit;
+        font-size: 9px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        font-weight: 500;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+    .seg button:hover { color: rgba(255, 255, 255, 0.85); }
+    .seg button.active {
+        background: rgba(255, 255, 255, 0.14);
+        color: #fff;
+    }
+</style>
+</head>
+<body>
+
+<a class="back" href="/" aria-label="Back to grid">←</a>
+
+<canvas id="canvas"></canvas>
+
+<div class="seg" id="mode-seg">
+    <button class="active" data-mode="SHAPES">Shapes</button>
+    <button data-mode="PHASES">Phases</button>
+    <button data-mode="DRIFT">Drift</button>
+    <button data-mode="WALL">Wall</button>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+// LOOPS — Lissajous-style harmonics in a grid. Each cell is a parametric
+// curve x = sin(a·t + δ), y = sin(b·t) sampled as colored particles that
+// slowly march around the loop. Modes change what each cell shows:
+//   SHAPES → 16 hand-picked frequency ratios, classical variety
+//   PHASES → same ratio (3:4) across all 16, δ stepping 0 → 2π
+//   DRIFT  → SHAPES base, but δ drifts per cell so each pattern morphs
+//   WALL   → denser 6×8 grid of fast-evolving curves
+// ════════════════════════════════════════════════════════════════════════════
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+const PARTICLES_PER_CELL = 90;
+const MARCH_SPEED = 0.045;   // rotations per second along the curve
+
+function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.floor(window.innerWidth * dpr);
+    canvas.height = Math.floor(window.innerHeight * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ─── PRESETS ───────────────────────────────────────────────────────────────
+const SHAPES = [
+    { a: 1, b: 1, d: 0 },              // straight line (diagonal)
+    { a: 1, b: 1, d: Math.PI / 4 },    // tilted ellipse
+    { a: 1, b: 1, d: Math.PI / 2 },    // perfect circle
+    { a: 1, b: 2, d: 0 },              // figure-eight cap
+    { a: 1, b: 2, d: Math.PI / 2 },    // open lemniscate
+    { a: 1, b: 3, d: Math.PI / 2 },    // three-leafed
+    { a: 2, b: 3, d: 0 },              // 2:3 closed
+    { a: 2, b: 3, d: Math.PI / 4 },
+    { a: 3, b: 4, d: 0 },
+    { a: 3, b: 5, d: 0 },
+    { a: 4, b: 5, d: 0 },
+    { a: 5, b: 6, d: 0 },
+    { a: 1, b: 4, d: Math.PI / 2 },
+    { a: 3, b: 2, d: Math.PI / 3 },
+    { a: 5, b: 4, d: Math.PI / 4 },
+    { a: 7, b: 9, d: 0 },
+];
+
+const PHASES = Array.from({ length: 16 }, (_, i) => ({
+    a: 3,
+    b: 4,
+    d: (i / 16) * 2 * Math.PI,
+}));
+
+// Per-cell drift rate (rad/sec) — picked so cells evolve out of sync
+const DRIFT_RATES = Array.from({ length: 16 }, (_, i) =>
+    0.025 + ((i * 0.013 + i * i * 0.0009) % 0.06)
+);
+
+// WALL: denser grid with extra ratios for a thick, busy look
+const WALL_RATIOS = [];
+for (let a = 1; a <= 6; a++) {
+    for (let b = a + 1; b <= 9; b++) {
+        WALL_RATIOS.push({ a, b, d: (a * 0.7 + b * 0.4) % (2 * Math.PI) });
+    }
+}
+
+// ─── STATE ─────────────────────────────────────────────────────────────────
+const state = {
+    mode: 'SHAPES',
+    t: 0,
+};
+
+// ─── LAYOUT ────────────────────────────────────────────────────────────────
+function getGridDims() {
+    if (state.mode === 'WALL') {
+        // Adapt density to viewport orientation
+        const W = window.innerWidth, H = window.innerHeight;
+        return W >= H ? { cols: 8, rows: 6 } : { cols: 6, rows: 8 };
+    }
+    return { cols: 4, rows: 4 };
+}
+
+function getCells() {
+    const { cols, rows } = getGridDims();
+    const W = window.innerWidth, H = window.innerHeight;
+    const gap = state.mode === 'WALL' ? 3 : 6;
+    const cellW = (W - gap * (cols + 1)) / cols;
+    const cellH = (H - gap * (rows + 1)) / rows;
+    const cells = [];
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            cells.push({
+                x: gap + c * (cellW + gap),
+                y: gap + r * (cellH + gap),
+                w: cellW,
+                h: cellH,
+            });
+        }
+    }
+    return cells;
+}
+
+function getPresetForCell(idx) {
+    const tSec = state.t / 1000;
+    let base;
+    if (state.mode === 'SHAPES' || state.mode === 'DRIFT') {
+        base = SHAPES[idx % SHAPES.length];
+    } else if (state.mode === 'PHASES') {
+        base = PHASES[idx % PHASES.length];
+    } else {
+        base = WALL_RATIOS[idx % WALL_RATIOS.length];
+    }
+    const driftDelta =
+        state.mode === 'DRIFT' ? tSec * DRIFT_RATES[idx % DRIFT_RATES.length]
+      : state.mode === 'WALL'  ? tSec * 0.05 * (1 + (idx % 5) * 0.15)
+      : 0;
+    return { a: base.a, b: base.b, d: base.d + driftDelta };
+}
+
+// ─── DRAW ──────────────────────────────────────────────────────────────────
+function drawCell(cell, preset) {
+    const cx = cell.x + cell.w / 2;
+    const cy = cell.y + cell.h / 2;
+    const r = Math.min(cell.w, cell.h) * 0.40;
+    const N = PARTICLES_PER_CELL;
+    const marchShift = (state.t / 1000) * MARCH_SPEED;
+    const dotR = Math.max(0.9, Math.min(cell.w, cell.h) * 0.012);
+
+    for (let i = 0; i < N; i++) {
+        const t = ((i / N) + marchShift) * 2 * Math.PI;
+        const x = cx + r * Math.sin(preset.a * t + preset.d);
+        const y = cy + r * Math.sin(preset.b * t);
+        // Rainbow hue along the curve — gives the time-coded look
+        const hue = (i / N) * 360;
+        ctx.fillStyle = `hsl(${hue}, 75%, 60%)`;
+        ctx.beginPath();
+        ctx.arc(x, y, dotR, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+function draw() {
+    const W = window.innerWidth, H = window.innerHeight;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+
+    // Additive blend so overlapping dots glow softly
+    ctx.globalCompositeOperation = 'lighter';
+
+    const cells = getCells();
+    cells.forEach((cell, i) => {
+        drawCell(cell, getPresetForCell(i));
+    });
+
+    ctx.globalCompositeOperation = 'source-over';
+}
+
+// ─── MODE SWITCH ───────────────────────────────────────────────────────────
+document.querySelectorAll('[data-mode]').forEach(b => {
+    b.addEventListener('click', () => {
+        state.mode = b.dataset.mode;
+        document.querySelectorAll('[data-mode]').forEach(x => {
+            x.classList.toggle('active', x === b);
+        });
+    });
+});
+
+// ─── LOOP ──────────────────────────────────────────────────────────────────
+let lastTime = performance.now();
+function loop(now) {
+    state.t += (now - lastTime);
+    lastTime = now;
+    draw();
+    requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// Prevent iOS double-tap zoom
+let _lastTouchEnd = 0;
+document.addEventListener('touchend', e => {
+    const now = Date.now();
+    if (now - _lastTouchEnd < 350) e.preventDefault();
+    _lastTouchEnd = now;
+}, { passive: false });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>loops · preview</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+        background: #000;
+        width: 100%;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+    }
+    #c {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        display: block;
+    }
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+// LOOPS PREVIEW — silent grid of Lissajous curves. Auto-cycles through
+// modes (SHAPES → PHASES → DRIFT → WALL) every ~6 seconds so the card
+// communicates the variety inside the post.
+// ════════════════════════════════════════════════════════════════════════════
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+const PARTICLES_PER_CELL = 80;
+const MARCH_SPEED = 0.05;
+
+function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.floor(window.innerWidth * dpr);
+    canvas.height = Math.floor(window.innerHeight * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+const SHAPES = [
+    { a: 1, b: 1, d: 0 },
+    { a: 1, b: 1, d: Math.PI / 4 },
+    { a: 1, b: 1, d: Math.PI / 2 },
+    { a: 1, b: 2, d: 0 },
+    { a: 1, b: 2, d: Math.PI / 2 },
+    { a: 1, b: 3, d: Math.PI / 2 },
+    { a: 2, b: 3, d: 0 },
+    { a: 2, b: 3, d: Math.PI / 4 },
+    { a: 3, b: 4, d: 0 },
+    { a: 3, b: 5, d: 0 },
+    { a: 4, b: 5, d: 0 },
+    { a: 5, b: 6, d: 0 },
+    { a: 1, b: 4, d: Math.PI / 2 },
+    { a: 3, b: 2, d: Math.PI / 3 },
+    { a: 5, b: 4, d: Math.PI / 4 },
+    { a: 7, b: 9, d: 0 },
+];
+const PHASES = Array.from({ length: 16 }, (_, i) => ({
+    a: 3, b: 4, d: (i / 16) * 2 * Math.PI
+}));
+const DRIFT_RATES = Array.from({ length: 16 }, (_, i) =>
+    0.025 + ((i * 0.013 + i * i * 0.0009) % 0.06)
+);
+const WALL_RATIOS = [];
+for (let a = 1; a <= 6; a++) {
+    for (let b = a + 1; b <= 9; b++) {
+        WALL_RATIOS.push({ a, b, d: (a * 0.7 + b * 0.4) % (2 * Math.PI) });
+    }
+}
+
+const CYCLE = ['SHAPES', 'PHASES', 'DRIFT', 'WALL'];
+const CYCLE_MS = 6000;
+
+let t = 0;
+
+function currentMode() {
+    return CYCLE[Math.floor(t / CYCLE_MS) % CYCLE.length];
+}
+
+function getCells(mode) {
+    const W = window.innerWidth, H = window.innerHeight;
+    let cols, rows;
+    if (mode === 'WALL') {
+        // square-ish viewport in a grid card → 6x6 reads well
+        cols = 6; rows = 6;
+    } else {
+        cols = 4; rows = 4;
+    }
+    const gap = mode === 'WALL' ? 2 : 4;
+    const cellW = (W - gap * (cols + 1)) / cols;
+    const cellH = (H - gap * (rows + 1)) / rows;
+    const cells = [];
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            cells.push({
+                x: gap + c * (cellW + gap),
+                y: gap + r * (cellH + gap),
+                w: cellW, h: cellH,
+            });
+        }
+    }
+    return cells;
+}
+
+function getPreset(mode, idx, tSec) {
+    let base;
+    if (mode === 'SHAPES' || mode === 'DRIFT') base = SHAPES[idx % SHAPES.length];
+    else if (mode === 'PHASES') base = PHASES[idx % PHASES.length];
+    else base = WALL_RATIOS[idx % WALL_RATIOS.length];
+    const drift =
+        mode === 'DRIFT' ? tSec * DRIFT_RATES[idx % DRIFT_RATES.length] :
+        mode === 'WALL'  ? tSec * 0.05 * (1 + (idx % 5) * 0.15) : 0;
+    return { a: base.a, b: base.b, d: base.d + drift };
+}
+
+function drawCell(cell, preset, marchShift) {
+    const cx = cell.x + cell.w / 2;
+    const cy = cell.y + cell.h / 2;
+    const r = Math.min(cell.w, cell.h) * 0.40;
+    const N = PARTICLES_PER_CELL;
+    const dotR = Math.max(0.8, Math.min(cell.w, cell.h) * 0.014);
+    for (let i = 0; i < N; i++) {
+        const tt = ((i / N) + marchShift) * 2 * Math.PI;
+        const x = cx + r * Math.sin(preset.a * tt + preset.d);
+        const y = cy + r * Math.sin(preset.b * tt);
+        const hue = (i / N) * 360;
+        ctx.fillStyle = `hsl(${hue}, 75%, 60%)`;
+        ctx.beginPath();
+        ctx.arc(x, y, dotR, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+function draw() {
+    const W = window.innerWidth, H = window.innerHeight;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalCompositeOperation = 'lighter';
+
+    const mode = currentMode();
+    const cells = getCells(mode);
+    const tSec = t / 1000;
+    const marchShift = tSec * MARCH_SPEED;
+    cells.forEach((cell, i) => {
+        drawCell(cell, getPreset(mode, i, tSec), marchShift);
+    });
+
+    ctx.globalCompositeOperation = 'source-over';
+}
+
+let lastTime = performance.now();
+function loop(now) {
+    t += (now - lastTime);
+    lastTime = now;
+    draw();
+    requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+
+</body>
+</html>
