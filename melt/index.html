@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0">
+<title>melt · limbrow.zip</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+        background: #000;
+        color: #e8e8e8;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+        font-family: ui-monospace, 'JetBrains Mono', monospace;
+        -webkit-user-select: none; user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: none;
+    }
+
+    .back {
+        position: fixed;
+        top: 16px; left: 16px;
+        z-index: 100;
+        width: 36px; height: 36px;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0, 0, 0, 0.35);
+        border: 1px solid rgba(255,255,255,0.10);
+        border-radius: 50%;
+        color: rgba(255,255,255,0.85);
+        text-decoration: none;
+        font-size: 16px;
+        line-height: 1;
+        padding-bottom: 2px;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+    }
+
+    #stage {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+    }
+
+    /* Subtle direction indicator (4 dots) at bottom */
+    .dots {
+        position: fixed;
+        bottom: max(22px, env(safe-area-inset-bottom));
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10;
+        display: flex;
+        gap: 10px;
+        padding: 6px 10px;
+        background: rgba(0, 0, 0, 0.25);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border-radius: 999px;
+    }
+    .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.28);
+        cursor: pointer;
+        transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+                    background 0.22s ease;
+    }
+    .dot.active {
+        background: #fff;
+        transform: scale(1.4);
+    }
+</style>
+</head>
+<body>
+
+<a class="back" href="/" aria-label="Back to grid">←</a>
+
+<canvas id="stage"></canvas>
+
+<div class="dots" id="dots">
+    <div class="dot active" data-idx="0" aria-label="Drip"></div>
+    <div class="dot" data-idx="1" aria-label="Drag"></div>
+    <div class="dot" data-idx="2" aria-label="Shift"></div>
+    <div class="dot" data-idx="3" aria-label="Mosh"></div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+// MELT — pixel-sort glitch, Kim Asendorf style.
+//
+// A low-resolution buffer is painted each frame with a layered, animated
+// noise field, then pixel-sorted column-wise (DRIP) or row-wise (DRAG),
+// or RGB-channel-offset (SHIFT), or all-of-the-above (MOSH). The buffer
+// is then stretched to the viewport with nearest-neighbor scaling so the
+// blocky pixels stay sharp.
+//
+// Swipe horizontally (or arrow keys, or tap the dots) to switch effects.
+// Tap once on the canvas to jump the seed — the colors reshuffle.
+// ════════════════════════════════════════════════════════════════════════════
+
+const display = document.getElementById('stage');
+const dctx = display.getContext('2d');
+
+// Working buffer at low res — keeps pixel sort cheap and the pixels chunky
+const isMobile = window.matchMedia('(max-width: 600px)').matches;
+const W = isMobile ? 260 : 380;
+const H = Math.floor(W * (window.innerHeight / window.innerWidth));
+const buffer = document.createElement('canvas');
+buffer.width = W;
+buffer.height = H;
+const bctx = buffer.getContext('2d');
+const imgData = bctx.createImageData(W, H);
+const data = imgData.data;
+
+function fitDisplay() {
+    display.width = window.innerWidth;
+    display.height = window.innerHeight;
+    dctx.imageSmoothingEnabled = false;
+}
+window.addEventListener('resize', fitDisplay);
+fitDisplay();
+
+// ─── STATE ─────────────────────────────────────────────────────────────────
+const MODES = ['DRIP', 'DRAG', 'SHIFT', 'MOSH'];
+let modeIdx = 0;
+let mode = MODES[0];
+let seed = 0;
+let t0 = performance.now();
+
+const dotEls = document.querySelectorAll('#dots .dot');
+function setModeByIdx(idx) {
+    modeIdx = (idx + MODES.length) % MODES.length;
+    mode = MODES[modeIdx];
+    dotEls.forEach((d, i) => d.classList.toggle('active', i === modeIdx));
+}
+
+// ─── PALETTE (Inigo Quilez form — fast, no HSL conversion) ─────────────────
+// palette(v) = a + b * cos(2π * (c·v + d))
+// Tuned for Asendorf-ish high saturation: cyan / magenta / lime / orange.
+const PAL_A = [0.50, 0.45, 0.60];
+const PAL_B = [0.55, 0.50, 0.50];
+const PAL_C = [1.00, 1.00, 0.90];
+const PAL_D = [0.00, 0.33, 0.67];
+const TWO_PI = 6.283185307;
+
+// ─── BASE GENERATION ───────────────────────────────────────────────────────
+function paintBase(time) {
+    const tt = time * 0.00035 + seed;
+    for (let y = 0; y < H; y++) {
+        const ny = (y / H) * 2 - 1;
+        for (let x = 0; x < W; x++) {
+            const nx = (x / W) * 2 - 1;
+
+            // Layered sine field — pseudo-noise with structure
+            const v =
+                Math.sin(nx * 5.0 + tt * 1.0) * 0.40 +
+                Math.cos(ny * 4.0 + tt * 1.3) * 0.30 +
+                Math.sin((nx + ny) * 3.5 + tt * 0.7) * 0.20 +
+                Math.cos((nx - ny) * 6.0 - tt * 0.5) * 0.10;
+            // v ~ [-1, 1]
+            const v01 = v * 0.5 + 0.5;
+
+            // Iñigo Quilez palette
+            const r = (PAL_A[0] + PAL_B[0] * Math.cos(TWO_PI * (PAL_C[0] * v01 + PAL_D[0] + tt * 0.04))) * 255;
+            const g = (PAL_A[1] + PAL_B[1] * Math.cos(TWO_PI * (PAL_C[1] * v01 + PAL_D[1] + tt * 0.04))) * 255;
+            const b = (PAL_A[2] + PAL_B[2] * Math.cos(TWO_PI * (PAL_C[2] * v01 + PAL_D[2] + tt * 0.04))) * 255;
+
+            const i = (y * W + x) * 4;
+            data[i]     = r < 0 ? 0 : r > 255 ? 255 : r | 0;
+            data[i + 1] = g < 0 ? 0 : g > 255 ? 255 : g | 0;
+            data[i + 2] = b < 0 ? 0 : b > 255 ? 255 : b | 0;
+            data[i + 3] = 255;
+        }
+    }
+}
+
+// ─── PIXEL SORT VERTICAL (DRIP) ────────────────────────────────────────────
+function sortVertical(threshold) {
+    for (let x = 0; x < W; x++) {
+        let runStart = -1;
+        for (let y = 0; y <= H; y++) {
+            let pass = false;
+            if (y < H) {
+                const i = (y * W + x) * 4;
+                pass = data[i] + data[i + 1] + data[i + 2] > threshold;
+            }
+            if (pass) {
+                if (runStart === -1) runStart = y;
+            } else {
+                if (runStart !== -1 && y - runStart > 2) {
+                    sortRunVertical(x, runStart, y - 1);
+                }
+                runStart = -1;
+            }
+        }
+    }
+}
+function sortRunVertical(x, y0, y1) {
+    const len = y1 - y0 + 1;
+    const arr = new Array(len);
+    for (let i = 0; i < len; i++) {
+        const di = ((y0 + i) * W + x) * 4;
+        arr[i] = [data[di] + data[di + 1] + data[di + 2], data[di], data[di + 1], data[di + 2]];
+    }
+    arr.sort((a, b) => a[0] - b[0]);
+    for (let i = 0; i < len; i++) {
+        const di = ((y0 + i) * W + x) * 4;
+        data[di]     = arr[i][1];
+        data[di + 1] = arr[i][2];
+        data[di + 2] = arr[i][3];
+    }
+}
+
+// ─── PIXEL SORT HORIZONTAL (DRAG) ──────────────────────────────────────────
+function sortHorizontal(threshold) {
+    for (let y = 0; y < H; y++) {
+        let runStart = -1;
+        for (let x = 0; x <= W; x++) {
+            let pass = false;
+            if (x < W) {
+                const i = (y * W + x) * 4;
+                pass = data[i] + data[i + 1] + data[i + 2] > threshold;
+            }
+            if (pass) {
+                if (runStart === -1) runStart = x;
+            } else {
+                if (runStart !== -1 && x - runStart > 2) {
+                    sortRunHorizontal(y, runStart, x - 1);
+                }
+                runStart = -1;
+            }
+        }
+    }
+}
+function sortRunHorizontal(y, x0, x1) {
+    const len = x1 - x0 + 1;
+    const arr = new Array(len);
+    for (let i = 0; i < len; i++) {
+        const di = (y * W + (x0 + i)) * 4;
+        arr[i] = [data[di] + data[di + 1] + data[di + 2], data[di], data[di + 1], data[di + 2]];
+    }
+    arr.sort((a, b) => a[0] - b[0]);
+    for (let i = 0; i < len; i++) {
+        const di = (y * W + (x0 + i)) * 4;
+        data[di]     = arr[i][1];
+        data[di + 1] = arr[i][2];
+        data[di + 2] = arr[i][3];
+    }
+}
+
+// ─── RGB CHANNEL SHIFT (SHIFT) ─────────────────────────────────────────────
+// Shift R left by N px and B right by N px — chromatic aberration glitch.
+function shiftChannels(amount) {
+    // Snapshot current red and blue channels
+    const red  = new Uint8ClampedArray(W * H);
+    const blue = new Uint8ClampedArray(W * H);
+    for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+        red[j]  = data[i];
+        blue[j] = data[i + 2];
+    }
+    for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+            const xR = Math.max(0, Math.min(W - 1, x - amount));
+            const xB = Math.max(0, Math.min(W - 1, x + amount));
+            const di = (y * W + x) * 4;
+            data[di]     = red[y * W + xR];
+            data[di + 2] = blue[y * W + xB];
+        }
+    }
+}
+
+// ─── FRAME ─────────────────────────────────────────────────────────────────
+function frame(now) {
+    const t = (now - t0) + seed * 100;
+    paintBase(t);
+
+    const slow = t * 0.0008;
+    if (mode === 'DRIP') {
+        const threshold = 340 + Math.sin(slow) * 110;
+        sortVertical(threshold);
+    } else if (mode === 'DRAG') {
+        const threshold = 340 + Math.sin(slow) * 110;
+        sortHorizontal(threshold);
+    } else if (mode === 'SHIFT') {
+        const amount = 3 + ((Math.sin(slow * 0.7) * 0.5 + 0.5) * 9) | 0;
+        shiftChannels(amount);
+    } else if (mode === 'MOSH') {
+        const threshold1 = 320 + Math.sin(slow) * 130;
+        const threshold2 = 360 + Math.cos(slow * 1.3) * 110;
+        sortVertical(threshold1);
+        sortHorizontal(threshold2);
+        const amount = 2 + ((Math.sin(slow * 0.9) * 0.5 + 0.5) * 6) | 0;
+        shiftChannels(amount);
+    }
+
+    bctx.putImageData(imgData, 0, 0);
+    dctx.drawImage(buffer, 0, 0, display.width, display.height);
+    requestAnimationFrame(frame);
+}
+
+requestAnimationFrame(frame);
+
+// ─── SWIPE / KEYS / DOTS / TAP ─────────────────────────────────────────────
+dotEls.forEach((d, i) => d.addEventListener('click', e => {
+    e.stopPropagation();
+    setModeByIdx(i);
+}));
+
+let pStart = null;
+window.addEventListener('pointerdown', e => {
+    if (e.target.closest('#dots') || e.target.closest('.back')) return;
+    pStart = { x: e.clientX, y: e.clientY, t: performance.now() };
+}, { passive: true });
+
+window.addEventListener('pointerup', e => {
+    if (!pStart) return;
+    const dx = e.clientX - pStart.x;
+    const dy = e.clientY - pStart.y;
+    const dt = performance.now() - pStart.t;
+    const start = pStart;
+    pStart = null;
+    if (dt > 700) return;
+    // Short tap with no drag → mutate seed (re-roll colors)
+    if (Math.abs(dx) < 12 && Math.abs(dy) < 12) {
+        seed = (seed + 13.37 + Math.random() * 100) % 1e6;
+        return;
+    }
+    // Horizontal swipe → cycle mode
+    if (Math.abs(dx) >= 50 && Math.abs(dy) < Math.abs(dx) * 0.7) {
+        setModeByIdx(dx > 0 ? modeIdx - 1 : modeIdx + 1);
+    }
+}, { passive: true });
+
+window.addEventListener('keydown', e => {
+    if (e.key === 'ArrowLeft')  setModeByIdx(modeIdx - 1);
+    if (e.key === 'ArrowRight') setModeByIdx(modeIdx + 1);
+    if (e.key === ' ') seed = (seed + 13.37 + Math.random() * 100) % 1e6;
+});
+
+// Prevent iOS double-tap zoom
+let _lastTouchEnd = 0;
+document.addEventListener('touchend', e => {
+    const now = Date.now();
+    if (now - _lastTouchEnd < 350) e.preventDefault();
+    _lastTouchEnd = now;
+}, { passive: false });
+</script>
+
+</body>
+</html>

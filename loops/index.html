@@ -44,40 +44,33 @@
         display: block;
     }
 
-    /* ─── Floating segmented control ─── */
-    .seg {
+    /* ─── Page indicator (4 dots at bottom) ─── */
+    .dots {
         position: fixed;
-        bottom: max(16px, env(safe-area-inset-bottom));
+        bottom: max(22px, env(safe-area-inset-bottom));
         left: 50%;
         transform: translateX(-50%);
         z-index: 10;
         display: flex;
-        gap: 0;
-        background: rgba(0, 0, 0, 0.45);
-        backdrop-filter: blur(16px) saturate(120%);
-        -webkit-backdrop-filter: blur(16px) saturate(120%);
-        border: 1px solid rgba(255, 255, 255, 0.10);
+        gap: 10px;
+        padding: 6px 10px;
+        background: rgba(0, 0, 0, 0.25);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
         border-radius: 999px;
-        padding: 4px;
     }
-    .seg button {
-        background: transparent;
-        border: 0;
-        color: rgba(255, 255, 255, 0.55);
-        padding: 9px 14px;
-        font-family: inherit;
-        font-size: 9px;
-        letter-spacing: 0.22em;
-        text-transform: uppercase;
-        font-weight: 500;
-        border-radius: 999px;
+    .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.28);
         cursor: pointer;
-        transition: all 0.15s;
+        transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+                    background 0.22s ease;
     }
-    .seg button:hover { color: rgba(255, 255, 255, 0.85); }
-    .seg button.active {
-        background: rgba(255, 255, 255, 0.14);
-        color: #fff;
+    .dot.active {
+        background: #fff;
+        transform: scale(1.4);
     }
 </style>
 </head>
@@ -87,11 +80,11 @@
 
 <canvas id="canvas"></canvas>
 
-<div class="seg" id="mode-seg">
-    <button class="active" data-mode="SHAPES">Shapes</button>
-    <button data-mode="PHASES">Phases</button>
-    <button data-mode="DRIFT">Drift</button>
-    <button data-mode="WALL">Wall</button>
+<div class="dots" id="dots">
+    <div class="dot active" data-idx="0" aria-label="Shapes"></div>
+    <div class="dot" data-idx="1" aria-label="Phases"></div>
+    <div class="dot" data-idx="2" aria-label="Drift"></div>
+    <div class="dot" data-idx="3" aria-label="Wall"></div>
 </div>
 
 <script>
@@ -250,14 +243,42 @@ function draw() {
     ctx.globalCompositeOperation = 'source-over';
 }
 
-// ─── MODE SWITCH ───────────────────────────────────────────────────────────
-document.querySelectorAll('[data-mode]').forEach(b => {
-    b.addEventListener('click', () => {
-        state.mode = b.dataset.mode;
-        document.querySelectorAll('[data-mode]').forEach(x => {
-            x.classList.toggle('active', x === b);
-        });
-    });
+// ─── MODE SWITCH (swipe / arrow keys / tap a dot) ──────────────────────────
+const MODES = ['SHAPES', 'PHASES', 'DRIFT', 'WALL'];
+let modeIdx = 0;
+const dotEls = document.querySelectorAll('#dots .dot');
+
+function setModeByIdx(idx) {
+    modeIdx = (idx + MODES.length) % MODES.length;
+    state.mode = MODES[modeIdx];
+    dotEls.forEach((d, i) => d.classList.toggle('active', i === modeIdx));
+}
+
+dotEls.forEach((d, i) => d.addEventListener('click', () => setModeByIdx(i)));
+
+// Horizontal swipe anywhere on screen → prev/next mode
+let pStart = null;
+window.addEventListener('pointerdown', e => {
+    // Ignore taps on the dots themselves
+    if (e.target.closest('#dots') || e.target.closest('.back')) return;
+    pStart = { x: e.clientX, y: e.clientY, t: performance.now() };
+}, { passive: true });
+
+window.addEventListener('pointerup', e => {
+    if (!pStart) return;
+    const dx = e.clientX - pStart.x;
+    const dy = e.clientY - pStart.y;
+    const dt = performance.now() - pStart.t;
+    pStart = null;
+    if (dt > 700) return;
+    if (Math.abs(dx) < 50) return;
+    if (Math.abs(dy) > Math.abs(dx) * 0.7) return;
+    setModeByIdx(dx > 0 ? modeIdx - 1 : modeIdx + 1);
+}, { passive: true });
+
+window.addEventListener('keydown', e => {
+    if (e.key === 'ArrowLeft')  setModeByIdx(modeIdx - 1);
+    if (e.key === 'ArrowRight') setModeByIdx(modeIdx + 1);
 });
 
 // ─── LOOP ──────────────────────────────────────────────────────────────────
