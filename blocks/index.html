@@ -46,20 +46,21 @@
         image-rendering: crisp-edges;
     }
 
-    /* Tiny readout in the corner — system · layout · flow · seed */
-    .meta {
+    /* Centered credit at the bottom */
+    .credit {
         position: fixed;
         bottom: max(14px, env(safe-area-inset-bottom));
-        left: 16px;
+        left: 50%;
+        transform: translateX(-50%);
         z-index: 10;
         font-size: 9px;
-        letter-spacing: 0.18em;
+        letter-spacing: 0.22em;
         text-transform: uppercase;
-        color: rgba(255, 255, 255, 0.58);
+        color: rgba(255, 255, 255, 0.55);
         mix-blend-mode: difference;
         pointer-events: none;
+        white-space: nowrap;
     }
-    .meta span { margin-right: 14px; }
 </style>
 </head>
 <body>
@@ -68,12 +69,7 @@
 
 <canvas id="stage"></canvas>
 
-<div class="meta" id="meta">
-    <span id="m-sys">—</span>
-    <span id="m-lay">—</span>
-    <span id="m-flow">—</span>
-    <span id="m-seed">—</span>
-</div>
+<div class="credit">inspired by kim asendorf</div>
 
 <script>
 // ════════════════════════════════════════════════════════════════════════════
@@ -350,11 +346,6 @@ function reseed() {
     }
 
     initState(layout, packed, seed);
-
-    document.getElementById('m-sys').textContent  = system;
-    document.getElementById('m-lay').textContent  = layout;
-    document.getElementById('m-flow').textContent = flowName;
-    document.getElementById('m-seed').textContent = '0x' + (seed >>> 0).toString(16).padStart(8, '0');
 }
 reseed();
 

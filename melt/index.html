@@ -47,7 +47,7 @@
         image-rendering: crisp-edges;
     }
 
-    /* Subtle direction indicator (4 dots) at bottom */
+    /* Direction indicator (4 dots) at bottom */
     .dots {
         position: fixed;
         bottom: max(22px, env(safe-area-inset-bottom));
@@ -92,22 +92,35 @@
 
 <script>
 // ════════════════════════════════════════════════════════════════════════════
-// MELT — pixel-sort glitch, Kim Asendorf style.
+// MELT — pixel-sort + channel-shift glitch, Kim Asendorf style.
 //
-// A low-resolution buffer is painted each frame with a layered, animated
-// noise field, then pixel-sorted column-wise (DRIP) or row-wise (DRAG),
-// or RGB-channel-offset (SHIFT), or all-of-the-above (MOSH). The buffer
-// is then stretched to the viewport with nearest-neighbor scaling so the
-// blocky pixels stay sharp.
+// A low-resolution source field is painted each frame from two layered sine
+// oscillators (low + high frequency) blended through an Inigo Quilez palette
+// whose 12 control parameters slowly drift through their own sine fields.
+// The piece never settles on a fixed look — the colours evolve continuously
+// over a multi-minute cycle.
 //
-// Swipe horizontally (or arrow keys, or tap the dots) to switch effects.
-// Tap once on the canvas to jump the seed — the colors reshuffle.
+// Each mode applies a different processing pass with its own internal phase
+// so the behaviour deepens over time, not just the threshold pulse:
+//
+//   DRIP — dual vertical sort: a low-threshold pass running continuously and
+//          a high-threshold pass that gates in and out, layering bands of
+//          sorted pixels at two scales.
+//   DRAG — same but horizontal.
+//   SHIFT — chromatic aberration with INDEPENDENT R/G/B offsets, each driven
+//          by its own slow oscillator. Sometimes only red moves, sometimes
+//          all three are out of phase.
+//   MOSH — cycles through four sub-combinations of DRIP/DRAG/SHIFT, each
+//          running for a few seconds before the rotation advances.
+//
+// Tap → mutate the seed (jumps everything forward, re-rolls the colour
+// drift and source state). Swipe / dots / arrow keys → switch mode.
 // ════════════════════════════════════════════════════════════════════════════
 
 const display = document.getElementById('stage');
 const dctx = display.getContext('2d');
 
-// Working buffer at low res — keeps pixel sort cheap and the pixels chunky
+// Working buffer at low res
 const isMobile = window.matchMedia('(max-width: 600px)').matches;
 const W = isMobile ? 260 : 380;
 const H = Math.floor(W * (window.innerHeight / window.innerWidth));
@@ -126,12 +139,24 @@ function fitDisplay() {
 window.addEventListener('resize', fitDisplay);
 fitDisplay();
 
+// ─── SIN LUT — speeds up the per-pixel inner loop ~5× ──────────────────────
+const SIN_N = 4096;
+const SIN_LUT = new Float32Array(SIN_N);
+for (let i = 0; i < SIN_N; i++) SIN_LUT[i] = Math.sin((i / SIN_N) * Math.PI * 2);
+const SIN_K = SIN_N / (Math.PI * 2);
+function fastSin(x) {
+    let i = (x * SIN_K) | 0;
+    i = ((i % SIN_N) + SIN_N) % SIN_N;
+    return SIN_LUT[i];
+}
+function fastCos(x) { return fastSin(x + Math.PI * 0.5); }
+
 // ─── STATE ─────────────────────────────────────────────────────────────────
 const MODES = ['DRIP', 'DRAG', 'SHIFT', 'MOSH'];
 let modeIdx = 0;
 let mode = MODES[0];
 let seed = 0;
-let t0 = performance.now();
+const t0 = performance.now();
 
 const dotEls = document.querySelectorAll('#dots .dot');
 function setModeByIdx(idx) {
@@ -140,36 +165,79 @@ function setModeByIdx(idx) {
     dotEls.forEach((d, i) => d.classList.toggle('active', i === modeIdx));
 }
 
-// ─── PALETTE (Inigo Quilez form — fast, no HSL conversion) ─────────────────
-// palette(v) = a + b * cos(2π * (c·v + d))
-// Tuned for Asendorf-ish high saturation: cyan / magenta / lime / orange.
-const PAL_A = [0.50, 0.45, 0.60];
-const PAL_B = [0.55, 0.50, 0.50];
-const PAL_C = [1.00, 1.00, 0.90];
-const PAL_D = [0.00, 0.33, 0.67];
+// ─── EVOLVING PALETTE (Iñigo Quilez form) + source layer params ────────────
+// 12 palette params + 4 source params all drift on their own slow sine
+// oscillators. Periods are multi-minute so the piece never looks identical.
 const TWO_PI = 6.283185307;
+const evo = {
+    aR: 0.5, aG: 0.45, aB: 0.60,
+    bR: 0.55, bG: 0.50, bB: 0.50,
+    cR: 1.0, cG: 1.0, cB: 0.9,
+    dR: 0.0, dG: 0.33, dB: 0.67,
+    layerMix: 0.7,
+    layer1Speed: 1.0,
+    layer2Scale: 8.0,
+    layer2Speed: 1.3,
+};
+function evolveParams(time) {
+    const t = time * 0.0000095;   // ~very slow base rate
+    const s = seed * 0.00003;
+    evo.aR = 0.50 + fastSin(t * 0.71 + s) * 0.10;
+    evo.aG = 0.45 + fastCos(t * 0.93 + s * 1.3 + 1.2) * 0.12;
+    evo.aB = 0.60 + fastSin(t * 0.55 + s * 0.7 + 2.4) * 0.10;
+    evo.bR = 0.55 + fastCos(t * 0.61 + s + 0.5) * 0.10;
+    evo.bG = 0.50 + fastSin(t * 0.47 + s * 1.1 + 1.8) * 0.10;
+    evo.bB = 0.50 + fastCos(t * 0.42 + s + 3.0) * 0.10;
+    evo.cR = 1.00 + fastSin(t * 0.33 + s) * 0.22;
+    evo.cG = 1.00 + fastCos(t * 0.29 + s * 0.8) * 0.20;
+    evo.cB = 0.90 + fastSin(t * 0.31 + s + 1.0) * 0.18;
+    evo.dR = 0.00 + fastSin(t * 0.51 + s) * 0.30;
+    evo.dG = 0.33 + fastCos(t * 0.45 + s * 0.9) * 0.22;
+    evo.dB = 0.67 + fastSin(t * 0.55 + s + 1.5) * 0.22;
+    evo.layerMix    = 0.50 + fastSin(t * 0.40 + s) * 0.35;
+    evo.layer1Speed = 1.00 + fastSin(t * 0.60 + s) * 0.45;
+    evo.layer2Scale = 7.00 + fastCos(t * 0.50 + s) * 4.50;
+    evo.layer2Speed = 1.30 + fastSin(t * 0.55 + s) * 0.55;
+}
 
-// ─── BASE GENERATION ───────────────────────────────────────────────────────
+// ─── SOURCE PAINT (two-layer noise blended through evolving palette) ───────
 function paintBase(time) {
     const tt = time * 0.00035 + seed;
+    const mix = evo.layerMix;
+    const inv = 1 - mix;
+    const s1 = evo.layer1Speed;
+    const s2 = evo.layer2Speed;
+    const k2 = evo.layer2Scale;
+    const aR = evo.aR, aG = evo.aG, aB = evo.aB;
+    const bR = evo.bR, bG = evo.bG, bB = evo.bB;
+    const cR = evo.cR, cG = evo.cG, cB = evo.cB;
+    const dR = evo.dR, dG = evo.dG, dB = evo.dB;
+    const driftHue = tt * 0.04;
+
     for (let y = 0; y < H; y++) {
         const ny = (y / H) * 2 - 1;
         for (let x = 0; x < W; x++) {
             const nx = (x / W) * 2 - 1;
 
-            // Layered sine field — pseudo-noise with structure
-            const v =
-                Math.sin(nx * 5.0 + tt * 1.0) * 0.40 +
-                Math.cos(ny * 4.0 + tt * 1.3) * 0.30 +
-                Math.sin((nx + ny) * 3.5 + tt * 0.7) * 0.20 +
-                Math.cos((nx - ny) * 6.0 - tt * 0.5) * 0.10;
-            // v ~ [-1, 1]
+            // Layer 1 — smooth low-frequency
+            const l1 =
+                fastSin(nx * 5.0 + tt * s1) * 0.40 +
+                fastCos(ny * 4.0 + tt * 1.3 * s1) * 0.30 +
+                fastSin((nx + ny) * 3.5 + tt * 0.7) * 0.20 +
+                fastCos((nx - ny) * 6.0 - tt * 0.5) * 0.10;
+
+            // Layer 2 — higher-frequency detail
+            const l2 =
+                fastSin(nx * k2 + tt * s2 * 1.5) * 0.40 +
+                fastCos(ny * k2 + tt * s2 * 1.2 + 1.7) * 0.35 +
+                fastSin((nx + ny) * k2 * 0.6 + tt * s2) * 0.25;
+
+            const v = l1 * mix + l2 * inv;
             const v01 = v * 0.5 + 0.5;
 
-            // Iñigo Quilez palette
-            const r = (PAL_A[0] + PAL_B[0] * Math.cos(TWO_PI * (PAL_C[0] * v01 + PAL_D[0] + tt * 0.04))) * 255;
-            const g = (PAL_A[1] + PAL_B[1] * Math.cos(TWO_PI * (PAL_C[1] * v01 + PAL_D[1] + tt * 0.04))) * 255;
-            const b = (PAL_A[2] + PAL_B[2] * Math.cos(TWO_PI * (PAL_C[2] * v01 + PAL_D[2] + tt * 0.04))) * 255;
+            const r = (aR + bR * fastCos(TWO_PI * (cR * v01 + dR + driftHue))) * 255;
+            const g = (aG + bG * fastCos(TWO_PI * (cG * v01 + dG + driftHue))) * 255;
+            const b = (aB + bB * fastCos(TWO_PI * (cB * v01 + dB + driftHue))) * 255;
 
             const i = (y * W + x) * 4;
             data[i]     = r < 0 ? 0 : r > 255 ? 255 : r | 0;
@@ -180,7 +248,7 @@ function paintBase(time) {
     }
 }
 
-// ─── PIXEL SORT VERTICAL (DRIP) ────────────────────────────────────────────
+// ─── PIXEL SORT VERTICAL ───────────────────────────────────────────────────
 function sortVertical(threshold) {
     for (let x = 0; x < W; x++) {
         let runStart = -1;
@@ -193,15 +261,13 @@ function sortVertical(threshold) {
             if (pass) {
                 if (runStart === -1) runStart = y;
             } else {
-                if (runStart !== -1 && y - runStart > 2) {
-                    sortRunVertical(x, runStart, y - 1);
-                }
+                if (runStart !== -1 && y - runStart > 2) sortRunV(x, runStart, y - 1);
                 runStart = -1;
             }
         }
     }
 }
-function sortRunVertical(x, y0, y1) {
+function sortRunV(x, y0, y1) {
     const len = y1 - y0 + 1;
     const arr = new Array(len);
     for (let i = 0; i < len; i++) {
@@ -217,7 +283,7 @@ function sortRunVertical(x, y0, y1) {
     }
 }
 
-// ─── PIXEL SORT HORIZONTAL (DRAG) ──────────────────────────────────────────
+// ─── PIXEL SORT HORIZONTAL ─────────────────────────────────────────────────
 function sortHorizontal(threshold) {
     for (let y = 0; y < H; y++) {
         let runStart = -1;
@@ -230,15 +296,13 @@ function sortHorizontal(threshold) {
             if (pass) {
                 if (runStart === -1) runStart = x;
             } else {
-                if (runStart !== -1 && x - runStart > 2) {
-                    sortRunHorizontal(y, runStart, x - 1);
-                }
+                if (runStart !== -1 && x - runStart > 2) sortRunH(y, runStart, x - 1);
                 runStart = -1;
             }
         }
     }
 }
-function sortRunHorizontal(y, x0, x1) {
+function sortRunH(y, x0, x1) {
     const len = x1 - x0 + 1;
     const arr = new Array(len);
     for (let i = 0; i < len; i++) {
@@ -254,23 +318,27 @@ function sortRunHorizontal(y, x0, x1) {
     }
 }
 
-// ─── RGB CHANNEL SHIFT (SHIFT) ─────────────────────────────────────────────
-// Shift R left by N px and B right by N px — chromatic aberration glitch.
-function shiftChannels(amount) {
-    // Snapshot current red and blue channels
-    const red  = new Uint8ClampedArray(W * H);
-    const blue = new Uint8ClampedArray(W * H);
+// ─── ASYMMETRIC RGB SHIFT ──────────────────────────────────────────────────
+// Each channel offsets independently. Negative shifts go right, positive left.
+function shiftChannelsRGB(dR, dG, dB) {
+    const cr = new Uint8ClampedArray(W * H);
+    const cg = new Uint8ClampedArray(W * H);
+    const cb = new Uint8ClampedArray(W * H);
     for (let i = 0, j = 0; i < data.length; i += 4, j++) {
-        red[j]  = data[i];
-        blue[j] = data[i + 2];
+        cr[j] = data[i];
+        cg[j] = data[i + 1];
+        cb[j] = data[i + 2];
     }
     for (let y = 0; y < H; y++) {
+        const yBase = y * W;
         for (let x = 0; x < W; x++) {
-            const xR = Math.max(0, Math.min(W - 1, x - amount));
-            const xB = Math.max(0, Math.min(W - 1, x + amount));
-            const di = (y * W + x) * 4;
-            data[di]     = red[y * W + xR];
-            data[di + 2] = blue[y * W + xB];
+            const xR = Math.max(0, Math.min(W - 1, x - dR));
+            const xG = Math.max(0, Math.min(W - 1, x - dG));
+            const xB = Math.max(0, Math.min(W - 1, x - dB));
+            const di = (yBase + x) * 4;
+            data[di]     = cr[yBase + xR];
+            data[di + 1] = cg[yBase + xG];
+            data[di + 2] = cb[yBase + xB];
         }
     }
 }
@@ -278,32 +346,57 @@ function shiftChannels(amount) {
 // ─── FRAME ─────────────────────────────────────────────────────────────────
 function frame(now) {
     const t = (now - t0) + seed * 100;
+    evolveParams(t);
     paintBase(t);
 
     const slow = t * 0.0008;
+    const subPhase = t * 0.00006;   // ~17s cycle for sub-state rotations
+
     if (mode === 'DRIP') {
-        const threshold = 340 + Math.sin(slow) * 110;
-        sortVertical(threshold);
+        // Dual vertical sort — a baseline pass plus a gated heavier pass
+        const tBase  = 320 + fastSin(slow) * 130;
+        const tHeavy = 410 + fastCos(slow * 1.4 + subPhase * 5) * 90;
+        sortVertical(tBase);
+        if (fastSin(subPhase * 3.1) > -0.15) sortVertical(tHeavy);
     } else if (mode === 'DRAG') {
-        const threshold = 340 + Math.sin(slow) * 110;
-        sortHorizontal(threshold);
+        const tBase  = 320 + fastSin(slow) * 130;
+        const tHeavy = 390 + fastCos(slow * 1.2 + subPhase * 4) * 90;
+        sortHorizontal(tBase);
+        if (fastSin(subPhase * 2.7 + 1) > -0.15) sortHorizontal(tHeavy);
     } else if (mode === 'SHIFT') {
-        const amount = 3 + ((Math.sin(slow * 0.7) * 0.5 + 0.5) * 9) | 0;
-        shiftChannels(amount);
+        // Independent per-channel offsets, each on its own oscillator
+        const dRR = 1 + ((fastSin(slow * 0.7 + subPhase * 2) * 0.5 + 0.5) * 11) | 0;
+        const dGG = ((fastSin(slow * 0.5 + subPhase * 3 + 1.5) * 0.5 + 0.5) * 7) | 0;
+        const dBB = -1 - ((fastCos(slow * 0.45 + subPhase * 2.5 + 0.9) * 0.5 + 0.5) * 11) | 0;
+        shiftChannelsRGB(dRR, dGG, dBB);
     } else if (mode === 'MOSH') {
-        const threshold1 = 320 + Math.sin(slow) * 130;
-        const threshold2 = 360 + Math.cos(slow * 1.3) * 110;
-        sortVertical(threshold1);
-        sortHorizontal(threshold2);
-        const amount = 2 + ((Math.sin(slow * 0.9) * 0.5 + 0.5) * 6) | 0;
-        shiftChannels(amount);
+        // Rotate through 4 sub-combinations every few seconds
+        const sub = ((subPhase * 4) | 0) % 4;
+        const t1 = 320 + fastSin(slow) * 130;
+        const t2 = 360 + fastCos(slow * 1.3) * 110;
+        const dRR = 1 + ((fastSin(slow * 0.7) * 0.5 + 0.5) * 9) | 0;
+        const dGG = ((fastCos(slow * 0.4 + 1) * 0.5 + 0.5) * 5) | 0;
+        const dBB = -1 - ((fastSin(slow * 0.5 + 2) * 0.5 + 0.5) * 9) | 0;
+        if (sub === 0) {
+            sortVertical(t1);
+            sortHorizontal(t2);
+        } else if (sub === 1) {
+            sortVertical(t1);
+            shiftChannelsRGB(dRR, dGG, dBB);
+        } else if (sub === 2) {
+            sortHorizontal(t2);
+            shiftChannelsRGB(dRR, dGG, dBB);
+        } else {
+            sortVertical(t1);
+            sortHorizontal(t2);
+            shiftChannelsRGB(dRR, dGG, dBB);
+        }
     }
 
     bctx.putImageData(imgData, 0, 0);
     dctx.drawImage(buffer, 0, 0, display.width, display.height);
     requestAnimationFrame(frame);
 }
-
 requestAnimationFrame(frame);
 
 // ─── SWIPE / KEYS / DOTS / TAP ─────────────────────────────────────────────
@@ -323,15 +416,13 @@ window.addEventListener('pointerup', e => {
     const dx = e.clientX - pStart.x;
     const dy = e.clientY - pStart.y;
     const dt = performance.now() - pStart.t;
-    const start = pStart;
     pStart = null;
     if (dt > 700) return;
-    // Short tap with no drag → mutate seed (re-roll colors)
     if (Math.abs(dx) < 12 && Math.abs(dy) < 12) {
+        // Short tap → mutate seed (re-rolls colour drift offset + source seed)
         seed = (seed + 13.37 + Math.random() * 100) % 1e6;
         return;
     }
-    // Horizontal swipe → cycle mode
     if (Math.abs(dx) >= 50 && Math.abs(dy) < Math.abs(dx) * 0.7) {
         setModeByIdx(dx > 0 ? modeIdx - 1 : modeIdx + 1);
     }

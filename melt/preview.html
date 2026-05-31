@@ -29,8 +29,9 @@
 
 <script>
 // ════════════════════════════════════════════════════════════════════════════
-// MELT PREVIEW — slow auto-cycle through DRIP → DRAG → SHIFT → MOSH.
-// Tighter buffer and lighter compute since multiple cards may render at once.
+// MELT PREVIEW — same engine as the live post (evolving palette, two-layer
+// source) at lower resolution. Cycles through DRIP → DRAG → SHIFT → MOSH
+// every 7 s so each mode has time to develop.
 // ════════════════════════════════════════════════════════════════════════════
 
 const display = document.getElementById('stage');
@@ -38,7 +39,6 @@ const dctx = display.getContext('2d');
 
 const W = 180;
 const H = Math.floor(W * (window.innerHeight / window.innerWidth)) || W;
-
 const buffer = document.createElement('canvas');
 buffer.width = W; buffer.height = H;
 const bctx = buffer.getContext('2d');
@@ -53,33 +53,83 @@ function fitDisplay() {
 window.addEventListener('resize', fitDisplay);
 fitDisplay();
 
-// Pick a random seed offset so multiple cards differ
+// Per-card random seed so multiple previews differ
 const seed = Math.random() * 1000;
 
 const MODES = ['DRIP', 'DRAG', 'SHIFT', 'MOSH'];
-const MODE_MS = 4500;
-
-const PAL_A = [0.50, 0.45, 0.60];
-const PAL_B = [0.55, 0.50, 0.50];
-const PAL_C = [1.00, 1.00, 0.90];
-const PAL_D = [0.00, 0.33, 0.67];
+const MODE_MS = 7000;
 const TWO_PI = 6.283185307;
+
+// Sin LUT
+const SIN_N = 4096;
+const SIN_LUT = new Float32Array(SIN_N);
+for (let i = 0; i < SIN_N; i++) SIN_LUT[i] = Math.sin((i / SIN_N) * Math.PI * 2);
+const SIN_K = SIN_N / (Math.PI * 2);
+function fastSin(x) {
+    let i = (x * SIN_K) | 0;
+    i = ((i % SIN_N) + SIN_N) % SIN_N;
+    return SIN_LUT[i];
+}
+function fastCos(x) { return fastSin(x + Math.PI * 0.5); }
+
+const evo = {
+    aR: 0.5, aG: 0.45, aB: 0.60,
+    bR: 0.55, bG: 0.50, bB: 0.50,
+    cR: 1.0, cG: 1.0, cB: 0.9,
+    dR: 0.0, dG: 0.33, dB: 0.67,
+    layerMix: 0.7,
+    layer1Speed: 1.0,
+    layer2Scale: 8.0,
+    layer2Speed: 1.3,
+};
+function evolveParams(time) {
+    const t = time * 0.0000095;
+    const s = seed * 0.00003;
+    evo.aR = 0.50 + fastSin(t * 0.71 + s) * 0.10;
+    evo.aG = 0.45 + fastCos(t * 0.93 + s * 1.3 + 1.2) * 0.12;
+    evo.aB = 0.60 + fastSin(t * 0.55 + s * 0.7 + 2.4) * 0.10;
+    evo.bR = 0.55 + fastCos(t * 0.61 + s + 0.5) * 0.10;
+    evo.bG = 0.50 + fastSin(t * 0.47 + s * 1.1 + 1.8) * 0.10;
+    evo.bB = 0.50 + fastCos(t * 0.42 + s + 3.0) * 0.10;
+    evo.cR = 1.00 + fastSin(t * 0.33 + s) * 0.22;
+    evo.cG = 1.00 + fastCos(t * 0.29 + s * 0.8) * 0.20;
+    evo.cB = 0.90 + fastSin(t * 0.31 + s + 1.0) * 0.18;
+    evo.dR = 0.00 + fastSin(t * 0.51 + s) * 0.30;
+    evo.dG = 0.33 + fastCos(t * 0.45 + s * 0.9) * 0.22;
+    evo.dB = 0.67 + fastSin(t * 0.55 + s + 1.5) * 0.22;
+    evo.layerMix    = 0.50 + fastSin(t * 0.40 + s) * 0.35;
+    evo.layer1Speed = 1.00 + fastSin(t * 0.60 + s) * 0.45;
+    evo.layer2Scale = 7.00 + fastCos(t * 0.50 + s) * 4.50;
+    evo.layer2Speed = 1.30 + fastSin(t * 0.55 + s) * 0.55;
+}
 
 function paintBase(time) {
     const tt = time * 0.00035 + seed;
+    const mix = evo.layerMix, inv = 1 - mix;
+    const s1 = evo.layer1Speed, s2 = evo.layer2Speed, k2 = evo.layer2Scale;
+    const aR = evo.aR, aG = evo.aG, aB = evo.aB;
+    const bR = evo.bR, bG = evo.bG, bB = evo.bB;
+    const cR = evo.cR, cG = evo.cG, cB = evo.cB;
+    const dR = evo.dR, dG = evo.dG, dB = evo.dB;
+    const driftHue = tt * 0.04;
     for (let y = 0; y < H; y++) {
         const ny = (y / H) * 2 - 1;
         for (let x = 0; x < W; x++) {
             const nx = (x / W) * 2 - 1;
-            const v =
-                Math.sin(nx * 5.0 + tt * 1.0) * 0.40 +
-                Math.cos(ny * 4.0 + tt * 1.3) * 0.30 +
-                Math.sin((nx + ny) * 3.5 + tt * 0.7) * 0.20 +
-                Math.cos((nx - ny) * 6.0 - tt * 0.5) * 0.10;
+            const l1 =
+                fastSin(nx * 5.0 + tt * s1) * 0.40 +
+                fastCos(ny * 4.0 + tt * 1.3 * s1) * 0.30 +
+                fastSin((nx + ny) * 3.5 + tt * 0.7) * 0.20 +
+                fastCos((nx - ny) * 6.0 - tt * 0.5) * 0.10;
+            const l2 =
+                fastSin(nx * k2 + tt * s2 * 1.5) * 0.40 +
+                fastCos(ny * k2 + tt * s2 * 1.2 + 1.7) * 0.35 +
+                fastSin((nx + ny) * k2 * 0.6 + tt * s2) * 0.25;
+            const v = l1 * mix + l2 * inv;
             const v01 = v * 0.5 + 0.5;
-            const r = (PAL_A[0] + PAL_B[0] * Math.cos(TWO_PI * (PAL_C[0] * v01 + PAL_D[0] + tt * 0.04))) * 255;
-            const g = (PAL_A[1] + PAL_B[1] * Math.cos(TWO_PI * (PAL_C[1] * v01 + PAL_D[1] + tt * 0.04))) * 255;
-            const b = (PAL_A[2] + PAL_B[2] * Math.cos(TWO_PI * (PAL_C[2] * v01 + PAL_D[2] + tt * 0.04))) * 255;
+            const r = (aR + bR * fastCos(TWO_PI * (cR * v01 + dR + driftHue))) * 255;
+            const g = (aG + bG * fastCos(TWO_PI * (cG * v01 + dG + driftHue))) * 255;
+            const b = (aB + bB * fastCos(TWO_PI * (cB * v01 + dB + driftHue))) * 255;
             const i = (y * W + x) * 4;
             data[i]     = r < 0 ? 0 : r > 255 ? 255 : r | 0;
             data[i + 1] = g < 0 ? 0 : g > 255 ? 255 : g | 0;
@@ -117,9 +167,7 @@ function sortRunV(x, y0, y1) {
     arr.sort((a, b) => a[0] - b[0]);
     for (let i = 0; i < len; i++) {
         const di = ((y0 + i) * W + x) * 4;
-        data[di]   = arr[i][1];
-        data[di+1] = arr[i][2];
-        data[di+2] = arr[i][3];
+        data[di] = arr[i][1]; data[di+1] = arr[i][2]; data[di+2] = arr[i][3];
     }
 }
 
@@ -151,25 +199,27 @@ function sortRunH(y, x0, x1) {
     arr.sort((a, b) => a[0] - b[0]);
     for (let i = 0; i < len; i++) {
         const di = (y * W + (x0 + i)) * 4;
-        data[di]   = arr[i][1];
-        data[di+1] = arr[i][2];
-        data[di+2] = arr[i][3];
+        data[di] = arr[i][1]; data[di+1] = arr[i][2]; data[di+2] = arr[i][3];
     }
 }
 
-function shiftChannels(amount) {
-    const red  = new Uint8ClampedArray(W * H);
-    const blue = new Uint8ClampedArray(W * H);
+function shiftChannelsRGB(dRR, dGG, dBB) {
+    const cr = new Uint8ClampedArray(W * H);
+    const cg = new Uint8ClampedArray(W * H);
+    const cb = new Uint8ClampedArray(W * H);
     for (let i = 0, j = 0; i < data.length; i += 4, j++) {
-        red[j] = data[i]; blue[j] = data[i+2];
+        cr[j] = data[i]; cg[j] = data[i+1]; cb[j] = data[i+2];
     }
     for (let y = 0; y < H; y++) {
+        const yBase = y * W;
         for (let x = 0; x < W; x++) {
-            const xR = Math.max(0, Math.min(W - 1, x - amount));
-            const xB = Math.max(0, Math.min(W - 1, x + amount));
-            const di = (y * W + x) * 4;
-            data[di]   = red[y * W + xR];
-            data[di+2] = blue[y * W + xB];
+            const xR = Math.max(0, Math.min(W - 1, x - dRR));
+            const xG = Math.max(0, Math.min(W - 1, x - dGG));
+            const xB = Math.max(0, Math.min(W - 1, x - dBB));
+            const di = (yBase + x) * 4;
+            data[di] = cr[yBase + xR];
+            data[di+1] = cg[yBase + xG];
+            data[di+2] = cb[yBase + xB];
         }
     }
 }
@@ -178,18 +228,36 @@ let t0 = performance.now();
 function frame(now) {
     const t = now - t0;
     const mode = MODES[Math.floor(t / MODE_MS) % MODES.length];
+    evolveParams(t);
     paintBase(t);
     const slow = t * 0.0008;
+    const subPhase = t * 0.00006;
     if (mode === 'DRIP') {
-        sortVertical(340 + Math.sin(slow) * 110);
+        const tB = 320 + fastSin(slow) * 130;
+        const tH = 410 + fastCos(slow * 1.4 + subPhase * 5) * 90;
+        sortVertical(tB);
+        if (fastSin(subPhase * 3.1) > -0.15) sortVertical(tH);
     } else if (mode === 'DRAG') {
-        sortHorizontal(340 + Math.sin(slow) * 110);
+        const tB = 320 + fastSin(slow) * 130;
+        const tH = 390 + fastCos(slow * 1.2 + subPhase * 4) * 90;
+        sortHorizontal(tB);
+        if (fastSin(subPhase * 2.7 + 1) > -0.15) sortHorizontal(tH);
     } else if (mode === 'SHIFT') {
-        shiftChannels(3 + ((Math.sin(slow * 0.7) * 0.5 + 0.5) * 9) | 0);
+        const dRR = 1 + ((fastSin(slow * 0.7 + subPhase * 2) * 0.5 + 0.5) * 11) | 0;
+        const dGG = ((fastSin(slow * 0.5 + subPhase * 3 + 1.5) * 0.5 + 0.5) * 7) | 0;
+        const dBB = -1 - ((fastCos(slow * 0.45 + subPhase * 2.5 + 0.9) * 0.5 + 0.5) * 11) | 0;
+        shiftChannelsRGB(dRR, dGG, dBB);
     } else {
-        sortVertical(320 + Math.sin(slow) * 130);
-        sortHorizontal(360 + Math.cos(slow * 1.3) * 110);
-        shiftChannels(2 + ((Math.sin(slow * 0.9) * 0.5 + 0.5) * 6) | 0);
+        const sub = ((subPhase * 4) | 0) % 4;
+        const t1 = 320 + fastSin(slow) * 130;
+        const t2 = 360 + fastCos(slow * 1.3) * 110;
+        const dRR = 1 + ((fastSin(slow * 0.7) * 0.5 + 0.5) * 9) | 0;
+        const dGG = ((fastCos(slow * 0.4 + 1) * 0.5 + 0.5) * 5) | 0;
+        const dBB = -1 - ((fastSin(slow * 0.5 + 2) * 0.5 + 0.5) * 9) | 0;
+        if (sub === 0)      { sortVertical(t1); sortHorizontal(t2); }
+        else if (sub === 1) { sortVertical(t1); shiftChannelsRGB(dRR, dGG, dBB); }
+        else if (sub === 2) { sortHorizontal(t2); shiftChannelsRGB(dRR, dGG, dBB); }
+        else                { sortVertical(t1); sortHorizontal(t2); shiftChannelsRGB(dRR, dGG, dBB); }
     }
     bctx.putImageData(imgData, 0, 0);
     dctx.drawImage(buffer, 0, 0, display.width, display.height);
