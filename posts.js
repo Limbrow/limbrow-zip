@@ -24,6 +24,20 @@
 export const posts = [
 
     {
+        slug: 'meme',
+        date: '2026-05-17',
+        preview: 'preview.html',  // famous-meme data-mesh — captions/emojis dissolved by the flow
+        scale: 1.0
+    },
+
+    {
+        slug: 'physarum',
+        date: '2026-05-17',
+        preview: 'preview.html',  // slime-mould agents self-organising into a network
+        scale: 1.0
+    },
+
+    {
         slug: 'leparc',
         date: '2026-05-17',
         preview: 'preview.html',  // modulation grid of rotating lines — in memory of julio le parc

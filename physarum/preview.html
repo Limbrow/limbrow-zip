@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>physarum · preview</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { background: #000; width: 100%; height: 100vh; height: 100dvh; overflow: hidden; }
+    #stage {
+        position: fixed; top: 0; left: 0;
+        width: 100%; height: 100%;
+        display: block;
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+    }
+</style>
+</head>
+<body>
+
+<canvas id="stage"></canvas>
+
+<script>
+// Lower-resolution Physarum that auto-reseeds every 24s so the card cycles
+// through different agent regimes while still letting each network develop.
+const display = document.getElementById('stage');
+const dctx = display.getContext('2d');
+
+const W = 200;
+const H = Math.max(90, Math.floor(W * (window.innerHeight / window.innerWidth))) || W;
+const buffer = document.createElement('canvas');
+buffer.width = W; buffer.height = H;
+const bctx = buffer.getContext('2d');
+const imgData = bctx.createImageData(W, H);
+const data8  = imgData.data;
+const data32 = new Uint32Array(data8.buffer);
+const trail  = new Float32Array(W * H);
+const trail2 = new Float32Array(W * H);
+
+function fitDisplay() {
+    display.width = window.innerWidth;
+    display.height = window.innerHeight;
+    dctx.imageSmoothingEnabled = false;
+}
+window.addEventListener('resize', fitDisplay);
+fitDisplay();
+
+const PAL = { a:[0.5,0.45,0.6], b:[0.55,0.5,0.5], c:[1,1,0.9], d:[0,0.33,0.67] };
+const TWO_PI = Math.PI * 2;
+
+function generatePalette() {
+    const sys = Math.floor(Math.random() * 4);
+    if (sys === 0) {
+        PAL.a[0] = 0.5; PAL.a[1] = 0.5; PAL.a[2] = 0.5;
+        PAL.b[0] = 0.5; PAL.b[1] = 0.5; PAL.b[2] = 0.5;
+        PAL.c[0] = 1.0 + Math.random() * 0.4;
+        PAL.c[1] = 1.0 + Math.random() * 0.4;
+        PAL.c[2] = 1.0 + Math.random() * 0.4;
+        PAL.d[0] = Math.random();
+        PAL.d[1] = Math.random();
+        PAL.d[2] = Math.random();
+    } else if (sys === 1) {
+        const h = Math.random();
+        PAL.a[0] = h * 0.3;  PAL.a[1] = h * 0.4;  PAL.a[2] = h * 0.5;
+        PAL.b[0] = 0.5;      PAL.b[1] = 0.5;      PAL.b[2] = 0.5;
+        PAL.c[0] = 0.4;      PAL.c[1] = 0.4;      PAL.c[2] = 0.5;
+        PAL.d[0] = h;        PAL.d[1] = h + 0.1;  PAL.d[2] = h + 0.2;
+    } else if (sys === 2) {
+        PAL.a[0] = 0.6;  PAL.a[1] = 0.4;  PAL.a[2] = 0.25;
+        PAL.b[0] = 0.5;  PAL.b[1] = 0.45; PAL.b[2] = 0.35;
+        PAL.c[0] = 0.8;  PAL.c[1] = 0.9;  PAL.c[2] = 1.0;
+        PAL.d[0] = 0.0;  PAL.d[1] = 0.15; PAL.d[2] = 0.30;
+    } else {
+        PAL.a[0] = 0.25; PAL.a[1] = 0.45; PAL.a[2] = 0.65;
+        PAL.b[0] = 0.35; PAL.b[1] = 0.45; PAL.b[2] = 0.55;
+        PAL.c[0] = 0.9;  PAL.c[1] = 0.95; PAL.c[2] = 1.0;
+        PAL.d[0] = 0.55; PAL.d[1] = 0.65; PAL.d[2] = 0.78;
+    }
+}
+
+const N_AGENTS = 3200;
+const agentX = new Float32Array(N_AGENTS);
+const agentY = new Float32Array(N_AGENTS);
+const agentA = new Float32Array(N_AGENTS);
+
+let SENSOR_DIST, SENSOR_ANGLE, TURN_ANGLE, SPEED, DECAY, DEPOSIT;
+
+function reseed() {
+    SENSOR_DIST  = 6 + Math.random() * 22;
+    SENSOR_ANGLE = 0.20 + Math.random() * 0.70;
+    TURN_ANGLE   = 0.25 + Math.random() * 0.90;
+    SPEED        = 0.6 + Math.random() * 1.1;
+    DECAY        = 0.920 + Math.random() * 0.050;
+    DEPOSIT      = 18 + Math.random() * 32;
+    generatePalette();
+    const spawnDisk = Math.random() < 0.6;
+    if (spawnDisk) {
+        const cx = W * (0.3 + Math.random() * 0.4);
+        const cy = H * (0.3 + Math.random() * 0.4);
+        const radius = Math.min(W, H) * (0.15 + Math.random() * 0.25);
+        for (let i = 0; i < N_AGENTS; i++) {
+            const r = Math.sqrt(Math.random()) * radius;
+            const a = Math.random() * TWO_PI;
+            agentX[i] = cx + Math.cos(a) * r;
+            agentY[i] = cy + Math.sin(a) * r;
+            agentA[i] = Math.random() * TWO_PI;
+        }
+    } else {
+        for (let i = 0; i < N_AGENTS; i++) {
+            agentX[i] = Math.random() * W;
+            agentY[i] = Math.random() * H;
+            agentA[i] = Math.random() * TWO_PI;
+        }
+    }
+    trail.fill(0); trail2.fill(0);
+}
+reseed();
+
+function sample(x, y) {
+    let ix = x | 0, iy = y | 0;
+    if (ix < 0) ix += W; else if (ix >= W) ix -= W;
+    if (iy < 0) iy += H; else if (iy >= H) iy -= H;
+    return trail[iy * W + ix];
+}
+
+function stepAgents() {
+    const sd = SENSOR_DIST, sa = SENSOR_ANGLE, ta = TURN_ANGLE, sp = SPEED, dep = DEPOSIT;
+    for (let i = 0; i < N_AGENTS; i++) {
+        const x = agentX[i], y = agentY[i], a = agentA[i];
+        const cf = Math.cos(a),       sf = Math.sin(a);
+        const cl = Math.cos(a - sa),  sl = Math.sin(a - sa);
+        const cr = Math.cos(a + sa),  sr = Math.sin(a + sa);
+        const fv = sample(x + cf * sd, y + sf * sd);
+        const lv = sample(x + cl * sd, y + sl * sd);
+        const rv = sample(x + cr * sd, y + sr * sd);
+        let na = a;
+        if (fv >= lv && fv >= rv) { /* forward */ }
+        else if (lv > rv) na -= ta;
+        else if (rv > lv) na += ta;
+        else              na += (Math.random() < 0.5 ? -ta : ta);
+        let nx = x + Math.cos(na) * sp;
+        let ny = y + Math.sin(na) * sp;
+        if (nx < 0) nx += W; else if (nx >= W) nx -= W;
+        if (ny < 0) ny += H; else if (ny >= H) ny -= H;
+        agentX[i] = nx; agentY[i] = ny; agentA[i] = na;
+        const px = nx | 0, py = ny | 0;
+        const idx = py * W + px;
+        const t = trail[idx] + dep;
+        trail[idx] = t > 255 ? 255 : t;
+    }
+}
+
+function decayDiffuse() {
+    const k = (1 / 9) * DECAY;
+    for (let y = 1; y < H - 1; y++) {
+        const yBase = y * W;
+        const ym = (y - 1) * W;
+        const yp = (y + 1) * W;
+        for (let x = 1; x < W - 1; x++) {
+            trail2[yBase + x] = (
+                trail[ym + x - 1] + trail[ym + x] + trail[ym + x + 1] +
+                trail[yBase + x - 1] + trail[yBase + x] + trail[yBase + x + 1] +
+                trail[yp + x - 1] + trail[yp + x] + trail[yp + x + 1]
+            ) * k;
+        }
+    }
+    for (let x = 0; x < W; x++) {
+        trail2[x] = trail[x] * DECAY;
+        trail2[(H - 1) * W + x] = trail[(H - 1) * W + x] * DECAY;
+    }
+    for (let y = 0; y < H; y++) {
+        trail2[y * W] = trail[y * W] * DECAY;
+        trail2[y * W + W - 1] = trail[y * W + W - 1] * DECAY;
+    }
+    trail.set(trail2);
+}
+
+function paintImage() {
+    const aR = PAL.a[0], aG = PAL.a[1], aB = PAL.a[2];
+    const bR = PAL.b[0], bG = PAL.b[1], bB = PAL.b[2];
+    const cR = PAL.c[0], cG = PAL.c[1], cB = PAL.c[2];
+    const dR = PAL.d[0], dG = PAL.d[1], dB = PAL.d[2];
+    for (let i = 0, n = W * H; i < n; i++) {
+        const t = trail[i] * (1 / 255);
+        const r = (aR + bR * Math.cos(TWO_PI * (cR * t + dR))) * 255 * t;
+        const g = (aG + bG * Math.cos(TWO_PI * (cG * t + dG))) * 255 * t;
+        const b = (aB + bB * Math.cos(TWO_PI * (cB * t + dB))) * 255 * t;
+        const ri = r < 0 ? 0 : r > 255 ? 255 : r | 0;
+        const gi = g < 0 ? 0 : g > 255 ? 255 : g | 0;
+        const bi = b < 0 ? 0 : b > 255 ? 255 : b | 0;
+        data32[i] = (255 << 24) | (bi << 16) | (gi << 8) | ri;
+    }
+}
+
+const RESEED_MS = 24000;
+let lastReseed = performance.now();
+
+function frame() {
+    if (performance.now() - lastReseed > RESEED_MS) {
+        reseed();
+        lastReseed = performance.now();
+    }
+    stepAgents();
+    decayDiffuse();
+    paintImage();
+    bctx.putImageData(imgData, 0, 0);
+    dctx.drawImage(buffer, 0, 0, display.width, display.height);
+    requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) lastReseed = performance.now();
+});
+</script>
+
+</body>
+</html>

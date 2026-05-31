@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>meme · preview</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { background: #000; width: 100%; height: 100vh; height: 100dvh; overflow: hidden; }
+    #stage {
+        position: fixed; top: 0; left: 0;
+        width: 100%; height: 100%;
+        display: block;
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+    }
+</style>
+</head>
+<body>
+
+<canvas id="stage"></canvas>
+
+<script>
+// Same meme→advection engine at lower res; auto-remixes every 14s.
+const display = document.getElementById('stage');
+const dctx = display.getContext('2d');
+const W = 180;
+const H = Math.max(80, Math.floor(W * (window.innerHeight / window.innerWidth))) || W;
+const buffer = document.createElement('canvas');
+buffer.width = W; buffer.height = H;
+const bctx = buffer.getContext('2d');
+const imgData = bctx.createImageData(W, H);
+const data8  = imgData.data;
+const data32 = new Uint32Array(data8.buffer);
+const buf2   = new Uint32Array(W * H);
+function fitDisplay() {
+    display.width = window.innerWidth;
+    display.height = window.innerHeight;
+    dctx.imageSmoothingEnabled = false;
+}
+window.addEventListener('resize', fitDisplay);
+fitDisplay();
+
+const EMOJIS = ['🐸','🤡','💀','🗿','🐕','👁','🔥','🌚','🦍','🚀','💎','🤔','🐱','🍕','🤯','🧠','😎','👀','💋','🌽','🦴','🐢','🪐','😭','💯'];
+const TEXTS = ['STONKS','MUCH WOW','VERY NICE','BIG IF TRUE','POG','LMAO','OOF','RIP','F','NO CAP','Y THO','BRUH','SUS','BASED','PEAK','SLAY','COOKED','LFG','GG'];
+const BG_PALETTES = [
+    [255,220,0],[225,35,55],[40,175,85],[220,60,195],[35,45,90],[240,234,219],[255,130,40],[90,35,215],[10,10,15],[60,215,220],
+];
+function pickFromSeed(arr, seed, salt) {
+    return arr[(Math.abs((seed * salt) | 0)) % arr.length];
+}
+function renderMeme(seed) {
+    const bg = pickFromSeed(BG_PALETTES, seed, 31);
+    const fgIsDark = (bg[0] + bg[1] + bg[2]) > 380;
+    const textFill   = fgIsDark ? '#0c0c10' : '#ffffff';
+    const textStroke = fgIsDark ? '#ffffff' : '#0c0c10';
+    bctx.fillStyle = `rgb(${bg[0]}, ${bg[1]}, ${bg[2]})`;
+    bctx.fillRect(0, 0, W, H);
+    const style = Math.abs((seed * 13) | 0) % 4;
+    if (style === 0 || style === 2 || style === 3) {
+        const emoji = pickFromSeed(EMOJIS, seed, 17);
+        const size = (style === 3) ? Math.min(W, H) * 0.95 : Math.min(W, H) * 0.70;
+        bctx.font = `${size}px serif`;
+        bctx.textAlign = 'center';
+        bctx.textBaseline = 'middle';
+        bctx.fillStyle = '#000';
+        bctx.fillText(emoji, W * 0.5, H * 0.5);
+    }
+    if (style === 1 || style === 2 || style === 3) {
+        const lineH = H * 0.20;
+        bctx.font = `900 ${lineH}px Impact, "Arial Black", "Helvetica Neue", sans-serif`;
+        bctx.textAlign = 'center';
+        bctx.textBaseline = 'middle';
+        bctx.lineWidth = Math.max(1.5, H * 0.018);
+        bctx.lineJoin = 'round';
+        bctx.fillStyle = textFill;
+        bctx.strokeStyle = textStroke;
+        if (style === 1) {
+            const text = pickFromSeed(TEXTS, seed, 11);
+            bctx.strokeText(text, W * 0.5, H * 0.5);
+            bctx.fillText(text, W * 0.5, H * 0.5);
+        } else if (style === 2) {
+            const top = pickFromSeed(TEXTS, seed, 11);
+            const bot = pickFromSeed(TEXTS, seed, 23);
+            bctx.strokeText(top, W * 0.5, lineH * 0.85);
+            bctx.fillText(top,   W * 0.5, lineH * 0.85);
+            bctx.strokeText(bot, W * 0.5, H - lineH * 0.85);
+            bctx.fillText(bot,   W * 0.5, H - lineH * 0.85);
+        } else {
+            const text = pickFromSeed(TEXTS, seed, 11);
+            bctx.strokeText(text, W * 0.5, H - lineH * 0.75);
+            bctx.fillText(text,   W * 0.5, H - lineH * 0.75);
+        }
+    }
+    const captured = bctx.getImageData(0, 0, W, H);
+    data8.set(captured.data);
+}
+
+const FLOWS = {
+    laminar: { threshold: 0.48, speed: 0.00016,
+        velocity(nx, ny, t, ph) {
+            return { vx: Math.sin(nx * 1.2 + t * 0.7 + ph) + Math.cos(ny * 0.9 - t * 0.6) * 0.5,
+                     vy: Math.cos(ny * 1.2 + t * 0.8 + ph * 0.6) + Math.sin(nx * 0.9 + t * 0.5) * 0.5 };
+        } },
+    swirl: { threshold: 0.40, speed: 0.00018,
+        velocity(nx, ny, t, ph) {
+            const r = Math.sqrt(nx * nx + ny * ny);
+            const a = Math.atan2(ny, nx) + t * 0.45 + ph;
+            const m = 1 + Math.sin(r * 2.6 - t * 0.9) * 0.6;
+            return { vx: -Math.sin(a) * m, vy: Math.cos(a) * m };
+        } },
+    shear: { threshold: 0.35, speed: 0.00020,
+        velocity(nx, ny, t, ph) {
+            return { vx: Math.sin(ny * 3.2 + t * 1.0 + ph) * 1.5,
+                     vy: Math.cos(nx * 0.6 + t * 0.35) * 0.55 + Math.sin(ny * 1.1 + t * 0.4) * 0.30 };
+        } },
+    turbulent: { threshold: 0.32, speed: 0.00022,
+        velocity(nx, ny, t, ph) {
+            return { vx: Math.sin(nx * 1.4 + t * 0.9 + ph) + Math.cos(ny * 2.2 - t * 1.3) * 0.7 + Math.sin(nx * 3.5 + ny * 0.8 + t * 2.0) * 0.55,
+                     vy: Math.cos(ny * 1.4 + t * 1.0 + ph * 0.7) + Math.sin(nx * 2.2 + t * 0.85) * 0.7 + Math.cos(ny * 3.5 + nx * 0.6 + t * 1.8) * 0.55 };
+        } },
+    axial: { threshold: 0.55, speed: 0.00014,
+        velocity(nx, ny, t, ph) {
+            return { vx: Math.sin(nx * 0.8 + ny * 0.6 + t * 0.6 + ph) * 1.8 + Math.sin(nx * 2.5 + t * 0.4) * 0.3,
+                     vy: Math.cos(ny * 0.8 - nx * 0.6 + t * 0.7) * 1.8 + Math.cos(ny * 2.5 + t * 0.45) * 0.3 };
+        } },
+};
+const FLOW_NAMES = Object.keys(FLOWS);
+
+let flowName, flowDef, attractors, seed, phase, patience;
+function reseed() {
+    flowName = FLOW_NAMES[(Math.random() * FLOW_NAMES.length) | 0];
+    flowDef  = FLOWS[flowName];
+    seed     = (Math.random() * 2147483647) | 0;
+    phase    = ((seed & 0xFFFF) / 0xFFFF) * Math.PI * 2;
+    patience = 0.45 + Math.random() * 0.55;
+    const attCount = (Math.random() * 4) | 0;
+    attractors = [];
+    for (let i = 0; i < attCount; i++) {
+        attractors.push({
+            x: (Math.random() * 2 - 1) * 1.2,
+            y: (Math.random() * 2 - 1) * 1.2,
+            strength: (Math.random() * 1.4 + 0.6) * (Math.random() < 0.5 ? 1 : -1),
+            range: 0.6 + Math.random() * 1.4,
+        });
+    }
+    renderMeme(seed);
+}
+reseed();
+
+const FW = 48;
+const FH = Math.max(18, Math.floor(FW * H / W));
+const flowDX = new Int8Array(FW * FH);
+const flowDY = new Int8Array(FW * FH);
+
+function updateFlow(time) {
+    const t = time * flowDef.speed;
+    const tt = time;
+    const breath = 0.5 + Math.sin(tt * 0.00009 + phase) * 0.5;
+    const beatA  = Math.max(0, Math.sin(tt * 0.00072 + phase * 1.3) - 0.84) * 5;
+    const beatB  = Math.max(0, Math.sin(tt * 0.00115 + phase * 1.9) - 0.88) * 5;
+    const beats  = beatA > beatB ? beatA : beatB;
+    const baseThresh = flowDef.threshold * (0.8 + patience * 0.8);
+    const thresh = baseThresh * (1.30 - breath * 0.45 - beats * 0.55);
+    const half = thresh * 0.45;
+    const vel = flowDef.velocity;
+    for (let fy = 0; fy < FH; fy++) {
+        const ny = fy / FH * 3.0 - 1.5;
+        for (let fx = 0; fx < FW; fx++) {
+            const nx = fx / FW * 3.0 - 1.5;
+            const v = vel(nx, ny, t, phase);
+            let vx = v.vx, vy = v.vy;
+            for (let i = 0; i < attractors.length; i++) {
+                const a = attractors[i];
+                const dx = a.x - nx, dy = a.y - ny;
+                const r = Math.sqrt(dx * dx + dy * dy) + 0.05;
+                if (r < a.range) {
+                    const fo = 1 - r / a.range;
+                    vx += (dx / r) * a.strength * fo;
+                    vy += (dy / r) * a.strength * fo;
+                }
+            }
+            const ax = vx < 0 ? -vx : vx;
+            const ay = vy < 0 ? -vy : vy;
+            flowDX[fy * FW + fx] = ax > half ? (vx > 0 ? 1 : -1) : 0;
+            flowDY[fy * FW + fx] = ay > half ? (vy > 0 ? 1 : -1) : 0;
+        }
+    }
+}
+function step() {
+    const fxScale = FW / W, fyScale = FH / H;
+    for (let y = 0; y < H; y++) {
+        const fy = (y * fyScale) | 0;
+        const fyBase = fy * FW;
+        const yBase = y * W;
+        for (let x = 0; x < W; x++) {
+            const fx = (x * fxScale) | 0;
+            const dx = flowDX[fyBase + fx];
+            const dy = flowDY[fyBase + fx];
+            let sx = x - dx, sy = y - dy;
+            if (sx < 0) sx += W; else if (sx >= W) sx -= W;
+            if (sy < 0) sy += H; else if (sy >= H) sy -= H;
+            buf2[yBase + x] = data32[sy * W + sx];
+        }
+    }
+    data32.set(buf2);
+}
+
+const RESEED_MS = 14000;
+let lastReseed = performance.now();
+const t0 = performance.now();
+function loop() {
+    const now = performance.now();
+    const t = now - t0;
+    if (now - lastReseed > RESEED_MS) { reseed(); lastReseed = now; }
+    updateFlow(t);
+    step();
+    bctx.putImageData(imgData, 0, 0);
+    dctx.drawImage(buffer, 0, 0, display.width, display.height);
+    requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) lastReseed = performance.now();
+});
+</script>
+
+</body>
+</html>
