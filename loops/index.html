@@ -44,7 +44,7 @@
         display: block;
     }
 
-    /* ─── Page indicator (4 dots at bottom) ─── */
+    /* Page indicator (4 dots at bottom) */
     .dots {
         position: fixed;
         bottom: max(22px, env(safe-area-inset-bottom));
@@ -89,20 +89,32 @@
 
 <script>
 // ════════════════════════════════════════════════════════════════════════════
-// LOOPS — Lissajous-style harmonics in a grid. Each cell is a parametric
-// curve x = sin(a·t + δ), y = sin(b·t) sampled as colored particles that
-// slowly march around the loop. Modes change what each cell shows:
-//   SHAPES → 16 hand-picked frequency ratios, classical variety
-//   PHASES → same ratio (3:4) across all 16, δ stepping 0 → 2π
-//   DRIFT  → SHAPES base, but δ drifts per cell so each pattern morphs
-//   WALL   → denser 6×8 grid of fast-evolving curves
+// LOOPS — Lissajous-style harmonics, now with shapes themselves evolving.
+//
+// Each cell still draws x = sin(a·t + δ), y = sin(b·t) as marching coloured
+// particles, but (a, b, δ) are no longer fixed integers per mode — they drift
+// continuously on per-cell sine oscillators with their own phases. Real-
+// valued ratios produce open, never-closing curves that constantly reshape
+// themselves; closed integer ratios drift in and out of resonance.
+//
+// Each mode gives the evolution a different character:
+//   SHAPES → classical ratios as base, gentle a/b drift, slow δ rotation —
+//            contemplative morphing through familiar forms
+//   PHASES → all cells share ratio 3:4, almost-static a/b but a strong δ
+//            wave rolls across the grid — a wave of phase travelling
+//   DRIFT  → SHAPES base + heavy a/b drift and faster δ — the forms
+//            never settle
+//   WALL   → denser 6×8 grid covering 1≤a<b≤9 with full evolution
+//
+// Swipe horizontally / arrow keys / tap a dot to change mode.
 // ════════════════════════════════════════════════════════════════════════════
 
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 
 const PARTICLES_PER_CELL = 90;
-const MARCH_SPEED = 0.045;   // rotations per second along the curve
+const MARCH_SPEED = 0.045;
+const TWO_PI = Math.PI * 2;
 
 function resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -113,15 +125,15 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-// ─── PRESETS ───────────────────────────────────────────────────────────────
-const SHAPES = [
-    { a: 1, b: 1, d: 0 },              // straight line (diagonal)
-    { a: 1, b: 1, d: Math.PI / 4 },    // tilted ellipse
-    { a: 1, b: 1, d: Math.PI / 2 },    // perfect circle
-    { a: 1, b: 2, d: 0 },              // figure-eight cap
-    { a: 1, b: 2, d: Math.PI / 2 },    // open lemniscate
-    { a: 1, b: 3, d: Math.PI / 2 },    // three-leafed
-    { a: 2, b: 3, d: 0 },              // 2:3 closed
+// ─── BASE LISSAJOUS PRESETS (one set per mode) ─────────────────────────────
+const SHAPES_BASES = [
+    { a: 1, b: 1, d: 0 },
+    { a: 1, b: 1, d: Math.PI / 4 },
+    { a: 1, b: 1, d: Math.PI / 2 },
+    { a: 1, b: 2, d: 0 },
+    { a: 1, b: 2, d: Math.PI / 2 },
+    { a: 1, b: 3, d: Math.PI / 2 },
+    { a: 2, b: 3, d: 0 },
     { a: 2, b: 3, d: Math.PI / 4 },
     { a: 3, b: 4, d: 0 },
     { a: 3, b: 5, d: 0 },
@@ -133,23 +145,67 @@ const SHAPES = [
     { a: 7, b: 9, d: 0 },
 ];
 
-const PHASES = Array.from({ length: 16 }, (_, i) => ({
-    a: 3,
-    b: 4,
-    d: (i / 16) * 2 * Math.PI,
+const PHASES_BASES = Array.from({ length: 16 }, (_, i) => ({
+    a: 3, b: 4, d: (i / 16) * TWO_PI,
 }));
 
-// Per-cell drift rate (rad/sec) — picked so cells evolve out of sync
-const DRIFT_RATES = Array.from({ length: 16 }, (_, i) =>
-    0.025 + ((i * 0.013 + i * i * 0.0009) % 0.06)
-);
-
-// WALL: denser grid with extra ratios for a thick, busy look
-const WALL_RATIOS = [];
+const WALL_BASES = [];
 for (let a = 1; a <= 6; a++) {
     for (let b = a + 1; b <= 9; b++) {
-        WALL_RATIOS.push({ a, b, d: (a * 0.7 + b * 0.4) % (2 * Math.PI) });
+        WALL_BASES.push({ a, b, d: (a * 0.7 + b * 0.4) % TWO_PI });
     }
+}
+
+// ─── PER-CELL PHASE OFFSETS (set once, shared across modes) ────────────────
+// Each cell gets its own deterministic phase so the 48-cell grid never
+// looks synchronised — different cells are at different points in their
+// drift cycle even when the mode parameters are identical.
+const CELL_PHASES = Array.from({ length: 48 }, (_, i) => ({
+    pA: ((i * 0.31379) % 1) * TWO_PI,
+    pB: ((i * 0.47281) % 1) * TWO_PI,
+    pD: ((i * 0.19427) % 1) * TWO_PI,
+}));
+
+// ─── EVOLUTION PARAMETERS PER MODE ─────────────────────────────────────────
+//   ampA/ampB  — how far a, b drift from their base on the per-cell sine
+//   speedA/B   — how quickly that drift cycle progresses (rad/ms)
+//   speedD     — how quickly δ rotates (rad/ms) — drives the phase wave
+const MODE_PRESETS = {
+    SHAPES: {
+        bases: SHAPES_BASES,
+        ampA: 0.35, ampB: 0.35,
+        speedA: 0.00015, speedB: 0.00018,
+        speedD: 0.00012,
+    },
+    PHASES: {
+        bases: PHASES_BASES,
+        ampA: 0.12, ampB: 0.12,
+        speedA: 0.00010, speedB: 0.00010,
+        speedD: 0.00030,
+    },
+    DRIFT: {
+        bases: SHAPES_BASES,
+        ampA: 0.70, ampB: 0.70,
+        speedA: 0.00030, speedB: 0.00033,
+        speedD: 0.00020,
+    },
+    WALL: {
+        bases: WALL_BASES,
+        ampA: 0.50, ampB: 0.50,
+        speedA: 0.00022, speedB: 0.00025,
+        speedD: 0.00015,
+    },
+};
+
+function getCellLissajous(cellIdx, mode, time) {
+    const preset = MODE_PRESETS[mode];
+    const base = preset.bases[cellIdx % preset.bases.length];
+    const ph = CELL_PHASES[cellIdx % CELL_PHASES.length];
+    return {
+        a: base.a + Math.sin(time * preset.speedA + ph.pA) * preset.ampA,
+        b: base.b + Math.sin(time * preset.speedB + ph.pB) * preset.ampB,
+        d: base.d + time * preset.speedD + Math.sin(time * preset.speedD * 0.4 + ph.pD) * 0.5,
+    };
 }
 
 // ─── STATE ─────────────────────────────────────────────────────────────────
@@ -161,7 +217,6 @@ const state = {
 // ─── LAYOUT ────────────────────────────────────────────────────────────────
 function getGridDims() {
     if (state.mode === 'WALL') {
-        // Adapt density to viewport orientation
         const W = window.innerWidth, H = window.innerHeight;
         return W >= H ? { cols: 8, rows: 6 } : { cols: 6, rows: 8 };
     }
@@ -188,25 +243,9 @@ function getCells() {
     return cells;
 }
 
-function getPresetForCell(idx) {
-    const tSec = state.t / 1000;
-    let base;
-    if (state.mode === 'SHAPES' || state.mode === 'DRIFT') {
-        base = SHAPES[idx % SHAPES.length];
-    } else if (state.mode === 'PHASES') {
-        base = PHASES[idx % PHASES.length];
-    } else {
-        base = WALL_RATIOS[idx % WALL_RATIOS.length];
-    }
-    const driftDelta =
-        state.mode === 'DRIFT' ? tSec * DRIFT_RATES[idx % DRIFT_RATES.length]
-      : state.mode === 'WALL'  ? tSec * 0.05 * (1 + (idx % 5) * 0.15)
-      : 0;
-    return { a: base.a, b: base.b, d: base.d + driftDelta };
-}
-
 // ─── DRAW ──────────────────────────────────────────────────────────────────
-function drawCell(cell, preset) {
+function drawCell(cell, idx) {
+    const { a, b, d } = getCellLissajous(idx, state.mode, state.t);
     const cx = cell.x + cell.w / 2;
     const cy = cell.y + cell.h / 2;
     const r = Math.min(cell.w, cell.h) * 0.40;
@@ -215,14 +254,13 @@ function drawCell(cell, preset) {
     const dotR = Math.max(0.9, Math.min(cell.w, cell.h) * 0.012);
 
     for (let i = 0; i < N; i++) {
-        const t = ((i / N) + marchShift) * 2 * Math.PI;
-        const x = cx + r * Math.sin(preset.a * t + preset.d);
-        const y = cy + r * Math.sin(preset.b * t);
-        // Rainbow hue along the curve — gives the time-coded look
+        const t = ((i / N) + marchShift) * TWO_PI;
+        const x = cx + r * Math.sin(a * t + d);
+        const y = cy + r * Math.sin(b * t);
         const hue = (i / N) * 360;
         ctx.fillStyle = `hsl(${hue}, 75%, 60%)`;
         ctx.beginPath();
-        ctx.arc(x, y, dotR, 0, Math.PI * 2);
+        ctx.arc(x, y, dotR, 0, TWO_PI);
         ctx.fill();
     }
 }
@@ -232,14 +270,9 @@ function draw() {
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, W, H);
 
-    // Additive blend so overlapping dots glow softly
     ctx.globalCompositeOperation = 'lighter';
-
     const cells = getCells();
-    cells.forEach((cell, i) => {
-        drawCell(cell, getPresetForCell(i));
-    });
-
+    cells.forEach((cell, i) => drawCell(cell, i));
     ctx.globalCompositeOperation = 'source-over';
 }
 
@@ -256,10 +289,8 @@ function setModeByIdx(idx) {
 
 dotEls.forEach((d, i) => d.addEventListener('click', () => setModeByIdx(i)));
 
-// Horizontal swipe anywhere on screen → prev/next mode
 let pStart = null;
 window.addEventListener('pointerdown', e => {
-    // Ignore taps on the dots themselves
     if (e.target.closest('#dots') || e.target.closest('.back')) return;
     pStart = { x: e.clientX, y: e.clientY, t: performance.now() };
 }, { passive: true });
@@ -291,7 +322,6 @@ function loop(now) {
 }
 requestAnimationFrame(loop);
 
-// Prevent iOS double-tap zoom
 let _lastTouchEnd = 0;
 document.addEventListener('touchend', e => {
     const now = Date.now();

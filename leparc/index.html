@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0">
+<title>leparc · limbrow.zip</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+        background: #060608;
+        color: #e8e8e8;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+        font-family: ui-monospace, 'JetBrains Mono', monospace;
+        -webkit-user-select: none; user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: none;
+    }
+
+    .back {
+        position: fixed;
+        top: 16px; left: 16px;
+        z-index: 100;
+        width: 36px; height: 36px;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0, 0, 0, 0.35);
+        border: 1px solid rgba(255,255,255,0.10);
+        border-radius: 50%;
+        color: rgba(255,255,255,0.85);
+        text-decoration: none;
+        font-size: 16px;
+        line-height: 1;
+        padding-bottom: 2px;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+    }
+
+    #stage {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        display: block;
+    }
+
+    /* Centred credit, subtle, mix-blend so it reads over any colour */
+    .credit {
+        position: fixed;
+        bottom: max(14px, env(safe-area-inset-bottom));
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10;
+        font-size: 9px;
+        letter-spacing: 0.26em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.55);
+        mix-blend-mode: difference;
+        pointer-events: none;
+        white-space: nowrap;
+    }
+</style>
+</head>
+<body>
+
+<a class="back" href="/" aria-label="Back to grid">←</a>
+
+<canvas id="stage"></canvas>
+
+<div class="credit">in memory of julio le parc</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+// LEPARC — in memory of Julio Le Parc (1928–2025).
+//
+// Reads from his Modulations / Surface-Couleur vocabulary: a regular grid
+// of identical elements, each one set at a subtly-different angle so that
+// the collective forms a continuous wave. Here the wave is multi-octave
+// (three sine layers + one cross-term) and itself slowly drifts under a
+// long-period weighting, so the field never closes onto the same
+// configuration twice.
+//
+// Hue and lightness are also driven by position-and-time fields so colour
+// rolls across the grid in slow currents — a hint of the spectrum work
+// without spelling it out.
+//
+// Immersive: no menu, no controls. Just the field and a credit in the
+// corner. The back arrow returns to the grid.
+// ════════════════════════════════════════════════════════════════════════════
+
+const canvas = document.getElementById('stage');
+const ctx = canvas.getContext('2d');
+
+function fit() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.floor(window.innerWidth * dpr);
+    canvas.height = Math.floor(window.innerHeight * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', fit);
+fit();
+
+const PI = Math.PI;
+const TWO_PI = PI * 2;
+
+function frame(now) {
+    const W = canvas.clientWidth;
+    const H = canvas.clientHeight;
+
+    ctx.fillStyle = '#060608';
+    ctx.fillRect(0, 0, W, H);
+
+    // Density adapts to viewport — ~22 elements across the smaller side
+    const target = Math.min(W, H) / 22;
+    const COLS = Math.max(8, Math.ceil(W / target));
+    const ROWS = Math.max(8, Math.ceil(H / target));
+    const cellW = W / COLS;
+    const cellH = H / ROWS;
+    const lineLen = Math.min(cellW, cellH) * 0.62;
+
+    const t = now * 0.00038;
+
+    // Long-period drift terms — slowly re-weight the wave octaves so the
+    // overall character of the field shifts over minutes
+    const driftSlow = now * 0.000018;
+    const wOct1 = 0.65 + Math.sin(driftSlow * 0.7)        * 0.25;
+    const wOct2 = 0.55 + Math.sin(driftSlow * 0.5 + 1.4)  * 0.25;
+    const wOct3 = 0.40 + Math.cos(driftSlow * 0.6 + 2.8)  * 0.20;
+    const wOct4 = 0.30 + Math.sin(driftSlow * 0.4 + 0.9)  * 0.20;
+
+    ctx.lineWidth = Math.max(1.0, Math.min(cellW, cellH) * 0.06);
+    ctx.lineCap = 'round';
+
+    for (let r = 0; r < ROWS; r++) {
+        const ny = r / (ROWS - 1) - 0.5;
+        const cy = (r + 0.5) * cellH;
+        for (let c = 0; c < COLS; c++) {
+            const nx = c / (COLS - 1) - 0.5;
+            const cx = (c + 0.5) * cellW;
+
+            // Multi-octave angle field — each octave reads at a different
+            // spatial scale and time, drift terms weight them
+            const angle =
+                Math.sin(nx * 4.5 + t * 1.00) * wOct1 +
+                Math.cos(ny * 3.5 + t * 0.85) * wOct2 +
+                Math.sin((nx + ny) * 5.5 + t * 1.30) * wOct3 +
+                Math.cos((nx - ny) * 7.0 - t * 0.70) * wOct4;
+
+            // Colour fields — spectrum slowly cycles + position offset
+            const hue = (
+                (nx + ny) * 100 +
+                t * 26 +
+                Math.sin(nx * 4 + t) * 32 +
+                driftSlow * 30
+            ) % 360;
+            const hueWrapped = hue < 0 ? hue + 360 : hue;
+            const lit = 60 + Math.sin(nx * 5 - ny * 3 + t * 1.5) * 14;
+            const sat = 68 + Math.cos(ny * 4 + nx * 2 - t * 0.8) * 16;
+
+            ctx.strokeStyle = `hsl(${hueWrapped}, ${sat}%, ${lit}%)`;
+
+            const half = lineLen * 0.5;
+            const dx = Math.cos(angle * PI) * half;
+            const dy = Math.sin(angle * PI) * half;
+
+            ctx.beginPath();
+            ctx.moveTo(cx - dx, cy - dy);
+            ctx.lineTo(cx + dx, cy + dy);
+            ctx.stroke();
+        }
+    }
+
+    requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// Prevent iOS double-tap zoom
+let _lastTouchEnd = 0;
+document.addEventListener('touchend', e => {
+    const now = Date.now();
+    if (now - _lastTouchEnd < 350) e.preventDefault();
+    _lastTouchEnd = now;
+}, { passive: false });
+</script>
+
+</body>
+</html>

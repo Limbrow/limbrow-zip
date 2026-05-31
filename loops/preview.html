@@ -26,17 +26,13 @@
 <canvas id="c"></canvas>
 
 <script>
-// ════════════════════════════════════════════════════════════════════════════
-// LOOPS PREVIEW — silent grid of Lissajous curves. Auto-cycles through
-// modes (SHAPES → PHASES → DRIFT → WALL) every ~6 seconds so the card
-// communicates the variety inside the post.
-// ════════════════════════════════════════════════════════════════════════════
-
+// Same evolving Lissajous engine as the live post; cycles modes every 6s.
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 const PARTICLES_PER_CELL = 80;
 const MARCH_SPEED = 0.05;
+const TWO_PI = Math.PI * 2;
 
 function resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -47,96 +43,80 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-const SHAPES = [
-    { a: 1, b: 1, d: 0 },
-    { a: 1, b: 1, d: Math.PI / 4 },
-    { a: 1, b: 1, d: Math.PI / 2 },
-    { a: 1, b: 2, d: 0 },
-    { a: 1, b: 2, d: Math.PI / 2 },
-    { a: 1, b: 3, d: Math.PI / 2 },
-    { a: 2, b: 3, d: 0 },
-    { a: 2, b: 3, d: Math.PI / 4 },
-    { a: 3, b: 4, d: 0 },
-    { a: 3, b: 5, d: 0 },
-    { a: 4, b: 5, d: 0 },
-    { a: 5, b: 6, d: 0 },
-    { a: 1, b: 4, d: Math.PI / 2 },
-    { a: 3, b: 2, d: Math.PI / 3 },
-    { a: 5, b: 4, d: Math.PI / 4 },
-    { a: 7, b: 9, d: 0 },
+const SHAPES_BASES = [
+    { a: 1, b: 1, d: 0 }, { a: 1, b: 1, d: Math.PI / 4 }, { a: 1, b: 1, d: Math.PI / 2 },
+    { a: 1, b: 2, d: 0 }, { a: 1, b: 2, d: Math.PI / 2 }, { a: 1, b: 3, d: Math.PI / 2 },
+    { a: 2, b: 3, d: 0 }, { a: 2, b: 3, d: Math.PI / 4 }, { a: 3, b: 4, d: 0 },
+    { a: 3, b: 5, d: 0 }, { a: 4, b: 5, d: 0 }, { a: 5, b: 6, d: 0 },
+    { a: 1, b: 4, d: Math.PI / 2 }, { a: 3, b: 2, d: Math.PI / 3 },
+    { a: 5, b: 4, d: Math.PI / 4 }, { a: 7, b: 9, d: 0 },
 ];
-const PHASES = Array.from({ length: 16 }, (_, i) => ({
-    a: 3, b: 4, d: (i / 16) * 2 * Math.PI
-}));
-const DRIFT_RATES = Array.from({ length: 16 }, (_, i) =>
-    0.025 + ((i * 0.013 + i * i * 0.0009) % 0.06)
-);
-const WALL_RATIOS = [];
+const PHASES_BASES = Array.from({ length: 16 }, (_, i) => ({ a: 3, b: 4, d: (i / 16) * TWO_PI }));
+const WALL_BASES = [];
 for (let a = 1; a <= 6; a++) {
-    for (let b = a + 1; b <= 9; b++) {
-        WALL_RATIOS.push({ a, b, d: (a * 0.7 + b * 0.4) % (2 * Math.PI) });
-    }
+    for (let b = a + 1; b <= 9; b++) WALL_BASES.push({ a, b, d: (a * 0.7 + b * 0.4) % TWO_PI });
+}
+const CELL_PHASES = Array.from({ length: 48 }, (_, i) => ({
+    pA: ((i * 0.31379) % 1) * TWO_PI,
+    pB: ((i * 0.47281) % 1) * TWO_PI,
+    pD: ((i * 0.19427) % 1) * TWO_PI,
+}));
+
+const MODE_PRESETS = {
+    SHAPES: { bases: SHAPES_BASES, ampA: 0.35, ampB: 0.35, speedA: 0.00015, speedB: 0.00018, speedD: 0.00012 },
+    PHASES: { bases: PHASES_BASES, ampA: 0.12, ampB: 0.12, speedA: 0.00010, speedB: 0.00010, speedD: 0.00030 },
+    DRIFT:  { bases: SHAPES_BASES, ampA: 0.70, ampB: 0.70, speedA: 0.00030, speedB: 0.00033, speedD: 0.00020 },
+    WALL:   { bases: WALL_BASES,   ampA: 0.50, ampB: 0.50, speedA: 0.00022, speedB: 0.00025, speedD: 0.00015 },
+};
+
+function getCellLissajous(cellIdx, mode, time) {
+    const preset = MODE_PRESETS[mode];
+    const base = preset.bases[cellIdx % preset.bases.length];
+    const ph = CELL_PHASES[cellIdx % CELL_PHASES.length];
+    return {
+        a: base.a + Math.sin(time * preset.speedA + ph.pA) * preset.ampA,
+        b: base.b + Math.sin(time * preset.speedB + ph.pB) * preset.ampB,
+        d: base.d + time * preset.speedD + Math.sin(time * preset.speedD * 0.4 + ph.pD) * 0.5,
+    };
 }
 
 const CYCLE = ['SHAPES', 'PHASES', 'DRIFT', 'WALL'];
 const CYCLE_MS = 6000;
-
 let t = 0;
-
-function currentMode() {
-    return CYCLE[Math.floor(t / CYCLE_MS) % CYCLE.length];
-}
+function currentMode() { return CYCLE[Math.floor(t / CYCLE_MS) % CYCLE.length]; }
 
 function getCells(mode) {
     const W = window.innerWidth, H = window.innerHeight;
     let cols, rows;
-    if (mode === 'WALL') {
-        // square-ish viewport in a grid card → 6x6 reads well
-        cols = 6; rows = 6;
-    } else {
-        cols = 4; rows = 4;
-    }
+    if (mode === 'WALL') { cols = 6; rows = 6; }
+    else                 { cols = 4; rows = 4; }
     const gap = mode === 'WALL' ? 2 : 4;
     const cellW = (W - gap * (cols + 1)) / cols;
     const cellH = (H - gap * (rows + 1)) / rows;
     const cells = [];
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
-            cells.push({
-                x: gap + c * (cellW + gap),
-                y: gap + r * (cellH + gap),
-                w: cellW, h: cellH,
-            });
+            cells.push({ x: gap + c * (cellW + gap), y: gap + r * (cellH + gap), w: cellW, h: cellH });
         }
     }
     return cells;
 }
 
-function getPreset(mode, idx, tSec) {
-    let base;
-    if (mode === 'SHAPES' || mode === 'DRIFT') base = SHAPES[idx % SHAPES.length];
-    else if (mode === 'PHASES') base = PHASES[idx % PHASES.length];
-    else base = WALL_RATIOS[idx % WALL_RATIOS.length];
-    const drift =
-        mode === 'DRIFT' ? tSec * DRIFT_RATES[idx % DRIFT_RATES.length] :
-        mode === 'WALL'  ? tSec * 0.05 * (1 + (idx % 5) * 0.15) : 0;
-    return { a: base.a, b: base.b, d: base.d + drift };
-}
-
-function drawCell(cell, preset, marchShift) {
+function drawCell(cell, idx, mode, marchShift) {
+    const { a, b, d } = getCellLissajous(idx, mode, t);
     const cx = cell.x + cell.w / 2;
     const cy = cell.y + cell.h / 2;
     const r = Math.min(cell.w, cell.h) * 0.40;
     const N = PARTICLES_PER_CELL;
     const dotR = Math.max(0.8, Math.min(cell.w, cell.h) * 0.014);
     for (let i = 0; i < N; i++) {
-        const tt = ((i / N) + marchShift) * 2 * Math.PI;
-        const x = cx + r * Math.sin(preset.a * tt + preset.d);
-        const y = cy + r * Math.sin(preset.b * tt);
+        const tt = ((i / N) + marchShift) * TWO_PI;
+        const x = cx + r * Math.sin(a * tt + d);
+        const y = cy + r * Math.sin(b * tt);
         const hue = (i / N) * 360;
         ctx.fillStyle = `hsl(${hue}, 75%, 60%)`;
         ctx.beginPath();
-        ctx.arc(x, y, dotR, 0, Math.PI * 2);
+        ctx.arc(x, y, dotR, 0, TWO_PI);
         ctx.fill();
     }
 }
@@ -146,15 +126,10 @@ function draw() {
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, W, H);
     ctx.globalCompositeOperation = 'lighter';
-
     const mode = currentMode();
     const cells = getCells(mode);
-    const tSec = t / 1000;
-    const marchShift = tSec * MARCH_SPEED;
-    cells.forEach((cell, i) => {
-        drawCell(cell, getPreset(mode, i, tSec), marchShift);
-    });
-
+    const marchShift = (t / 1000) * MARCH_SPEED;
+    cells.forEach((cell, i) => drawCell(cell, i, mode, marchShift));
     ctx.globalCompositeOperation = 'source-over';
 }
 

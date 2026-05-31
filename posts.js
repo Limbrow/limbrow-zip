@@ -24,6 +24,13 @@
 export const posts = [
 
     {
+        slug: 'leparc',
+        date: '2026-05-17',
+        preview: 'preview.html',  // modulation grid of rotating lines — in memory of julio le parc
+        scale: 1.0
+    },
+
+    {
         slug: 'blocks',
         date: '2026-05-17',
         preview: 'preview.html',  // flat-color rectangles, pixel-wipe transitions in 8 directions

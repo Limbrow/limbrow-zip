@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>leparc · preview</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+        background: #060608;
+        width: 100%;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+    }
+    #stage {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        display: block;
+    }
+</style>
+</head>
+<body>
+
+<canvas id="stage"></canvas>
+
+<script>
+// Same modulation-grid engine as the live post, sized to the card.
+const canvas = document.getElementById('stage');
+const ctx = canvas.getContext('2d');
+
+function fit() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.floor(window.innerWidth * dpr);
+    canvas.height = Math.floor(window.innerHeight * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', fit);
+fit();
+
+const PI = Math.PI;
+const startSeed = Math.random() * 1000;   // each card differs slightly
+
+function frame(now) {
+    const W = canvas.clientWidth, H = canvas.clientHeight;
+    ctx.fillStyle = '#060608';
+    ctx.fillRect(0, 0, W, H);
+
+    const target = Math.min(W, H) / 14;   // chunkier in the card
+    const COLS = Math.max(6, Math.ceil(W / target));
+    const ROWS = Math.max(6, Math.ceil(H / target));
+    const cellW = W / COLS;
+    const cellH = H / ROWS;
+    const lineLen = Math.min(cellW, cellH) * 0.62;
+
+    const t = now * 0.00038 + startSeed * 0.01;
+    const driftSlow = now * 0.000018 + startSeed * 0.001;
+    const wOct1 = 0.65 + Math.sin(driftSlow * 0.7)       * 0.25;
+    const wOct2 = 0.55 + Math.sin(driftSlow * 0.5 + 1.4) * 0.25;
+    const wOct3 = 0.40 + Math.cos(driftSlow * 0.6 + 2.8) * 0.20;
+    const wOct4 = 0.30 + Math.sin(driftSlow * 0.4 + 0.9) * 0.20;
+
+    ctx.lineWidth = Math.max(1.0, Math.min(cellW, cellH) * 0.08);
+    ctx.lineCap = 'round';
+
+    for (let r = 0; r < ROWS; r++) {
+        const ny = r / (ROWS - 1) - 0.5;
+        const cy = (r + 0.5) * cellH;
+        for (let c = 0; c < COLS; c++) {
+            const nx = c / (COLS - 1) - 0.5;
+            const cx = (c + 0.5) * cellW;
+            const angle =
+                Math.sin(nx * 4.5 + t * 1.00) * wOct1 +
+                Math.cos(ny * 3.5 + t * 0.85) * wOct2 +
+                Math.sin((nx + ny) * 5.5 + t * 1.30) * wOct3 +
+                Math.cos((nx - ny) * 7.0 - t * 0.70) * wOct4;
+            const hue = ((nx + ny) * 100 + t * 26 + Math.sin(nx * 4 + t) * 32 + driftSlow * 30) % 360;
+            const hueWrapped = hue < 0 ? hue + 360 : hue;
+            const lit = 60 + Math.sin(nx * 5 - ny * 3 + t * 1.5) * 14;
+            const sat = 68 + Math.cos(ny * 4 + nx * 2 - t * 0.8) * 16;
+            ctx.strokeStyle = `hsl(${hueWrapped}, ${sat}%, ${lit}%)`;
+            const half = lineLen * 0.5;
+            const dx = Math.cos(angle * PI) * half;
+            const dy = Math.sin(angle * PI) * half;
+            ctx.beginPath();
+            ctx.moveTo(cx - dx, cy - dy);
+            ctx.lineTo(cx + dx, cy + dy);
+            ctx.stroke();
+        }
+    }
+    requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+
+</body>
+</html>
