@@ -78,7 +78,25 @@ function hslToRgb(h, s, l) {
 const pack = c => (255 << 24) | (c[2] << 16) | (c[1] << 8) | c[0];
 
 const COLOR_SYSTEMS = ['monochrome', 'triadic', 'analogous', 'greyscale', 'random'];
-const LAYOUTS = ['grid', 'rows', 'cols', 'checker', 'scatter', 'nested'];
+const LAYOUTS = ['grid', 'rows', 'cols', 'checker', 'scatter', 'nested', 'spectrum', 'bars'];
+const LAYOUT_WEIGHTS = [17, 16, 16, 15, 14, 13, 5, 4];
+function pickLayout() {
+    let total = 0; for (const w of LAYOUT_WEIGHTS) total += w;
+    let r = Math.random() * total;
+    for (let i = 0; i < LAYOUTS.length; i++) {
+        r -= LAYOUT_WEIGHTS[i];
+        if (r <= 0) return LAYOUTS[i];
+    }
+    return LAYOUTS[0];
+}
+function lerpRGBPacked(c1, c2, t) {
+    const r1 = c1 & 0xFF, g1 = (c1 >> 8) & 0xFF, b1 = (c1 >> 16) & 0xFF;
+    const r2 = c2 & 0xFF, g2 = (c2 >> 8) & 0xFF, b2 = (c2 >> 16) & 0xFF;
+    const r = (r1 + (r2 - r1) * t) | 0;
+    const g = (g1 + (g2 - g1) * t) | 0;
+    const b = (b1 + (b2 - b1) * t) | 0;
+    return (255 << 24) | (b << 16) | (g << 8) | r;
+}
 
 function generatePalette() {
     const sys = COLOR_SYSTEMS[(Math.random() * COLOR_SYSTEMS.length) | 0];
@@ -160,7 +178,7 @@ function initState(layout, packed, seed) {
                 data32[y * W + x] = packed[h % len];
             }
         }
-    } else {
+    } else if (layout === 'nested') {
         const cx = W * 0.5, cy = H * 0.5;
         const ring = 4 + ((seed % 10) + 1);
         for (let y = 0; y < H; y++) {
@@ -171,6 +189,24 @@ function initState(layout, packed, seed) {
                 const ri = (d / ring) | 0;
                 const h = ((ri * 2654435761) ^ seed) >>> 0;
                 data32[y * W + x] = packed[h % len];
+            }
+        }
+    } else if (layout === 'spectrum') {
+        for (let x = 0; x < W; x++) {
+            const t = x / (W - 1);
+            const idx = t * (len - 1);
+            const i0 = idx | 0;
+            const i1 = i0 + 1 < len ? i0 + 1 : len - 1;
+            const f = idx - i0;
+            const c = lerpRGBPacked(packed[i0], packed[i1], f);
+            for (let y = 0; y < H; y++) data32[y * W + x] = c;
+        }
+    } else {
+        const stripeW = 2 + (seed & 1);
+        for (let y = 0; y < H; y++) {
+            for (let x = 0; x < W; x++) {
+                const stripe = (x / stripeW) | 0;
+                data32[y * W + x] = packed[stripe % len];
             }
         }
     }
@@ -224,14 +260,16 @@ let flowDef  = FLOWS.laminar;
 let attractors = [];
 let seed     = 0;
 let phase    = 0;
+let patience = 0.6;
 
 function reseed() {
     packed   = generatePalette().map(pack);
-    layout   = LAYOUTS[(Math.random() * LAYOUTS.length) | 0];
+    layout   = pickLayout();
     flowName = FLOW_NAMES[(Math.random() * FLOW_NAMES.length) | 0];
     flowDef  = FLOWS[flowName];
     seed     = (Math.random() * 2147483647) | 0;
     phase    = ((seed & 0xFFFF) / 0xFFFF) * Math.PI * 2;
+    patience = 0.45 + Math.random() * 0.55;
 
     const attCount = (Math.random() * 4) | 0;
     attractors = [];
@@ -255,7 +293,14 @@ const flowDY = new Int8Array(FW * FH);
 
 function updateFlow(time) {
     const t = time * flowDef.speed;
-    const half = flowDef.threshold * 0.45;
+    const tt = time;
+    const breath = 0.5 + Math.sin(tt * 0.00009 + phase) * 0.5;
+    const beatA  = Math.max(0, Math.sin(tt * 0.00072 + phase * 1.3) - 0.84) * 5;
+    const beatB  = Math.max(0, Math.sin(tt * 0.00115 + phase * 1.9) - 0.88) * 5;
+    const beats  = beatA > beatB ? beatA : beatB;
+    const baseThresh = flowDef.threshold * (0.8 + patience * 0.8);
+    const thresh = baseThresh * (1.30 - breath * 0.45 - beats * 0.55);
+    const half = thresh * 0.45;
     const vel = flowDef.velocity;
     for (let fy = 0; fy < FH; fy++) {
         const ny = fy / FH * 3.0 - 1.5;
