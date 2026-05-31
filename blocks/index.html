@@ -26,9 +26,9 @@
         width: 36px; height: 36px;
         display: flex; align-items: center; justify-content: center;
         background: rgba(0, 0, 0, 0.45);
-        border: 1px solid rgba(255,255,255,0.10);
+        border: 1px solid rgba(255,255,255,0.12);
         border-radius: 50%;
-        color: rgba(255,255,255,0.90);
+        color: rgba(255,255,255,0.92);
         text-decoration: none;
         font-size: 16px;
         line-height: 1;
@@ -45,6 +45,21 @@
         image-rendering: pixelated;
         image-rendering: crisp-edges;
     }
+
+    /* Tiny readout in the corner — like alternate.cx's metadata strip */
+    .meta {
+        position: fixed;
+        bottom: max(14px, env(safe-area-inset-bottom));
+        left: 16px;
+        z-index: 10;
+        font-size: 9px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.55);
+        mix-blend-mode: difference;
+        pointer-events: none;
+    }
+    .meta span { margin-right: 14px; }
 </style>
 </head>
 <body>
@@ -53,32 +68,42 @@
 
 <canvas id="stage"></canvas>
 
+<div class="meta" id="meta">
+    <span id="m-sys">—</span>
+    <span id="m-lay">—</span>
+    <span id="m-seed">—</span>
+</div>
+
 <script>
 // ════════════════════════════════════════════════════════════════════════════
-// BLOCKS — flat color, pixel-wipe transitions.
+// BLOCKS — pixel-level advection field. Investigation of Kim Asendorf's
+// Alternate (alternate.cx, 2023).
 //
-// A low-res buffer of flat color regions that is continuously overwritten by
-// "wipes": rectangular regions of a new flat color that reveal pixel-by-pixel
-// along one of 8 axes (horizontal ←→, vertical ↑↓, diagonal × 4). Two or three
-// wipes are usually in flight at once, at different scales and speeds, so the
-// composition never settles.
-//
-// Tap anywhere to drop a new wipe at that point.
+// Every pixel holds a packed RGBA colour. A coarse flow field is computed
+// each frame as multi-octave sine noise; each cell quantises to one of nine
+// motions (8 neighbours + stay). Each step, every pixel pulls its colour
+// from the neighbour the flow points back toward — exactly one pixel of
+// motion per frame. Initial state is a grid or row arrangement of colours
+// drawn from an algorithmic palette (monochrome / triadic / analogous /
+// greyscale / random). Tap to re-seed.
 // ════════════════════════════════════════════════════════════════════════════
 
 const display = document.getElementById('stage');
 const dctx = display.getContext('2d');
 
+// Buffer size — keep it modest so each pixel reads visibly
 const isMobile = window.matchMedia('(max-width: 600px)').matches;
-const W = isMobile ? 220 : 320;
-const H = Math.max(60, Math.floor(W * (window.innerHeight / window.innerWidth)));
+const W = isMobile ? 240 : 340;
+const H = Math.max(120, Math.floor(W * (window.innerHeight / window.innerWidth)));
 
 const buffer = document.createElement('canvas');
 buffer.width = W;
 buffer.height = H;
 const bctx = buffer.getContext('2d');
 const imgData = bctx.createImageData(W, H);
-const data = imgData.data;
+const data8  = imgData.data;
+const data32 = new Uint32Array(data8.buffer);
+const buf2   = new Uint32Array(W * H);
 
 function fitDisplay() {
     display.width = window.innerWidth;
@@ -88,256 +113,182 @@ function fitDisplay() {
 window.addEventListener('resize', fitDisplay);
 fitDisplay();
 
-// ─── PALETTE (6 refined flats — vivid digital, Asendorf-leaning) ───────────
-const PALETTE = [
-    [255,  45, 112],   // hot magenta
-    [ 45, 238, 240],   // electric cyan
-    [248, 223,  58],   // saturated yellow
-    [123,  58, 255],   // violet
-    [ 24,  28,  47],   // deep navy
-    [240, 234, 219],   // warm off-white
-];
-
-// ─── 8 DIRECTIONS for pixel-wipe phase ─────────────────────────────────────
-//   0  H →     1  H ←
-//   2  V ↓     3  V ↑
-//   4  ↘       5  ↖
-//   6  ↗       7  ↙
-function getPhase(direction, x, y, w, h) {
-    switch (direction) {
-        case 0: return x / (w - 1 || 1);
-        case 1: return 1 - x / (w - 1 || 1);
-        case 2: return y / (h - 1 || 1);
-        case 3: return 1 - y / (h - 1 || 1);
-        case 4: return (x + y) / ((w + h - 2) || 1);
-        case 5: return 1 - (x + y) / ((w + h - 2) || 1);
-        case 6: return ((w - 1 - x) + y) / ((w + h - 2) || 1);
-        case 7: return (x + (h - 1 - y)) / ((w + h - 2) || 1);
-    }
-    return 0;
+// ─── COLOUR / PALETTE SYSTEMS ──────────────────────────────────────────────
+function hslToRgb(h, s, l) {
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const hp = h / 60;
+    const x = c * (1 - Math.abs(hp % 2 - 1));
+    let r, g, b;
+    if (hp < 1)      { r = c; g = x; b = 0; }
+    else if (hp < 2) { r = x; g = c; b = 0; }
+    else if (hp < 3) { r = 0; g = c; b = x; }
+    else if (hp < 4) { r = 0; g = x; b = c; }
+    else if (hp < 5) { r = x; g = 0; b = c; }
+    else             { r = c; g = 0; b = x; }
+    const m = l - c / 2;
+    return [
+        Math.round((r + m) * 255),
+        Math.round((g + m) * 255),
+        Math.round((b + m) * 255),
+    ];
 }
 
-// ─── INITIAL FILL ──────────────────────────────────────────────────────────
-function fillRect(r, colorIdx) {
-    const c = PALETTE[colorIdx];
-    for (let y = r.y; y < r.y + r.h; y++) {
-        for (let x = r.x; x < r.x + r.w; x++) {
-            const idx = (y * W + x) * 4;
-            data[idx]     = c[0];
-            data[idx + 1] = c[1];
-            data[idx + 2] = c[2];
-            data[idx + 3] = 255;
+function packColor(c) {
+    return (255 << 24) | (c[2] << 16) | (c[1] << 8) | c[0];
+}
+
+const COLOR_SYSTEMS = ['monochrome', 'triadic', 'analogous', 'greyscale', 'random'];
+
+function generatePalette() {
+    const sys = COLOR_SYSTEMS[Math.floor(Math.random() * COLOR_SYSTEMS.length)];
+    const baseHue = Math.random() * 360;
+    let palette;
+
+    if (sys === 'monochrome') {
+        const sat = 0.45 + Math.random() * 0.35;
+        palette = Array.from({ length: 6 }, (_, i) =>
+            hslToRgb(baseHue, sat, 0.10 + i * 0.15)
+        );
+    } else if (sys === 'triadic') {
+        const hues = [baseHue, (baseHue + 120) % 360, (baseHue + 240) % 360];
+        palette = [];
+        for (const h of hues) {
+            palette.push(hslToRgb(h, 0.78, 0.28));
+            palette.push(hslToRgb(h, 0.65, 0.66));
         }
-    }
-}
-fillRect({ x: 0, y: 0, w: W, h: H }, 4);  // start on near-black
-
-// ─── WIPES ─────────────────────────────────────────────────────────────────
-const activeWipes = [];
-let lastColorIdx = 4;
-
-function chooseColorIdx() {
-    // Avoid picking the same color back-to-back
-    let idx;
-    do { idx = (Math.random() * PALETTE.length) | 0; } while (idx === lastColorIdx);
-    lastColorIdx = idx;
-    return idx;
-}
-
-function spawnWipe(opts = {}) {
-    const colorIdx  = opts.colorIdx  != null ? opts.colorIdx  : chooseColorIdx();
-    const direction = opts.direction != null ? opts.direction : (Math.random() * 8) | 0;
-
-    let region;
-    if (opts.region) {
-        region = opts.region;
+    } else if (sys === 'analogous') {
+        const span = 70 + Math.random() * 50;
+        palette = Array.from({ length: 6 }, (_, i) =>
+            hslToRgb((baseHue + i * (span / 6)) % 360, 0.7, 0.30 + i * 0.07)
+        );
+    } else if (sys === 'greyscale') {
+        palette = Array.from({ length: 6 }, (_, i) => {
+            const v = Math.round((i / 5) * 235 + 10);
+            return [v, v, v];
+        });
     } else {
-        const roll = Math.random();
-        if (roll < 0.35) {
-            // Full canvas
-            region = { x: 0, y: 0, w: W, h: H };
-        } else if (roll < 0.70) {
-            // Half / band
-            const r = Math.random();
-            if (r < 0.25) region = { x: 0, y: 0, w: W, h: (H / 2) | 0 };
-            else if (r < 0.5) region = { x: 0, y: H - ((H / 2) | 0), w: W, h: (H / 2) | 0 };
-            else if (r < 0.75) region = { x: 0, y: 0, w: (W / 2) | 0, h: H };
-            else region = { x: W - ((W / 2) | 0), y: 0, w: (W / 2) | 0, h: H };
-        } else {
-            // Smaller block
-            const sw = ((0.22 + Math.random() * 0.45) * W) | 0;
-            const sh = ((0.22 + Math.random() * 0.45) * H) | 0;
-            region = {
-                x: (Math.random() * (W - sw)) | 0,
-                y: (Math.random() * (H - sh)) | 0,
-                w: sw,
-                h: sh,
-            };
-        }
+        palette = Array.from({ length: 6 }, () =>
+            hslToRgb(Math.random() * 360, 0.55 + Math.random() * 0.35, 0.25 + Math.random() * 0.4)
+        );
     }
 
-    activeWipes.push({
-        colorIdx,
-        direction,
-        region,
-        progress: 0,
-        // Slower than before — wipes feel composed, not frantic
-        speed: opts.speed != null ? opts.speed : 0.0022 + Math.random() * 0.008,
-    });
+    return { system: sys, palette };
 }
 
-function sweepWipe(wipe, oldP, newP) {
-    const r = wipe.region;
-    const c = PALETTE[wipe.colorIdx];
-    const dir = wipe.direction;
-    const rw = r.w, rh = r.h;
-    for (let py = 0; py < rh; py++) {
-        const y = r.y + py;
-        for (let px = 0; px < rw; px++) {
-            const phase = getPhase(dir, px, py, rw, rh);
-            if (phase > oldP && phase <= newP) {
-                const x = r.x + px;
-                const idx = (y * W + x) * 4;
-                data[idx]     = c[0];
-                data[idx + 1] = c[1];
-                data[idx + 2] = c[2];
-                data[idx + 3] = 255;
+let packed = [];
+let layout = 'grid';
+let seed   = 0;
+
+function reseed() {
+    const { system, palette } = generatePalette();
+    packed = palette.map(packColor);
+    layout = Math.random() < 0.55 ? 'grid' : 'rows';
+    seed   = (Math.random() * 2147483647) | 0;
+    initState();
+    document.getElementById('m-sys').textContent  = system;
+    document.getElementById('m-lay').textContent  = layout;
+    document.getElementById('m-seed').textContent = '0x' + seed.toString(16).padStart(8, '0');
+}
+
+function initState() {
+    // Cheap deterministic hash from seed
+    if (layout === 'grid') {
+        const blockSize = 3 + Math.floor((seed % 9) + 1);   // 4..12
+        for (let y = 0; y < H; y++) {
+            const by = (y / blockSize) | 0;
+            for (let x = 0; x < W; x++) {
+                const bx = (x / blockSize) | 0;
+                const h = ((bx * 2654435761) ^ (by * 2246822519) ^ seed) >>> 0;
+                data32[y * W + x] = packed[h % packed.length];
             }
         }
+    } else {
+        const rowH = 3 + Math.floor((seed % 11) + 1);       // 4..14
+        for (let y = 0; y < H; y++) {
+            const ry = (y / rowH) | 0;
+            const h = ((ry * 2654435761) ^ seed) >>> 0;
+            const c = packed[h % packed.length];
+            for (let x = 0; x < W; x++) data32[y * W + x] = c;
+        }
     }
 }
 
-// ─── SUBTLE GLITCH LAYER ───────────────────────────────────────────────────
-// Three small effects that run continuously on top of the wipe layer:
-//   pixelSwap   — N pairs of nearby pixels swap each frame (constant
-//                 micro-mixing; sharp boundaries shimmer)
-//   rowShift    — rare: a 1–2px row is translated horizontally with wrap
-//                 (the data-mosh tear)
-//   colDrift    — occasional: a 1–2px column slides up or down by 1px,
-//                 wrapping around (the gentle transverse flow)
-function pixelSwap(count) {
-    for (let i = 0; i < count; i++) {
-        const x = (Math.random() * W) | 0;
-        const y = (Math.random() * H) | 0;
-        const dx = ((Math.random() * 5) | 0) - 2;   // -2..+2
-        const dy = ((Math.random() * 5) | 0) - 2;
-        const nx = x + dx, ny = y + dy;
-        if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
-        const i1 = (y  * W + x ) * 4;
-        const i2 = (ny * W + nx) * 4;
-        const r = data[i1], g = data[i1 + 1], b = data[i1 + 2];
-        data[i1]     = data[i2];
-        data[i1 + 1] = data[i2 + 1];
-        data[i1 + 2] = data[i2 + 2];
-        data[i2]     = r;
-        data[i2 + 1] = g;
-        data[i2 + 2] = b;
+reseed();
+
+// ─── FLOW FIELD (coarse, smooth, evolves slowly) ───────────────────────────
+const FW = 64;
+const FH = Math.max(24, Math.floor(FW * H / W));
+const flowDX = new Int8Array(FW * FH);
+const flowDY = new Int8Array(FW * FH);
+
+function updateFlow(time) {
+    const t = time * 0.00018;
+    // Slowly-shifting phase offsets — different seed each reseed for variety
+    const ph = (seed & 0xFFFF) / 0xFFFF * Math.PI * 2;
+    for (let fy = 0; fy < FH; fy++) {
+        const ny = fy / FH * 3.5 - 1.75;
+        for (let fx = 0; fx < FW; fx++) {
+            const nx = fx / FW * 3.5 - 1.75;
+            // Multi-octave: gives areas of swirl, stillness, and laminar flow
+            const vx =
+                Math.sin(nx * 1.4 + t * 0.9 + ph) +
+                Math.cos(ny * 0.7 - t * 1.1) * 0.6 +
+                Math.sin(nx * 2.4 + ny * 0.5 + t * 1.7) * 0.3;
+            const vy =
+                Math.cos(ny * 1.4 + t * 1.0 + ph * 0.7) +
+                Math.sin(nx * 0.7 + t * 0.85) * 0.6 +
+                Math.cos(ny * 2.4 + nx * 0.5 + t * 1.5) * 0.3;
+            const ax = vx < 0 ? -vx : vx;
+            const ay = vy < 0 ? -vy : vy;
+            const thresh = 0.42;
+            flowDX[fy * FW + fx] = ax > thresh ? (vx > 0 ? 1 : -1) : 0;
+            flowDY[fy * FW + fx] = ay > thresh ? (vy > 0 ? 1 : -1) : 0;
+        }
     }
 }
 
-const _rowBuf = new Uint8ClampedArray(W * 3);
-function rowShift() {
-    const stripH = 1 + ((Math.random() * 2) | 0);
-    const y0 = (Math.random() * (H - stripH)) | 0;
-    const shift = 3 + ((Math.random() * 10) | 0);
-    const sign = Math.random() < 0.5 ? 1 : -1;
-    for (let y = y0; y < y0 + stripH; y++) {
+// ─── ADVECT (each pixel pulls its colour from the neighbour the flow points
+//             back toward — exactly one pixel per frame, with wrap) ─────────
+function step() {
+    const fxScale = FW / W;
+    const fyScale = FH / H;
+    for (let y = 0; y < H; y++) {
+        const fy = (y * fyScale) | 0;
+        const fyBase = fy * FW;
+        const yBase = y * W;
         for (let x = 0; x < W; x++) {
-            const i = (y * W + x) * 4;
-            _rowBuf[x * 3]     = data[i];
-            _rowBuf[x * 3 + 1] = data[i + 1];
-            _rowBuf[x * 3 + 2] = data[i + 2];
-        }
-        for (let x = 0; x < W; x++) {
-            const srcX = ((x - sign * shift) % W + W) % W;
-            const i = (y * W + x) * 4;
-            data[i]     = _rowBuf[srcX * 3];
-            data[i + 1] = _rowBuf[srcX * 3 + 1];
-            data[i + 2] = _rowBuf[srcX * 3 + 2];
+            const fx = (x * fxScale) | 0;
+            const dx = flowDX[fyBase + fx];
+            const dy = flowDY[fyBase + fx];
+            let sx = x - dx;
+            let sy = y - dy;
+            if (sx < 0) sx += W; else if (sx >= W) sx -= W;
+            if (sy < 0) sy += H; else if (sy >= H) sy -= H;
+            buf2[yBase + x] = data32[sy * W + sx];
         }
     }
-}
-
-function colDrift() {
-    const colW = 1 + ((Math.random() * 2) | 0);
-    const x0 = (Math.random() * (W - colW)) | 0;
-    const dir = Math.random() < 0.5 ? 1 : -1;  // 1 = down, -1 = up
-    for (let x = x0; x < x0 + colW; x++) {
-        if (dir > 0) {
-            // shift down by 1, wrap last to first
-            const lastI = ((H - 1) * W + x) * 4;
-            const r = data[lastI], g = data[lastI + 1], b = data[lastI + 2];
-            for (let y = H - 1; y > 0; y--) {
-                const dst = (y * W + x) * 4;
-                const src = ((y - 1) * W + x) * 4;
-                data[dst]     = data[src];
-                data[dst + 1] = data[src + 1];
-                data[dst + 2] = data[src + 2];
-            }
-            const firstI = x * 4;
-            data[firstI]     = r;
-            data[firstI + 1] = g;
-            data[firstI + 2] = b;
-        } else {
-            const firstI = x * 4;
-            const r = data[firstI], g = data[firstI + 1], b = data[firstI + 2];
-            for (let y = 0; y < H - 1; y++) {
-                const dst = (y * W + x) * 4;
-                const src = ((y + 1) * W + x) * 4;
-                data[dst]     = data[src];
-                data[dst + 1] = data[src + 1];
-                data[dst + 2] = data[src + 2];
-            }
-            const lastI = ((H - 1) * W + x) * 4;
-            data[lastI]     = r;
-            data[lastI + 1] = g;
-            data[lastI + 2] = b;
-        }
-    }
-}
-
-// ─── UPDATE & RENDER ───────────────────────────────────────────────────────
-function update() {
-    for (let i = activeWipes.length - 1; i >= 0; i--) {
-        const w = activeWipes[i];
-        const oldP = w.progress;
-        const newP = Math.min(1, w.progress + w.speed);
-        sweepWipe(w, oldP, newP);
-        w.progress = newP;
-        if (newP >= 1) activeWipes.splice(i, 1);
-    }
-    // One wipe almost always in flight, sometimes two — composed, not frantic
-    while (activeWipes.length < 1) spawnWipe();
-    if (activeWipes.length < 2 && Math.random() < 0.010) spawnWipe();
-
-    // Subtle glitch layer — runs every frame
-    pixelSwap(6);                              // constant micro-mixing
-    if (Math.random() < 0.014) rowShift();     // rare data-mosh tear
-    if (Math.random() < 0.030) colDrift();     // gentle transverse flow
+    data32.set(buf2);
 }
 
 function render() {
-    update();
     bctx.putImageData(imgData, 0, 0);
     dctx.drawImage(buffer, 0, 0, display.width, display.height);
-    requestAnimationFrame(render);
 }
-requestAnimationFrame(render);
 
-// ─── TAP → spawn a wipe centered on the touch ──────────────────────────────
+const t0 = performance.now();
+function loop() {
+    const t = performance.now() - t0;
+    updateFlow(t);
+    step();
+    render();
+    requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ─── TAP → reseed (new system, new palette, new initial state) ─────────────
 window.addEventListener('pointerdown', e => {
     if (e.target.closest('.back')) return;
-    const rect = display.getBoundingClientRect();
-    const cx = ((e.clientX - rect.left) / rect.width) * W;
-    const cy = ((e.clientY - rect.top)  / rect.height) * H;
-    const sw = ((0.30 + Math.random() * 0.40) * W) | 0;
-    const sh = ((0.30 + Math.random() * 0.40) * H) | 0;
-    const region = {
-        x: Math.max(0, Math.min(W - sw, (cx - sw / 2) | 0)),
-        y: Math.max(0, Math.min(H - sh, (cy - sh / 2) | 0)),
-        w: sw, h: sh,
-    };
-    spawnWipe({ region, speed: 0.022 + Math.random() * 0.018 });
+    reseed();
 });
 
 // Prevent iOS double-tap zoom

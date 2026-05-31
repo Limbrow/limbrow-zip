@@ -29,21 +29,24 @@
 
 <script>
 // ════════════════════════════════════════════════════════════════════════════
-// BLOCKS PREVIEW — same wipe engine at lower res, slightly more wipes in
-// flight so the card stays visually active for a viewer scrolling past.
+// BLOCKS PREVIEW — same flow-field advection engine at lower res.
+// Auto-reseeds every ~7s so the card cycles through colour systems.
 // ════════════════════════════════════════════════════════════════════════════
 
 const display = document.getElementById('stage');
 const dctx = display.getContext('2d');
 
-const W = 160;
-const H = Math.max(60, Math.floor(W * (window.innerHeight / window.innerWidth))) || W;
+const W = 180;
+const H = Math.max(80, Math.floor(W * (window.innerHeight / window.innerWidth))) || W;
 
 const buffer = document.createElement('canvas');
-buffer.width = W; buffer.height = H;
+buffer.width = W;
+buffer.height = H;
 const bctx = buffer.getContext('2d');
 const imgData = bctx.createImageData(W, H);
-const data = imgData.data;
+const data8  = imgData.data;
+const data32 = new Uint32Array(data8.buffer);
+const buf2   = new Uint32Array(W * H);
 
 function fitDisplay() {
     display.width = window.innerWidth;
@@ -53,178 +56,147 @@ function fitDisplay() {
 window.addEventListener('resize', fitDisplay);
 fitDisplay();
 
-// Same 6-color palette as the live post
-const PALETTE = [
-    [255,  45, 112], [ 45, 238, 240], [248, 223,  58],
-    [123,  58, 255], [ 24,  28,  47], [240, 234, 219],
-];
-
-function getPhase(d, x, y, w, h) {
-    switch (d) {
-        case 0: return x / (w - 1 || 1);
-        case 1: return 1 - x / (w - 1 || 1);
-        case 2: return y / (h - 1 || 1);
-        case 3: return 1 - y / (h - 1 || 1);
-        case 4: return (x + y) / ((w + h - 2) || 1);
-        case 5: return 1 - (x + y) / ((w + h - 2) || 1);
-        case 6: return ((w - 1 - x) + y) / ((w + h - 2) || 1);
-        case 7: return (x + (h - 1 - y)) / ((w + h - 2) || 1);
-    }
-    return 0;
+function hslToRgb(h, s, l) {
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const hp = h / 60;
+    const x = c * (1 - Math.abs(hp % 2 - 1));
+    let r, g, b;
+    if (hp < 1)      { r = c; g = x; b = 0; }
+    else if (hp < 2) { r = x; g = c; b = 0; }
+    else if (hp < 3) { r = 0; g = c; b = x; }
+    else if (hp < 4) { r = 0; g = x; b = c; }
+    else if (hp < 5) { r = x; g = 0; b = c; }
+    else             { r = c; g = 0; b = x; }
+    const m = l - c / 2;
+    return [
+        Math.round((r + m) * 255),
+        Math.round((g + m) * 255),
+        Math.round((b + m) * 255),
+    ];
 }
+function packColor(c) { return (255 << 24) | (c[2] << 16) | (c[1] << 8) | c[0]; }
 
-function fillRect(r, ci) {
-    const c = PALETTE[ci];
-    for (let y = r.y; y < r.y + r.h; y++) {
-        for (let x = r.x; x < r.x + r.w; x++) {
-            const idx = (y * W + x) * 4;
-            data[idx] = c[0]; data[idx+1] = c[1]; data[idx+2] = c[2]; data[idx+3] = 255;
+const COLOR_SYSTEMS = ['monochrome', 'triadic', 'analogous', 'greyscale', 'random'];
+
+function generatePalette() {
+    const sys = COLOR_SYSTEMS[Math.floor(Math.random() * COLOR_SYSTEMS.length)];
+    const baseHue = Math.random() * 360;
+    let palette;
+    if (sys === 'monochrome') {
+        const sat = 0.45 + Math.random() * 0.35;
+        palette = Array.from({ length: 6 }, (_, i) => hslToRgb(baseHue, sat, 0.10 + i * 0.15));
+    } else if (sys === 'triadic') {
+        const hues = [baseHue, (baseHue + 120) % 360, (baseHue + 240) % 360];
+        palette = [];
+        for (const h of hues) {
+            palette.push(hslToRgb(h, 0.78, 0.28));
+            palette.push(hslToRgb(h, 0.65, 0.66));
         }
-    }
-}
-// Start on a random color per card so multiple previews look different
-const startIdx = (Math.random() * PALETTE.length) | 0;
-fillRect({ x: 0, y: 0, w: W, h: H }, startIdx);
-
-const wipes = [];
-let lastColorIdx = startIdx;
-
-function chooseColorIdx() {
-    let idx;
-    do { idx = (Math.random() * PALETTE.length) | 0; } while (idx === lastColorIdx);
-    lastColorIdx = idx;
-    return idx;
-}
-
-function spawnWipe() {
-    const colorIdx  = chooseColorIdx();
-    const direction = (Math.random() * 8) | 0;
-    let region;
-    const roll = Math.random();
-    if (roll < 0.40) {
-        region = { x: 0, y: 0, w: W, h: H };
-    } else if (roll < 0.72) {
-        const r = Math.random();
-        if (r < 0.25) region = { x: 0, y: 0, w: W, h: (H / 2) | 0 };
-        else if (r < 0.5) region = { x: 0, y: H - ((H / 2) | 0), w: W, h: (H / 2) | 0 };
-        else if (r < 0.75) region = { x: 0, y: 0, w: (W / 2) | 0, h: H };
-        else region = { x: W - ((W / 2) | 0), y: 0, w: (W / 2) | 0, h: H };
+    } else if (sys === 'analogous') {
+        const span = 70 + Math.random() * 50;
+        palette = Array.from({ length: 6 }, (_, i) =>
+            hslToRgb((baseHue + i * (span / 6)) % 360, 0.7, 0.30 + i * 0.07));
+    } else if (sys === 'greyscale') {
+        palette = Array.from({ length: 6 }, (_, i) => {
+            const v = Math.round((i / 5) * 235 + 10); return [v, v, v];
+        });
     } else {
-        const sw = ((0.22 + Math.random() * 0.45) * W) | 0;
-        const sh = ((0.22 + Math.random() * 0.45) * H) | 0;
-        region = {
-            x: (Math.random() * (W - sw)) | 0,
-            y: (Math.random() * (H - sh)) | 0,
-            w: sw, h: sh,
-        };
+        palette = Array.from({ length: 6 }, () =>
+            hslToRgb(Math.random() * 360, 0.55 + Math.random() * 0.35, 0.25 + Math.random() * 0.4));
     }
-    wipes.push({
-        colorIdx, direction, region,
-        progress: 0,
-        speed: 0.0035 + Math.random() * 0.010,
-    });
+    return palette;
 }
 
-// ─── Subtle glitch layer (mirrors index.html) ──────────────────────────────
-function pixelSwap(count) {
-    for (let i = 0; i < count; i++) {
-        const x = (Math.random() * W) | 0;
-        const y = (Math.random() * H) | 0;
-        const dx = ((Math.random() * 5) | 0) - 2;
-        const dy = ((Math.random() * 5) | 0) - 2;
-        const nx = x + dx, ny = y + dy;
-        if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
-        const i1 = (y * W + x) * 4;
-        const i2 = (ny * W + nx) * 4;
-        const r = data[i1], g = data[i1+1], b = data[i1+2];
-        data[i1] = data[i2]; data[i1+1] = data[i2+1]; data[i1+2] = data[i2+2];
-        data[i2] = r; data[i2+1] = g; data[i2+2] = b;
+let packed = [];
+let layout = 'grid';
+let seed = 0;
+
+function reseed() {
+    packed = generatePalette().map(packColor);
+    layout = Math.random() < 0.55 ? 'grid' : 'rows';
+    seed   = (Math.random() * 2147483647) | 0;
+    if (layout === 'grid') {
+        const blockSize = 3 + Math.floor((seed % 9) + 1);
+        for (let y = 0; y < H; y++) {
+            const by = (y / blockSize) | 0;
+            for (let x = 0; x < W; x++) {
+                const bx = (x / blockSize) | 0;
+                const h = ((bx * 2654435761) ^ (by * 2246822519) ^ seed) >>> 0;
+                data32[y * W + x] = packed[h % packed.length];
+            }
+        }
+    } else {
+        const rowH = 3 + Math.floor((seed % 11) + 1);
+        for (let y = 0; y < H; y++) {
+            const ry = (y / rowH) | 0;
+            const h = ((ry * 2654435761) ^ seed) >>> 0;
+            const c = packed[h % packed.length];
+            for (let x = 0; x < W; x++) data32[y * W + x] = c;
+        }
     }
 }
-const _rowBuf = new Uint8ClampedArray(W * 3);
-function rowShift() {
-    const stripH = 1 + ((Math.random() * 2) | 0);
-    const y0 = (Math.random() * (H - stripH)) | 0;
-    const shift = 3 + ((Math.random() * 9) | 0);
-    const sign = Math.random() < 0.5 ? 1 : -1;
-    for (let y = y0; y < y0 + stripH; y++) {
+reseed();
+
+const FW = 48;
+const FH = Math.max(18, Math.floor(FW * H / W));
+const flowDX = new Int8Array(FW * FH);
+const flowDY = new Int8Array(FW * FH);
+
+function updateFlow(time) {
+    const t = time * 0.00018;
+    const ph = (seed & 0xFFFF) / 0xFFFF * Math.PI * 2;
+    for (let fy = 0; fy < FH; fy++) {
+        const ny = fy / FH * 3.5 - 1.75;
+        for (let fx = 0; fx < FW; fx++) {
+            const nx = fx / FW * 3.5 - 1.75;
+            const vx = Math.sin(nx * 1.4 + t * 0.9 + ph) + Math.cos(ny * 0.7 - t * 1.1) * 0.6 + Math.sin(nx * 2.4 + ny * 0.5 + t * 1.7) * 0.3;
+            const vy = Math.cos(ny * 1.4 + t * 1.0 + ph * 0.7) + Math.sin(nx * 0.7 + t * 0.85) * 0.6 + Math.cos(ny * 2.4 + nx * 0.5 + t * 1.5) * 0.3;
+            const ax = vx < 0 ? -vx : vx;
+            const ay = vy < 0 ? -vy : vy;
+            const thresh = 0.42;
+            flowDX[fy * FW + fx] = ax > thresh ? (vx > 0 ? 1 : -1) : 0;
+            flowDY[fy * FW + fx] = ay > thresh ? (vy > 0 ? 1 : -1) : 0;
+        }
+    }
+}
+
+function step() {
+    const fxScale = FW / W, fyScale = FH / H;
+    for (let y = 0; y < H; y++) {
+        const fy = (y * fyScale) | 0;
+        const fyBase = fy * FW;
+        const yBase = y * W;
         for (let x = 0; x < W; x++) {
-            const i = (y * W + x) * 4;
-            _rowBuf[x*3] = data[i]; _rowBuf[x*3+1] = data[i+1]; _rowBuf[x*3+2] = data[i+2];
-        }
-        for (let x = 0; x < W; x++) {
-            const srcX = ((x - sign * shift) % W + W) % W;
-            const i = (y * W + x) * 4;
-            data[i] = _rowBuf[srcX*3];
-            data[i+1] = _rowBuf[srcX*3+1];
-            data[i+2] = _rowBuf[srcX*3+2];
+            const fx = (x * fxScale) | 0;
+            const dx = flowDX[fyBase + fx];
+            const dy = flowDY[fyBase + fx];
+            let sx = x - dx, sy = y - dy;
+            if (sx < 0) sx += W; else if (sx >= W) sx -= W;
+            if (sy < 0) sy += H; else if (sy >= H) sy -= H;
+            buf2[yBase + x] = data32[sy * W + sx];
         }
     }
-}
-function colDrift() {
-    const colW = 1 + ((Math.random() * 2) | 0);
-    const x0 = (Math.random() * (W - colW)) | 0;
-    const dir = Math.random() < 0.5 ? 1 : -1;
-    for (let x = x0; x < x0 + colW; x++) {
-        if (dir > 0) {
-            const lastI = ((H - 1) * W + x) * 4;
-            const r = data[lastI], g = data[lastI+1], b = data[lastI+2];
-            for (let y = H - 1; y > 0; y--) {
-                const dst = (y * W + x) * 4;
-                const src = ((y - 1) * W + x) * 4;
-                data[dst] = data[src]; data[dst+1] = data[src+1]; data[dst+2] = data[src+2];
-            }
-            const firstI = x * 4;
-            data[firstI] = r; data[firstI+1] = g; data[firstI+2] = b;
-        } else {
-            const firstI = x * 4;
-            const r = data[firstI], g = data[firstI+1], b = data[firstI+2];
-            for (let y = 0; y < H - 1; y++) {
-                const dst = (y * W + x) * 4;
-                const src = ((y + 1) * W + x) * 4;
-                data[dst] = data[src]; data[dst+1] = data[src+1]; data[dst+2] = data[src+2];
-            }
-            const lastI = ((H - 1) * W + x) * 4;
-            data[lastI] = r; data[lastI+1] = g; data[lastI+2] = b;
-        }
-    }
+    data32.set(buf2);
 }
 
-function sweep(w, oldP, newP) {
-    const r = w.region, c = PALETTE[w.colorIdx], d = w.direction;
-    for (let py = 0; py < r.h; py++) {
-        const y = r.y + py;
-        for (let px = 0; px < r.w; px++) {
-            const phase = getPhase(d, px, py, r.w, r.h);
-            if (phase > oldP && phase <= newP) {
-                const idx = (y * W + (r.x + px)) * 4;
-                data[idx] = c[0]; data[idx+1] = c[1]; data[idx+2] = c[2]; data[idx+3] = 255;
-            }
-        }
+const RESEED_MS = 7000;
+let lastReseed = performance.now();
+const t0 = performance.now();
+
+function loop() {
+    const now = performance.now();
+    const t = now - t0;
+    if (now - lastReseed > RESEED_MS) {
+        reseed();
+        lastReseed = now;
     }
-}
-
-function frame() {
-    for (let i = wipes.length - 1; i >= 0; i--) {
-        const w = wipes[i];
-        const oldP = w.progress;
-        const newP = Math.min(1, w.progress + w.speed);
-        sweep(w, oldP, newP);
-        w.progress = newP;
-        if (newP >= 1) wipes.splice(i, 1);
-    }
-    while (wipes.length < 1) spawnWipe();
-    if (wipes.length < 2 && Math.random() < 0.014) spawnWipe();
-
-    pixelSwap(5);
-    if (Math.random() < 0.014) rowShift();
-    if (Math.random() < 0.030) colDrift();
-
+    updateFlow(t);
+    step();
     bctx.putImageData(imgData, 0, 0);
     dctx.drawImage(buffer, 0, 0, display.width, display.height);
-    requestAnimationFrame(frame);
+    requestAnimationFrame(loop);
 }
-requestAnimationFrame(frame);
+requestAnimationFrame(loop);
 </script>
 
 </body>
