@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0">
 <title>i can't get out · limbrow.zip</title>
-<meta name="description" content="I can't get out — a track by limbrow.">
+<meta name="description" content="I can't get out — a track.">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -128,7 +128,6 @@
 <div class="stage">
     <div class="title-block">
         <div class="track-title">I can't get out</div>
-        <div class="track-by">limbrow</div>
     </div>
 
     <button class="play-orb" id="play-orb" aria-label="Play">
@@ -139,7 +138,7 @@
         <div class="progress" id="progress"><div class="fill" id="fill"></div></div>
         <div class="meta-row">
             <span class="time"><span id="cur">0:00</span> / <span id="dur">0:00</span></span>
-            <a class="dl" href="i-cant-get-out.mp3" download="i cant get out — limbrow.mp3">↓ download</a>
+            <a class="dl" href="i-cant-get-out.mp3" download="i cant get out.mp3">↓ download</a>
         </div>
     </div>
 </div>
@@ -227,17 +226,22 @@ progress.addEventListener('pointerdown', e => {
 });
 
 // ─── VISUALISER ────────────────────────────────────────────────────────────
-let phase = 0;
+// A confined waveform inside a ring (the "can't get out" image), wrapped in a
+// full-spectrum corona of frequency bars. The whole thing is rainbow-coloured
+// and the hue wheel rotates with the music.
+let phase = 0, hueRot = 0;
 function frame(now) {
-    ctx.fillStyle = '#050507';
+    // Soft trail instead of a hard clear — leaves gentle motion ghosts
+    ctx.fillStyle = 'rgba(5,5,7,0.32)';
     ctx.fillRect(0, 0, VW, VH);
 
     const cx = VW / 2, cy = VH / 2;
-    const baseR = Math.min(VW, VH) * 0.26;
-    const wallR = baseR * 1.42;
+    const baseR = Math.min(VW, VH) * 0.24;
+    const wallR = baseR * 1.46;
+    const playing = analyser && !audio.paused;
 
     let energy = 0, bass = 0;
-    if (analyser && !audio.paused) {
+    if (playing) {
         analyser.getByteTimeDomainData(timeData);
         analyser.getByteFrequencyData(freqData);
         let sum = 0;
@@ -248,61 +252,96 @@ function frame(now) {
         energy = e / (freqData.length / 8) / 255;
     }
 
-    phase += 0.004 + bass * 0.02;
+    phase  += 0.004 + bass * 0.02;
+    hueRot += 0.25 + bass * 2.2;
 
-    // The confining ring (the "wall")
+    ctx.globalCompositeOperation = 'lighter';
+
+    // ── Spectral corona — frequency bars radiating outward in rainbow ──
+    const NB = 128;
+    for (let i = 0; i < NB; i++) {
+        let amp;
+        if (playing) {
+            const fi = Math.floor((i / NB) * (freqData.length * 0.7));
+            amp = freqData[fi] / 255;
+        } else {
+            amp = 0.10 + 0.08 * (0.5 + 0.5 * Math.sin(i * 0.5 + phase * 2));
+        }
+        const a = (i / NB) * Math.PI * 2 + phase * 0.3;
+        const r0 = wallR + 4;
+        const r1 = r0 + amp * baseR * 1.5;
+        const hue = (i / NB * 360 + hueRot) % 360;
+        ctx.strokeStyle = `hsla(${hue}, 95%, ${55 + amp * 25}%, ${0.25 + amp * 0.7})`;
+        ctx.lineWidth = (Math.PI * 2 * r0 / NB) * 0.6;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0);
+        ctx.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
+        ctx.stroke();
+    }
+
+    // ── The confining ring (faint, prismatic) ──
     ctx.lineWidth = 1.5;
-    ctx.strokeStyle = `rgba(255,255,255,${0.06 + energy * 0.12})`;
+    ctx.strokeStyle = `hsla(${hueRot % 360}, 60%, 70%, ${0.10 + energy * 0.14})`;
     ctx.beginPath();
     ctx.arc(cx, cy, wallR, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Closed deformed waveform inside the ring
-    const N = 160;
-    const hue = 18 + bass * 24;               // amber → red-orange with bass
+    // ── Confined waveform — closed loop, rainbow per segment ──
+    const N = 180;
+    const pts = [];
     let maxReach = 0;
-    ctx.beginPath();
     for (let i = 0; i <= N; i++) {
         const a = (i / N) * Math.PI * 2;
         let dev = 0;
-        if (analyser && !audio.paused) {
-            const idx = (Math.floor((i / N) * timeData.length)) % timeData.length;
-            dev = (timeData[idx] - 128) / 128;   // -1..1
+        if (playing) {
+            const idx = Math.floor((i / N) * timeData.length) % timeData.length;
+            dev = (timeData[idx] - 128) / 128;
         } else {
-            dev = Math.sin(a * 5 + phase * 3) * 0.06;  // idle breath
+            dev = Math.sin(a * 5 + phase * 3) * 0.06;
         }
-        // Pressure toward the wall; clamp so it never breaks out
         let r = baseR * (1 + dev * 0.55 + energy * 0.35) + Math.sin(a * 3 + phase) * baseR * 0.05;
         r = Math.min(r, wallR - 2);
         maxReach = Math.max(maxReach, r / wallR);
-        const x = cx + Math.cos(a + phase * 0.3) * r;
-        const y = cy + Math.sin(a + phase * 0.3) * r;
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        pts.push([cx + Math.cos(a + phase * 0.3) * r, cy + Math.sin(a + phase * 0.3) * r]);
     }
-    ctx.closePath();
 
-    const grad = ctx.createRadialGradient(cx, cy, baseR * 0.2, cx, cy, wallR);
-    grad.addColorStop(0, `hsla(${hue}, 90%, 62%, ${0.10 + energy * 0.20})`);
-    grad.addColorStop(1, `hsla(${hue + 12}, 95%, 55%, ${0.04 + energy * 0.10})`);
+    // Soft multi-stop fill
+    const grad = ctx.createRadialGradient(cx, cy, baseR * 0.15, cx, cy, wallR);
+    grad.addColorStop(0.0, `hsla(${(hueRot) % 360}, 90%, 60%, ${0.10 + energy * 0.18})`);
+    grad.addColorStop(0.5, `hsla(${(hueRot + 120) % 360}, 90%, 58%, ${0.07 + energy * 0.14})`);
+    grad.addColorStop(1.0, `hsla(${(hueRot + 240) % 360}, 95%, 55%, ${0.03 + energy * 0.10})`);
     ctx.fillStyle = grad;
+    ctx.beginPath();
+    pts.forEach((p, i) => i === 0 ? ctx.moveTo(p[0], p[1]) : ctx.lineTo(p[0], p[1]));
+    ctx.closePath();
     ctx.fill();
 
-    ctx.lineWidth = 1.6 + energy * 2.4;
-    ctx.strokeStyle = `hsla(${hue}, 95%, ${60 + energy * 20}%, ${0.7 + energy * 0.3})`;
-    ctx.shadowBlur = 14 + energy * 26;
-    ctx.shadowColor = `hsla(${hue}, 95%, 60%, 0.8)`;
-    ctx.stroke();
+    // Stroke each segment with its own hue → rainbow outline
+    ctx.lineWidth = 1.8 + energy * 2.6;
+    ctx.lineCap = 'round';
+    ctx.shadowBlur = 12 + energy * 24;
+    for (let i = 0; i < N; i++) {
+        const hue = (i / N * 360 + hueRot) % 360;
+        ctx.strokeStyle = `hsla(${hue}, 95%, ${62 + energy * 18}%, ${0.75 + energy * 0.25})`;
+        ctx.shadowColor = `hsla(${hue}, 95%, 60%, 0.7)`;
+        ctx.beginPath();
+        ctx.moveTo(pts[i][0], pts[i][1]);
+        ctx.lineTo(pts[i + 1][0], pts[i + 1][1]);
+        ctx.stroke();
+    }
     ctx.shadowBlur = 0;
 
     // Contact flare where the wave nears the wall
     if (maxReach > 0.93) {
-        ctx.strokeStyle = `hsla(${hue}, 100%, 75%, ${(maxReach - 0.93) * 6})`;
+        ctx.strokeStyle = `hsla(${(hueRot + 60) % 360}, 100%, 78%, ${(maxReach - 0.93) * 6})`;
         ctx.lineWidth = 2.5;
         ctx.beginPath();
         ctx.arc(cx, cy, wallR, 0, Math.PI * 2);
         ctx.stroke();
     }
 
+    ctx.globalCompositeOperation = 'source-over';
     requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
