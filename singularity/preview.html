@@ -102,11 +102,12 @@ window.addEventListener('resize',resize); resize();
 function cross(a,b){ return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]]; }
 function norm(a){ const l=Math.hypot(a[0],a[1],a[2])||1; return [a[0]/l,a[1]/l,a[2]/l]; }
 
-// Near face-on so the disk reads as a halo parallel to the screen and the
-// shadow is a clean circle. Zoomed in (close dist + wide focal) so the ring
-// fills the grid card and it's obvious what it is. Slow azimuth spin keeps
-// the Doppler-bright side travelling around the ring.
-let az = Math.random()*6.28, el = 1.30, dist = 10.5;
+// Near face-on so the disk reads as a halo parallel to the screen. Pulled
+// back so the dark shadow + ring sit fully inside the card with the disk
+// around them — zoomed in, the bright disk filled the frame and you couldn't
+// see the hole itself. Slow azimuth spin keeps the Doppler-bright side
+// travelling around the ring.
+let az = Math.random()*6.28, el = 1.28, dist = 17.0;
 const t0 = performance.now();
 function frame(now){
     az += 0.0016;
@@ -120,7 +121,7 @@ function frame(now){
     gl.uniform1f(U.time,(now-t0)*0.001);
     gl.uniform3f(U.cam,camPos[0],camPos[1],camPos[2]);
     gl.uniformMatrix3fv(U.basis,false,basis);
-    gl.uniform1f(U.focal,1.7);
+    gl.uniform1f(U.focal,1.15);
     gl.drawArrays(gl.TRIANGLES,0,3);
     requestAnimationFrame(frame);
 }
