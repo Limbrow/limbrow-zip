@@ -105,8 +105,8 @@ if (!gl) {
 
 const isMobile = window.matchMedia('(max-width: 600px)').matches;
 
-const STEPS = isMobile ? 180 : 320;
-const RENDER_SCALE = isMobile ? 0.75 : 0.85;
+const STEPS = isMobile ? 210 : 340;
+const RENDER_SCALE = isMobile ? 0.78 : 0.85;
 
 const VS = `
 attribute vec2 a_pos;
@@ -125,7 +125,7 @@ uniform float u_focal;
 const float HORIZON = 1.0;
 const float R_IN    = 2.6;
 const float R_OUT   = 9.0;
-const float R_ESC   = 36.0;
+const float R_ESC   = 60.0;
 const int   MAX_STEPS = ${STEPS};
 
 float hash11(float p){ p = fract(p*0.1031); p *= p+33.33; p *= p+p; return fract(p); }
@@ -215,7 +215,9 @@ void main(){
 
     for(int i=0; i<MAX_STEPS; i++){
         float r = length(pos);
-        float dt = clamp(0.022 * (r - HORIZON) + 0.012, 0.014, 0.45);
+        // Step grows fast far from the hole (so a far camera still reaches it
+        // within the step budget) and stays fine near it for an accurate ring.
+        float dt = clamp(0.03 * (r - HORIZON) + 0.010, 0.012, 1.2);
 
         prevPos = pos;
         vec3 acc = -1.5 * h2 * pos / pow(dot(pos,pos), 2.5);
@@ -232,10 +234,16 @@ void main(){
         }
 
         float rr = length(pos);
-        if(rr < HORIZON){ break; }
+        if(rr < HORIZON){ trans = 0.0; break; }                  // shadow blocks the sky
         if(trans < 0.02){ break; }
-        if(rr > R_ESC){ col += trans * stars(normalize(vel)); break; }
+        // Only escape once the photon is heading OUTWARD — otherwise a camera
+        // that starts beyond R_ESC (zoomed far out) would escape instantly.
+        if(rr > R_ESC && dot(pos, vel) > 0.0){ break; }
     }
+
+    // Any remaining transmittance shows the background sky — covers escaped
+    // rays and rays that ran out of steps far from the hole.
+    col += trans * stars(normalize(vel));
 
     col = tonemap(col);
     float v = 1.0 - 0.25*dot(uv, uv);
@@ -274,10 +282,12 @@ const U = {
 };
 
 // ─── CAMERA ────────────────────────────────────────────────────────────────
+// Mobile pulls back with a wider lens by default so the whole ring + disk
+// reads on a small vertical screen.
 let az = 0.6;
-let el = isMobile ? 0.34 : 0.16;
-let dist = isMobile ? 13.0 : 15.0;
-const FOCAL = isMobile ? 1.30 : 1.5;
+let el = isMobile ? 0.30 : 0.16;
+let dist = isMobile ? 17.0 : 15.0;
+const FOCAL = isMobile ? 1.12 : 1.5;
 let vAz = 0.0004, vEl = 0.0;
 let dragging = false, lastX = 0, lastY = 0;
 
@@ -313,7 +323,7 @@ canvas.addEventListener('pointercancel', () => { dragging = false; });
 canvas.addEventListener('wheel', e => {
     e.preventDefault();
     dist *= Math.exp(e.deltaY * 0.0011);
-    dist = Math.max(5.0, Math.min(40.0, dist));
+    dist = Math.max(6.0, Math.min(52.0, dist));
 }, { passive: false });
 
 let pinchD = 0;
@@ -322,7 +332,7 @@ canvas.addEventListener('touchmove', e => {
         const dx = e.touches[0].clientX - e.touches[1].clientX;
         const dy = e.touches[0].clientY - e.touches[1].clientY;
         const d = Math.sqrt(dx*dx + dy*dy);
-        if (pinchD){ dist *= pinchD / d; dist = Math.max(5.0, Math.min(40.0, dist)); }
+        if (pinchD){ dist *= pinchD / d; dist = Math.max(6.0, Math.min(52.0, dist)); }
         pinchD = d; e.preventDefault();
     }
 }, { passive: false });

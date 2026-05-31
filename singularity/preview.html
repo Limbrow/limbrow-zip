@@ -29,7 +29,7 @@ const VS = `attribute vec2 a_pos; void main(){ gl_Position = vec4(a_pos,0.0,1.0)
 const FS = `
 precision highp float;
 uniform vec2 u_res; uniform float u_time; uniform vec3 u_camPos; uniform mat3 u_camBasis; uniform float u_focal;
-const float HORIZON=1.0, R_IN=2.6, R_OUT=9.0, R_ESC=36.0;
+const float HORIZON=1.0, R_IN=2.6, R_OUT=9.0, R_ESC=60.0;
 const int MAX_STEPS=${STEPS};
 float hash11(float p){ p=fract(p*0.1031); p*=p+33.33; p*=p+p; return fract(p); }
 float hash31(vec3 p){ p=fract(p*0.1031); p+=dot(p,p.yzx+33.33); return fract((p.x+p.y)*p.z); }
@@ -68,14 +68,15 @@ void main(){
   vec3 h=cross(pos,vel); float h2=dot(h,h);
   vec3 col=vec3(0.0); float trans=1.0; vec3 prevPos=pos;
   for(int i=0;i<MAX_STEPS;i++){
-    float r=length(pos); float dt=clamp(0.022*(r-HORIZON)+0.012,0.014,0.45);
+    float r=length(pos); float dt=clamp(0.03*(r-HORIZON)+0.010,0.012,1.2);
     prevPos=pos; vec3 acc=-1.5*h2*pos/pow(dot(pos,pos),2.5);
     vec3 newPos=pos+vel*dt+0.5*acc*dt*dt; vel+=acc*dt; pos=newPos;
     if(prevPos.y*pos.y<0.0){ float t=prevPos.y/(prevPos.y-pos.y); vec3 cp=mix(prevPos,pos,t);
       float a; vec3 e=diskEmission(cp,vel,a); if(a>0.0){ col+=trans*e; trans*=(1.0-a); } }
     float rr=length(pos);
-    if(rr<HORIZON) break; if(trans<0.02) break;
-    if(rr>R_ESC){ col+=trans*stars(normalize(vel)); break; } }
+    if(rr<HORIZON){ trans=0.0; break; } if(trans<0.02) break;
+    if(rr>R_ESC && dot(pos,vel)>0.0) break; }
+  col+=trans*stars(normalize(vel));
   col=tonemap(col); float v=1.0-0.25*dot(uv,uv); col*=v;
   gl_FragColor=vec4(col,1.0); }
 `;
