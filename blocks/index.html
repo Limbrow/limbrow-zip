@@ -46,7 +46,7 @@
         image-rendering: crisp-edges;
     }
 
-    /* Tiny readout in the corner — like alternate.cx's metadata strip */
+    /* Tiny readout in the corner — system · layout · flow · seed */
     .meta {
         position: fixed;
         bottom: max(14px, env(safe-area-inset-bottom));
@@ -55,7 +55,7 @@
         font-size: 9px;
         letter-spacing: 0.18em;
         text-transform: uppercase;
-        color: rgba(255, 255, 255, 0.55);
+        color: rgba(255, 255, 255, 0.58);
         mix-blend-mode: difference;
         pointer-events: none;
     }
@@ -71,29 +71,37 @@
 <div class="meta" id="meta">
     <span id="m-sys">—</span>
     <span id="m-lay">—</span>
+    <span id="m-flow">—</span>
     <span id="m-seed">—</span>
 </div>
 
 <script>
 // ════════════════════════════════════════════════════════════════════════════
-// BLOCKS — pixel-level advection field. Investigation of Kim Asendorf's
-// Alternate (alternate.cx, 2023).
+// BLOCKS — pixel-level advection. After Kim Asendorf's Alternate.
 //
-// Every pixel holds a packed RGBA colour. A coarse flow field is computed
-// each frame as multi-octave sine noise; each cell quantises to one of nine
-// motions (8 neighbours + stay). Each step, every pixel pulls its colour
+// Every pixel holds a packed RGBA value. Each frame a coarse flow field is
+// rebuilt according to the piece's "flow style" (laminar / swirl / shear /
+// turbulent / axial) plus 0–3 attractor points, then quantised to one of
+// nine motions per cell (8 neighbours + stay). The step pulls each pixel
 // from the neighbour the flow points back toward — exactly one pixel of
-// motion per frame. Initial state is a grid or row arrangement of colours
-// drawn from an algorithmic palette (monochrome / triadic / analogous /
-// greyscale / random). Tap to re-seed.
+// motion per frame, with wrap.
+//
+// A re-seed (tap on the canvas) picks new random parameters:
+//   colour system   → monochrome / triadic / analogous / greyscale / random
+//   palette count   → 5–9 colours
+//   layout          → grid / rows / cols / checker / scatter / nested
+//   flow style      → 5 motion templates with different threshold + speed
+//   attractors      → 0, 1, 2 or 3 radial pull/push points
+//   seed            → drives all hashing (block colours, phase, etc.)
+//
+// The piece does NOT change on its own — only on tap.
 // ════════════════════════════════════════════════════════════════════════════
 
 const display = document.getElementById('stage');
 const dctx = display.getContext('2d');
 
-// Buffer size — keep it modest so each pixel reads visibly
 const isMobile = window.matchMedia('(max-width: 600px)').matches;
-const W = isMobile ? 240 : 340;
+const W = isMobile ? 240 : 360;
 const H = Math.max(120, Math.floor(W * (window.innerHeight / window.innerWidth)));
 
 const buffer = document.createElement('canvas');
@@ -113,7 +121,7 @@ function fitDisplay() {
 window.addEventListener('resize', fitDisplay);
 fitDisplay();
 
-// ─── COLOUR / PALETTE SYSTEMS ──────────────────────────────────────────────
+// ─── PALETTE GENERATION ────────────────────────────────────────────────────
 function hslToRgb(h, s, l) {
     const c = (1 - Math.abs(2 * l - 1)) * s;
     const hp = h / 60;
@@ -132,123 +140,264 @@ function hslToRgb(h, s, l) {
         Math.round((b + m) * 255),
     ];
 }
-
-function packColor(c) {
-    return (255 << 24) | (c[2] << 16) | (c[1] << 8) | c[0];
-}
+const pack = c => (255 << 24) | (c[2] << 16) | (c[1] << 8) | c[0];
 
 const COLOR_SYSTEMS = ['monochrome', 'triadic', 'analogous', 'greyscale', 'random'];
 
 function generatePalette() {
-    const sys = COLOR_SYSTEMS[Math.floor(Math.random() * COLOR_SYSTEMS.length)];
+    const sys = COLOR_SYSTEMS[(Math.random() * COLOR_SYSTEMS.length) | 0];
     const baseHue = Math.random() * 360;
+    const count = 5 + ((Math.random() * 5) | 0);   // 5..9
     let palette;
 
     if (sys === 'monochrome') {
         const sat = 0.45 + Math.random() * 0.35;
-        palette = Array.from({ length: 6 }, (_, i) =>
-            hslToRgb(baseHue, sat, 0.10 + i * 0.15)
+        palette = Array.from({ length: count }, (_, i) =>
+            hslToRgb(baseHue, sat, 0.08 + (i / (count - 1)) * 0.84)
         );
     } else if (sys === 'triadic') {
         const hues = [baseHue, (baseHue + 120) % 360, (baseHue + 240) % 360];
         palette = [];
-        for (const h of hues) {
-            palette.push(hslToRgb(h, 0.78, 0.28));
-            palette.push(hslToRgb(h, 0.65, 0.66));
+        for (let i = 0; i < count; i++) {
+            const h = hues[i % 3];
+            const low = (i % 6) < 3;
+            palette.push(hslToRgb(h, low ? 0.78 : 0.65, low ? 0.28 : 0.66));
         }
     } else if (sys === 'analogous') {
-        const span = 70 + Math.random() * 50;
-        palette = Array.from({ length: 6 }, (_, i) =>
-            hslToRgb((baseHue + i * (span / 6)) % 360, 0.7, 0.30 + i * 0.07)
+        const span = 60 + Math.random() * 70;
+        palette = Array.from({ length: count }, (_, i) =>
+            hslToRgb((baseHue + (i / Math.max(1, count - 1)) * span) % 360,
+                     0.68, 0.28 + (i / Math.max(1, count - 1)) * 0.42)
         );
     } else if (sys === 'greyscale') {
-        palette = Array.from({ length: 6 }, (_, i) => {
-            const v = Math.round((i / 5) * 235 + 10);
+        palette = Array.from({ length: count }, (_, i) => {
+            const v = Math.round((i / (count - 1)) * 235 + 10);
             return [v, v, v];
         });
     } else {
-        palette = Array.from({ length: 6 }, () =>
-            hslToRgb(Math.random() * 360, 0.55 + Math.random() * 0.35, 0.25 + Math.random() * 0.4)
+        palette = Array.from({ length: count }, () =>
+            hslToRgb(Math.random() * 360, 0.5 + Math.random() * 0.4, 0.22 + Math.random() * 0.46)
         );
     }
-
     return { system: sys, palette };
 }
 
-let packed = [];
-let layout = 'grid';
-let seed   = 0;
+// ─── LAYOUTS — initial colour arrangement (6 patterns) ─────────────────────
+const LAYOUTS = ['grid', 'rows', 'cols', 'checker', 'scatter', 'nested'];
 
-function reseed() {
-    const { system, palette } = generatePalette();
-    packed = palette.map(packColor);
-    layout = Math.random() < 0.55 ? 'grid' : 'rows';
-    seed   = (Math.random() * 2147483647) | 0;
-    initState();
-    document.getElementById('m-sys').textContent  = system;
-    document.getElementById('m-lay').textContent  = layout;
-    document.getElementById('m-seed').textContent = '0x' + seed.toString(16).padStart(8, '0');
-}
-
-function initState() {
-    // Cheap deterministic hash from seed
+function initState(layout, packed, seed) {
+    const len = packed.length;
     if (layout === 'grid') {
-        const blockSize = 3 + Math.floor((seed % 9) + 1);   // 4..12
+        const bs = 3 + ((seed % 9) + 1);    // 4..12
         for (let y = 0; y < H; y++) {
-            const by = (y / blockSize) | 0;
+            const by = (y / bs) | 0;
             for (let x = 0; x < W; x++) {
-                const bx = (x / blockSize) | 0;
+                const bx = (x / bs) | 0;
                 const h = ((bx * 2654435761) ^ (by * 2246822519) ^ seed) >>> 0;
-                data32[y * W + x] = packed[h % packed.length];
+                data32[y * W + x] = packed[h % len];
             }
         }
-    } else {
-        const rowH = 3 + Math.floor((seed % 11) + 1);       // 4..14
+    } else if (layout === 'rows') {
+        const rh = 3 + ((seed % 11) + 1);    // 4..14
         for (let y = 0; y < H; y++) {
-            const ry = (y / rowH) | 0;
+            const ry = (y / rh) | 0;
             const h = ((ry * 2654435761) ^ seed) >>> 0;
-            const c = packed[h % packed.length];
+            const c = packed[h % len];
             for (let x = 0; x < W; x++) data32[y * W + x] = c;
+        }
+    } else if (layout === 'cols') {
+        const cw = 3 + ((seed % 11) + 1);
+        for (let x = 0; x < W; x++) {
+            const cx = (x / cw) | 0;
+            const h = ((cx * 2654435761) ^ seed) >>> 0;
+            const c = packed[h % len];
+            for (let y = 0; y < H; y++) data32[y * W + x] = c;
+        }
+    } else if (layout === 'checker') {
+        const bs = 4 + ((seed % 8) + 1);    // 5..12
+        // Period over many colours, not just 2 — gives diagonal bands
+        for (let y = 0; y < H; y++) {
+            const by = (y / bs) | 0;
+            for (let x = 0; x < W; x++) {
+                const bx = (x / bs) | 0;
+                data32[y * W + x] = packed[(bx + by) % len];
+            }
+        }
+    } else if (layout === 'scatter') {
+        // Smaller blocks, more colour churn
+        const bs = 2 + ((seed % 4) + 1);    // 3..6
+        for (let y = 0; y < H; y++) {
+            const by = (y / bs) | 0;
+            for (let x = 0; x < W; x++) {
+                const bx = (x / bs) | 0;
+                const h = ((bx * 374761393) ^ (by * 668265263) ^ seed) >>> 0;
+                data32[y * W + x] = packed[h % len];
+            }
+        }
+    } else {  // nested — concentric rectangles (Chebyshev distance)
+        const cx = W * 0.5, cy = H * 0.5;
+        const ring = 4 + ((seed % 10) + 1);    // 5..14
+        for (let y = 0; y < H; y++) {
+            const dy = Math.abs(y - cy);
+            for (let x = 0; x < W; x++) {
+                const dx = Math.abs(x - cx);
+                const d = dx > dy ? dx : dy;
+                const ri = (d / ring) | 0;
+                const h = ((ri * 2654435761) ^ seed) >>> 0;
+                data32[y * W + x] = packed[h % len];
+            }
         }
     }
 }
 
+// ─── FLOW STYLES ───────────────────────────────────────────────────────────
+// Each style returns a velocity (vx, vy) per (nx, ny, t, phase).
+// Each style also carries its own movement threshold — higher means more
+// pixels stay still (sparser motion), lower means denser.
+const FLOWS = {
+    laminar: {
+        threshold: 0.48,
+        speed: 0.00016,
+        velocity(nx, ny, t, ph) {
+            return {
+                vx: Math.sin(nx * 1.2 + t * 0.7 + ph) +
+                    Math.cos(ny * 0.9 - t * 0.6) * 0.5,
+                vy: Math.cos(ny * 1.2 + t * 0.8 + ph * 0.6) +
+                    Math.sin(nx * 0.9 + t * 0.5) * 0.5,
+            };
+        },
+    },
+    swirl: {
+        threshold: 0.40,
+        speed: 0.00018,
+        velocity(nx, ny, t, ph) {
+            const r = Math.sqrt(nx * nx + ny * ny);
+            const a = Math.atan2(ny, nx) + t * 0.45 + ph;
+            const m = 1 + Math.sin(r * 2.6 - t * 0.9) * 0.6;
+            return { vx: -Math.sin(a) * m, vy: Math.cos(a) * m };
+        },
+    },
+    shear: {
+        threshold: 0.35,
+        speed: 0.00020,
+        velocity(nx, ny, t, ph) {
+            // Horizontal bands moving opposite directions, with vertical drift
+            return {
+                vx: Math.sin(ny * 3.2 + t * 1.0 + ph) * 1.5,
+                vy: Math.cos(nx * 0.6 + t * 0.35) * 0.55 +
+                    Math.sin(ny * 1.1 + t * 0.4) * 0.30,
+            };
+        },
+    },
+    turbulent: {
+        threshold: 0.32,
+        speed: 0.00022,
+        velocity(nx, ny, t, ph) {
+            return {
+                vx: Math.sin(nx * 1.4 + t * 0.9 + ph) +
+                    Math.cos(ny * 2.2 - t * 1.3) * 0.7 +
+                    Math.sin(nx * 3.5 + ny * 0.8 + t * 2.0) * 0.55,
+                vy: Math.cos(ny * 1.4 + t * 1.0 + ph * 0.7) +
+                    Math.sin(nx * 2.2 + t * 0.85) * 0.7 +
+                    Math.cos(ny * 3.5 + nx * 0.6 + t * 1.8) * 0.55,
+            };
+        },
+    },
+    axial: {
+        threshold: 0.55,
+        speed: 0.00014,
+        velocity(nx, ny, t, ph) {
+            // Strong diagonals — bias toward x≈±y motion
+            return {
+                vx: Math.sin(nx * 0.8 + ny * 0.6 + t * 0.6 + ph) * 1.8 +
+                    Math.sin(nx * 2.5 + t * 0.4) * 0.3,
+                vy: Math.cos(ny * 0.8 - nx * 0.6 + t * 0.7) * 1.8 +
+                    Math.cos(ny * 2.5 + t * 0.45) * 0.3,
+            };
+        },
+    },
+};
+const FLOW_NAMES = Object.keys(FLOWS);
+
+// ─── PIECE STATE ───────────────────────────────────────────────────────────
+let packed   = [];
+let layout   = 'grid';
+let flowName = 'laminar';
+let flowDef  = FLOWS.laminar;
+let attractors = [];
+let seed     = 0;
+let phase    = 0;
+
+function reseed() {
+    const { system, palette } = generatePalette();
+    packed   = palette.map(pack);
+    layout   = LAYOUTS[(Math.random() * LAYOUTS.length) | 0];
+    flowName = FLOW_NAMES[(Math.random() * FLOW_NAMES.length) | 0];
+    flowDef  = FLOWS[flowName];
+    seed     = (Math.random() * 2147483647) | 0;
+    phase    = ((seed & 0xFFFF) / 0xFFFF) * Math.PI * 2;
+
+    // 0–3 attractors (radial push or pull), positioned in normalized [-1.5, 1.5]
+    const attCount = (Math.random() * 4) | 0;
+    attractors = [];
+    for (let i = 0; i < attCount; i++) {
+        attractors.push({
+            x: (Math.random() * 2 - 1) * 1.2,
+            y: (Math.random() * 2 - 1) * 1.2,
+            strength: (Math.random() * 1.4 + 0.6) * (Math.random() < 0.5 ? 1 : -1),
+            range: 0.6 + Math.random() * 1.4,
+        });
+    }
+
+    initState(layout, packed, seed);
+
+    document.getElementById('m-sys').textContent  = system;
+    document.getElementById('m-lay').textContent  = layout;
+    document.getElementById('m-flow').textContent = flowName;
+    document.getElementById('m-seed').textContent = '0x' + (seed >>> 0).toString(16).padStart(8, '0');
+}
 reseed();
 
-// ─── FLOW FIELD (coarse, smooth, evolves slowly) ───────────────────────────
-const FW = 64;
-const FH = Math.max(24, Math.floor(FW * H / W));
+// ─── FLOW FIELD ────────────────────────────────────────────────────────────
+const FW = 72;
+const FH = Math.max(28, Math.floor(FW * H / W));
 const flowDX = new Int8Array(FW * FH);
 const flowDY = new Int8Array(FW * FH);
 
 function updateFlow(time) {
-    const t = time * 0.00018;
-    // Slowly-shifting phase offsets — different seed each reseed for variety
-    const ph = (seed & 0xFFFF) / 0xFFFF * Math.PI * 2;
+    const t = time * flowDef.speed;
+    const thresh = flowDef.threshold;
+    const half = thresh * 0.45;  // separate threshold per axis so diagonals work
+    const vel = flowDef.velocity;
     for (let fy = 0; fy < FH; fy++) {
-        const ny = fy / FH * 3.5 - 1.75;
+        const ny = fy / FH * 3.0 - 1.5;
         for (let fx = 0; fx < FW; fx++) {
-            const nx = fx / FW * 3.5 - 1.75;
-            // Multi-octave: gives areas of swirl, stillness, and laminar flow
-            const vx =
-                Math.sin(nx * 1.4 + t * 0.9 + ph) +
-                Math.cos(ny * 0.7 - t * 1.1) * 0.6 +
-                Math.sin(nx * 2.4 + ny * 0.5 + t * 1.7) * 0.3;
-            const vy =
-                Math.cos(ny * 1.4 + t * 1.0 + ph * 0.7) +
-                Math.sin(nx * 0.7 + t * 0.85) * 0.6 +
-                Math.cos(ny * 2.4 + nx * 0.5 + t * 1.5) * 0.3;
+            const nx = fx / FW * 3.0 - 1.5;
+            const v = vel(nx, ny, t, phase);
+            let vx = v.vx, vy = v.vy;
+
+            // Attractors — adds radial pull/push at proximity
+            for (let i = 0; i < attractors.length; i++) {
+                const a = attractors[i];
+                const dx = a.x - nx;
+                const dy = a.y - ny;
+                const r = Math.sqrt(dx * dx + dy * dy) + 0.05;
+                if (r < a.range) {
+                    const falloff = (1 - r / a.range);
+                    vx += (dx / r) * a.strength * falloff;
+                    vy += (dy / r) * a.strength * falloff;
+                }
+            }
+
             const ax = vx < 0 ? -vx : vx;
             const ay = vy < 0 ? -vy : vy;
-            const thresh = 0.42;
-            flowDX[fy * FW + fx] = ax > thresh ? (vx > 0 ? 1 : -1) : 0;
-            flowDY[fy * FW + fx] = ay > thresh ? (vy > 0 ? 1 : -1) : 0;
+            flowDX[fy * FW + fx] = ax > half ? (vx > 0 ? 1 : -1) : 0;
+            flowDY[fy * FW + fx] = ay > half ? (vy > 0 ? 1 : -1) : 0;
         }
     }
 }
 
-// ─── ADVECT (each pixel pulls its colour from the neighbour the flow points
-//             back toward — exactly one pixel per frame, with wrap) ─────────
+// ─── ADVECT — each pixel pulls from the neighbour the flow points back to ──
 function step() {
     const fxScale = FW / W;
     const fyScale = FH / H;
@@ -285,7 +434,7 @@ function loop() {
 }
 requestAnimationFrame(loop);
 
-// ─── TAP → reseed (new system, new palette, new initial state) ─────────────
+// ─── TAP → reseed (only way the piece changes) ─────────────────────────────
 window.addEventListener('pointerdown', e => {
     if (e.target.closest('.back')) return;
     reseed();
