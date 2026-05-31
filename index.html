@@ -264,9 +264,13 @@
             if (post.aspect) card.style.setProperty('--aspect', post.aspect);
             card.style.setProperty('--scale', post.scale ?? 0.4);
 
+            // No loading="lazy" — we run our own IntersectionObserver below
+            // with a generous 400px root margin. Combining native lazy-load
+            // with programmatic src assignment occasionally left iframes in
+            // a never-load state (aviary / loops looking blank).
             card.innerHTML = `
                 <div class="preview">
-                    <iframe loading="lazy" tabindex="-1" aria-hidden="true" scrolling="no"></iframe>
+                    <iframe tabindex="-1" aria-hidden="true" scrolling="no"></iframe>
                 </div>
             `;
 

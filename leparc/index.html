@@ -103,6 +103,26 @@ fit();
 const PI = Math.PI;
 const TWO_PI = PI * 2;
 
+// Pointer state — when the cursor is on screen the lines bend into
+// concentric rings around it, fading back into the natural wave at
+// distance. Touch works the same way.
+const pointer = { x: 0, y: 0, active: false };
+let pointerStrength = 0;   // smoothly fades 0..1 in/out
+
+window.addEventListener('pointermove', e => {
+    pointer.x = e.clientX;
+    pointer.y = e.clientY;
+    pointer.active = true;
+}, { passive: true });
+window.addEventListener('pointerleave', () => { pointer.active = false; });
+window.addEventListener('blur', () => { pointer.active = false; });
+window.addEventListener('pointerdown', e => {
+    if (e.target.closest('.back')) return;
+    pointer.x = e.clientX;
+    pointer.y = e.clientY;
+    pointer.active = true;
+}, { passive: true });
+
 function frame(now) {
     const W = canvas.clientWidth;
     const H = canvas.clientHeight;
@@ -128,6 +148,14 @@ function frame(now) {
     const wOct3 = 0.40 + Math.cos(driftSlow * 0.6 + 2.8)  * 0.20;
     const wOct4 = 0.30 + Math.sin(driftSlow * 0.4 + 0.9)  * 0.20;
 
+    // Pointer strength fades in/out smoothly so leaving the canvas doesn't
+    // snap the rings off
+    const targetStrength = pointer.active ? 1 : 0;
+    pointerStrength += (targetStrength - pointerStrength) * 0.06;
+    const pInfluenceRadius = Math.min(W, H) * 0.42;
+    const pX = pointer.x, pY = pointer.y;
+    const pActive = pointerStrength > 0.01;
+
     ctx.lineWidth = Math.max(1.0, Math.min(cellW, cellH) * 0.06);
     ctx.lineCap = 'round';
 
@@ -140,11 +168,28 @@ function frame(now) {
 
             // Multi-octave angle field — each octave reads at a different
             // spatial scale and time, drift terms weight them
-            const angle =
+            let angle =
                 Math.sin(nx * 4.5 + t * 1.00) * wOct1 +
                 Math.cos(ny * 3.5 + t * 0.85) * wOct2 +
                 Math.sin((nx + ny) * 5.5 + t * 1.30) * wOct3 +
                 Math.cos((nx - ny) * 7.0 - t * 0.70) * wOct4;
+
+            // Pointer influence: lines closer to the cursor align tangent to
+            // a circle around it (perpendicular to the radius). The natural
+            // field is blended back in with smoothstepped distance falloff.
+            if (pActive) {
+                const dpx = cx - pX;
+                const dpy = cy - pY;
+                const dist = Math.sqrt(dpx * dpx + dpy * dpy);
+                const dInf = 1 - dist / pInfluenceRadius;
+                if (dInf > 0) {
+                    const influence = dInf * pointerStrength;
+                    const k = influence * influence * (3 - 2 * influence);  // smoothstep
+                    const rad = Math.atan2(dpy, dpx);
+                    const tangent = (rad + PI * 0.5) / PI;   // π units, perpendicular to radius
+                    angle = angle * (1 - k) + tangent * k;
+                }
+            }
 
             // Colour fields — spectrum slowly cycles + position offset
             const hue = (

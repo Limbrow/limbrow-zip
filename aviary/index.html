@@ -426,8 +426,21 @@ function kickAudio() {
 }
 window.addEventListener('load', kickAudio);
 kickAudio(); // try synchronously too
+// Don't use { once: true } — if the first gesture happens while the iframe
+// is still warming up the audio can fail to start; every subsequent click
+// gets a chance to recover.
 ['pointerdown', 'touchstart', 'keydown', 'click'].forEach(ev => {
-    window.addEventListener(ev, kickAudio, { once: true, passive: true });
+    window.addEventListener(ev, kickAudio, { passive: true });
+});
+
+// When the tab / iframe becomes visible again after being hidden, retry
+// audio. Browsers commonly pause inactive iframes and won't auto-resume.
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+        kickAudio();
+        // Reset the loop clock so the dt jump while hidden doesn't compound.
+        lastTime = performance.now();
+    }
 });
 
 // ─── LOOP ──────────────────────────────────────────────────────────────────

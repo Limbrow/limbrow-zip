@@ -322,6 +322,12 @@ function loop(now) {
 }
 requestAnimationFrame(loop);
 
+// When the iframe/tab becomes visible again, reset the clock so the long
+// dt jump while hidden doesn't compound into the evolution.
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) lastTime = performance.now();
+});
+
 let _lastTouchEnd = 0;
 document.addEventListener('touchend', e => {
     const now = Date.now();
