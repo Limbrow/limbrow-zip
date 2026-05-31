@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>i can't get out · preview</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+        background: #050507; width: 100%; height: 100vh; height: 100dvh;
+        overflow: hidden; font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    #viz { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: block; }
+    .label {
+        position: fixed; left: 0; right: 0;
+        bottom: clamp(10px, 5vh, 26px);
+        text-align: center; z-index: 2;
+        font-size: clamp(10px, 3.6vw, 15px);
+        font-weight: 500; letter-spacing: 0.06em;
+        color: rgba(255,255,255,0.92);
+        pointer-events: none;
+    }
+    .label small {
+        display: block; margin-top: 5px;
+        font-size: 0.6em; letter-spacing: 0.3em; text-transform: uppercase;
+        color: rgba(255,255,255,0.4);
+    }
+</style>
+</head>
+<body>
+
+<canvas id="viz"></canvas>
+<div class="label">I can't get out<small>limbrow</small></div>
+
+<script>
+// Silent teaser — a confined waveform pulsing against its ring, the same
+// "can't get out" image as the live player but synthetic (no audio in cards).
+const canvas = document.getElementById('viz');
+const ctx = canvas.getContext('2d');
+let DPR=1, VW=0, VH=0;
+function fit(){ DPR=Math.min(window.devicePixelRatio||1,2); VW=window.innerWidth; VH=window.innerHeight;
+    canvas.width=Math.floor(VW*DPR); canvas.height=Math.floor(VH*DPR); ctx.setTransform(DPR,0,0,DPR,0,0); }
+window.addEventListener('resize', fit); fit();
+
+let phase=0;
+function frame(now){
+    ctx.fillStyle='#050507'; ctx.fillRect(0,0,VW,VH);
+    const cx=VW/2, cy=VH*0.46;
+    const baseR=Math.min(VW,VH)*0.24, wallR=baseR*1.42;
+    // synthetic "energy" envelope
+    const t=now*0.001;
+    const energy=0.35+0.35*Math.sin(t*1.7)+0.15*Math.sin(t*4.3);
+    const bass=0.4+0.4*Math.sin(t*1.1);
+    phase += 0.006 + bass*0.02;
+
+    ctx.lineWidth=1.5; ctx.strokeStyle=`rgba(255,255,255,${0.06+energy*0.12})`;
+    ctx.beginPath(); ctx.arc(cx,cy,wallR,0,Math.PI*2); ctx.stroke();
+
+    const N=150, hue=18+bass*24; let maxReach=0;
+    ctx.beginPath();
+    for(let i=0;i<=N;i++){
+        const a=(i/N)*Math.PI*2;
+        const dev=Math.sin(a*5+phase*3)*0.18*energy + Math.sin(a*9-phase*2)*0.10*energy;
+        let r=baseR*(1+dev*0.6+energy*0.3)+Math.sin(a*3+phase)*baseR*0.05;
+        r=Math.min(r,wallR-2); maxReach=Math.max(maxReach,r/wallR);
+        const x=cx+Math.cos(a+phase*0.3)*r, y=cy+Math.sin(a+phase*0.3)*r;
+        if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.closePath();
+    const grad=ctx.createRadialGradient(cx,cy,baseR*0.2,cx,cy,wallR);
+    grad.addColorStop(0,`hsla(${hue},90%,62%,${0.10+energy*0.20})`);
+    grad.addColorStop(1,`hsla(${hue+12},95%,55%,${0.04+energy*0.10})`);
+    ctx.fillStyle=grad; ctx.fill();
+    ctx.lineWidth=1.6+energy*2.4; ctx.strokeStyle=`hsla(${hue},95%,${60+energy*20}%,${0.7+energy*0.3})`;
+    ctx.shadowBlur=14+energy*26; ctx.shadowColor=`hsla(${hue},95%,60%,0.8)`;
+    ctx.stroke(); ctx.shadowBlur=0;
+    if(maxReach>0.93){ ctx.strokeStyle=`hsla(${hue},100%,75%,${(maxReach-0.93)*6})`; ctx.lineWidth=2.5;
+        ctx.beginPath(); ctx.arc(cx,cy,wallR,0,Math.PI*2); ctx.stroke(); }
+    requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+
+</body>
+</html>

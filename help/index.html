@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0">
+<title>i can't get out · limbrow.zip</title>
+<meta name="description" content="I can't get out — a track by limbrow.">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+        background: #050507;
+        color: #e8e8e8;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+        font-family: 'JetBrains Mono', ui-monospace, monospace;
+        -webkit-user-select: none; user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: none;
+    }
+
+    .back {
+        position: fixed;
+        top: 16px; left: 16px;
+        z-index: 100;
+        width: 36px; height: 36px;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0, 0, 0, 0.4);
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 50%;
+        color: rgba(255,255,255,0.85);
+        text-decoration: none;
+        font-size: 16px; line-height: 1; padding-bottom: 2px;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+    }
+
+    #viz {
+        position: fixed; top: 0; left: 0;
+        width: 100%; height: 100%;
+        display: block; z-index: 1;
+    }
+
+    .stage {
+        position: fixed; inset: 0; z-index: 2;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: clamp(20px, 5vh, 44px);
+        padding: 40px 24px;
+        pointer-events: none;
+    }
+
+    .title-block { text-align: center; }
+    .track-title {
+        font-size: clamp(20px, 6vw, 38px);
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        line-height: 1.15;
+    }
+    .track-by {
+        margin-top: 8px;
+        font-size: 11px;
+        letter-spacing: 0.3em;
+        text-transform: uppercase;
+        color: rgba(255,255,255,0.45);
+    }
+
+    /* tap-to-play hint over the centre */
+    .play-orb {
+        pointer-events: auto;
+        width: clamp(64px, 18vw, 92px);
+        height: clamp(64px, 18vw, 92px);
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.18);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        cursor: pointer;
+        transition: transform 0.18s ease, background 0.2s, opacity 0.4s ease;
+    }
+    .play-orb:active { transform: scale(0.94); }
+    .play-orb svg { width: 40%; height: 40%; fill: #fff; }
+    .play-orb.playing { opacity: 0; pointer-events: none; }
+
+    /* controls */
+    .controls {
+        pointer-events: auto;
+        width: min(440px, calc(100vw - 48px));
+        display: flex; flex-direction: column; gap: 14px;
+    }
+    .progress {
+        height: 3px; width: 100%;
+        background: rgba(255,255,255,0.12);
+        border-radius: 2px; cursor: pointer;
+        position: relative; overflow: hidden;
+    }
+    .progress .fill {
+        position: absolute; left: 0; top: 0; bottom: 0;
+        width: 0%;
+        background: linear-gradient(90deg, #ff8a5c, #ff5c7a);
+    }
+    .meta-row {
+        display: flex; justify-content: space-between; align-items: center;
+        font-size: 10px; letter-spacing: 0.1em; color: rgba(255,255,255,0.55);
+    }
+    .time { font-variant-numeric: tabular-nums; }
+    .dl {
+        color: rgba(255,255,255,0.65);
+        text-decoration: none;
+        border: 1px solid rgba(255,255,255,0.16);
+        border-radius: 999px;
+        padding: 7px 14px;
+        font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase;
+        transition: all 0.18s;
+    }
+    .dl:hover { color: #fff; border-color: rgba(255,255,255,0.4); background: rgba(255,255,255,0.05); }
+</style>
+</head>
+<body>
+
+<a class="back" href="/" aria-label="Back to grid">←</a>
+
+<canvas id="viz"></canvas>
+
+<div class="stage">
+    <div class="title-block">
+        <div class="track-title">I can't get out</div>
+        <div class="track-by">limbrow</div>
+    </div>
+
+    <button class="play-orb" id="play-orb" aria-label="Play">
+        <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+    </button>
+
+    <div class="controls">
+        <div class="progress" id="progress"><div class="fill" id="fill"></div></div>
+        <div class="meta-row">
+            <span class="time"><span id="cur">0:00</span> / <span id="dur">0:00</span></span>
+            <a class="dl" href="i-cant-get-out.mp3" download="i cant get out — limbrow.mp3">↓ download</a>
+        </div>
+    </div>
+</div>
+
+<audio id="audio" src="i-cant-get-out.mp3" preload="metadata" playsinline></audio>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+// HELP — "I can't get out", a track by limbrow.
+//
+// A single-track player. The visualiser is a closed waveform confined inside a
+// ring: the live audio pushes the inner shape outward and it flares where it
+// reaches the wall but never breaks through — a quiet literalisation of the
+// title. Web Audio AnalyserNode drives both the time-domain deformation and a
+// bass-reactive hue. Tap the orb (or anywhere) to play; scrub the bar; download
+// the file.
+// ════════════════════════════════════════════════════════════════════════════
+
+const canvas = document.getElementById('viz');
+const ctx = canvas.getContext('2d');
+const audio = document.getElementById('audio');
+const orb = document.getElementById('play-orb');
+const fill = document.getElementById('fill');
+const curEl = document.getElementById('cur');
+const durEl = document.getElementById('dur');
+const progress = document.getElementById('progress');
+
+let DPR = 1, VW = 0, VH = 0;
+function fit() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    VW = window.innerWidth; VH = window.innerHeight;
+    canvas.width = Math.floor(VW * DPR);
+    canvas.height = Math.floor(VH * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', fit);
+fit();
+
+// ─── AUDIO GRAPH ───────────────────────────────────────────────────────────
+let actx = null, analyser = null, timeData = null, freqData = null;
+function initAudioGraph() {
+    if (actx) return;
+    actx = new (window.AudioContext || window.webkitAudioContext)();
+    const src = actx.createMediaElementSource(audio);
+    analyser = actx.createAnalyser();
+    analyser.fftSize = 1024;
+    analyser.smoothingTimeConstant = 0.82;
+    timeData = new Uint8Array(analyser.fftSize);
+    freqData = new Uint8Array(analyser.frequencyBinCount);
+    src.connect(analyser);
+    analyser.connect(actx.destination);
+}
+
+function togglePlay() {
+    initAudioGraph();
+    if (actx.state === 'suspended') actx.resume();
+    if (audio.paused) audio.play().catch(()=>{});
+    else audio.pause();
+}
+
+orb.addEventListener('click', e => { e.stopPropagation(); togglePlay(); });
+// Tap anywhere on the visualiser also toggles
+canvas.addEventListener('pointerdown', () => togglePlay());
+
+audio.addEventListener('play',  () => orb.classList.add('playing'));
+audio.addEventListener('pause', () => orb.classList.remove('playing'));
+audio.addEventListener('ended', () => orb.classList.remove('playing'));
+
+// ─── PROGRESS ──────────────────────────────────────────────────────────────
+function fmt(t) {
+    if (!isFinite(t)) return '0:00';
+    const m = Math.floor(t / 60), s = Math.floor(t % 60);
+    return m + ':' + String(s).padStart(2, '0');
+}
+audio.addEventListener('loadedmetadata', () => { durEl.textContent = fmt(audio.duration); });
+audio.addEventListener('timeupdate', () => {
+    curEl.textContent = fmt(audio.currentTime);
+    fill.style.width = (audio.currentTime / (audio.duration || 1) * 100) + '%';
+});
+progress.addEventListener('pointerdown', e => {
+    const r = progress.getBoundingClientRect();
+    const p = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+    if (isFinite(audio.duration)) audio.currentTime = p * audio.duration;
+    e.stopPropagation();
+});
+
+// ─── VISUALISER ────────────────────────────────────────────────────────────
+let phase = 0;
+function frame(now) {
+    ctx.fillStyle = '#050507';
+    ctx.fillRect(0, 0, VW, VH);
+
+    const cx = VW / 2, cy = VH / 2;
+    const baseR = Math.min(VW, VH) * 0.26;
+    const wallR = baseR * 1.42;
+
+    let energy = 0, bass = 0;
+    if (analyser && !audio.paused) {
+        analyser.getByteTimeDomainData(timeData);
+        analyser.getByteFrequencyData(freqData);
+        let sum = 0;
+        for (let i = 0; i < 64; i++) sum += freqData[i];
+        bass = sum / 64 / 255;
+        let e = 0;
+        for (let i = 0; i < freqData.length; i += 8) e += freqData[i];
+        energy = e / (freqData.length / 8) / 255;
+    }
+
+    phase += 0.004 + bass * 0.02;
+
+    // The confining ring (the "wall")
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = `rgba(255,255,255,${0.06 + energy * 0.12})`;
+    ctx.beginPath();
+    ctx.arc(cx, cy, wallR, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Closed deformed waveform inside the ring
+    const N = 160;
+    const hue = 18 + bass * 24;               // amber → red-orange with bass
+    let maxReach = 0;
+    ctx.beginPath();
+    for (let i = 0; i <= N; i++) {
+        const a = (i / N) * Math.PI * 2;
+        let dev = 0;
+        if (analyser && !audio.paused) {
+            const idx = (Math.floor((i / N) * timeData.length)) % timeData.length;
+            dev = (timeData[idx] - 128) / 128;   // -1..1
+        } else {
+            dev = Math.sin(a * 5 + phase * 3) * 0.06;  // idle breath
+        }
+        // Pressure toward the wall; clamp so it never breaks out
+        let r = baseR * (1 + dev * 0.55 + energy * 0.35) + Math.sin(a * 3 + phase) * baseR * 0.05;
+        r = Math.min(r, wallR - 2);
+        maxReach = Math.max(maxReach, r / wallR);
+        const x = cx + Math.cos(a + phase * 0.3) * r;
+        const y = cy + Math.sin(a + phase * 0.3) * r;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+
+    const grad = ctx.createRadialGradient(cx, cy, baseR * 0.2, cx, cy, wallR);
+    grad.addColorStop(0, `hsla(${hue}, 90%, 62%, ${0.10 + energy * 0.20})`);
+    grad.addColorStop(1, `hsla(${hue + 12}, 95%, 55%, ${0.04 + energy * 0.10})`);
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    ctx.lineWidth = 1.6 + energy * 2.4;
+    ctx.strokeStyle = `hsla(${hue}, 95%, ${60 + energy * 20}%, ${0.7 + energy * 0.3})`;
+    ctx.shadowBlur = 14 + energy * 26;
+    ctx.shadowColor = `hsla(${hue}, 95%, 60%, 0.8)`;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Contact flare where the wave nears the wall
+    if (maxReach > 0.93) {
+        ctx.strokeStyle = `hsla(${hue}, 100%, 75%, ${(maxReach - 0.93) * 6})`;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(cx, cy, wallR, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+
+    requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+let _lastTouchEnd = 0;
+document.addEventListener('touchend', e => {
+    const now = Date.now();
+    if (now - _lastTouchEnd < 350) e.preventDefault();
+    _lastTouchEnd = now;
+}, { passive: false });
+</script>
+
+</body>
+</html>

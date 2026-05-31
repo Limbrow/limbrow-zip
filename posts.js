@@ -24,6 +24,13 @@
 export const posts = [
 
     {
+        slug: 'help',
+        date: '2026-05-31',
+        preview: 'preview.html',  // single track — "I can't get out", confined-waveform player
+        scale: 1.0
+    },
+
+    {
         slug: 'singularity',
         date: '2026-05-17',
         preview: 'preview.html',  // schwarzschild black hole, real per-pixel geodesic lensing
