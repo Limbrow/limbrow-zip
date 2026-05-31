@@ -53,10 +53,10 @@ function fitDisplay() {
 window.addEventListener('resize', fitDisplay);
 fitDisplay();
 
+// Same 6-color palette as the live post
 const PALETTE = [
-    [240,  60,  50], [255, 200,  40], [ 40, 100, 230], [240, 240, 220],
-    [ 22,  22,  28], [ 50, 190, 100], [255, 110, 200], [255, 140,  50],
-    [ 80, 220, 220], [180,  80, 240],
+    [255,  45, 112], [ 45, 238, 240], [248, 223,  58],
+    [123,  58, 255], [ 24,  28,  47], [240, 234, 219],
 ];
 
 function getPhase(d, x, y, w, h) {
@@ -121,8 +121,73 @@ function spawnWipe() {
     wipes.push({
         colorIdx, direction, region,
         progress: 0,
-        speed: 0.010 + Math.random() * 0.025,
+        speed: 0.0035 + Math.random() * 0.010,
     });
+}
+
+// ─── Subtle glitch layer (mirrors index.html) ──────────────────────────────
+function pixelSwap(count) {
+    for (let i = 0; i < count; i++) {
+        const x = (Math.random() * W) | 0;
+        const y = (Math.random() * H) | 0;
+        const dx = ((Math.random() * 5) | 0) - 2;
+        const dy = ((Math.random() * 5) | 0) - 2;
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
+        const i1 = (y * W + x) * 4;
+        const i2 = (ny * W + nx) * 4;
+        const r = data[i1], g = data[i1+1], b = data[i1+2];
+        data[i1] = data[i2]; data[i1+1] = data[i2+1]; data[i1+2] = data[i2+2];
+        data[i2] = r; data[i2+1] = g; data[i2+2] = b;
+    }
+}
+const _rowBuf = new Uint8ClampedArray(W * 3);
+function rowShift() {
+    const stripH = 1 + ((Math.random() * 2) | 0);
+    const y0 = (Math.random() * (H - stripH)) | 0;
+    const shift = 3 + ((Math.random() * 9) | 0);
+    const sign = Math.random() < 0.5 ? 1 : -1;
+    for (let y = y0; y < y0 + stripH; y++) {
+        for (let x = 0; x < W; x++) {
+            const i = (y * W + x) * 4;
+            _rowBuf[x*3] = data[i]; _rowBuf[x*3+1] = data[i+1]; _rowBuf[x*3+2] = data[i+2];
+        }
+        for (let x = 0; x < W; x++) {
+            const srcX = ((x - sign * shift) % W + W) % W;
+            const i = (y * W + x) * 4;
+            data[i] = _rowBuf[srcX*3];
+            data[i+1] = _rowBuf[srcX*3+1];
+            data[i+2] = _rowBuf[srcX*3+2];
+        }
+    }
+}
+function colDrift() {
+    const colW = 1 + ((Math.random() * 2) | 0);
+    const x0 = (Math.random() * (W - colW)) | 0;
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    for (let x = x0; x < x0 + colW; x++) {
+        if (dir > 0) {
+            const lastI = ((H - 1) * W + x) * 4;
+            const r = data[lastI], g = data[lastI+1], b = data[lastI+2];
+            for (let y = H - 1; y > 0; y--) {
+                const dst = (y * W + x) * 4;
+                const src = ((y - 1) * W + x) * 4;
+                data[dst] = data[src]; data[dst+1] = data[src+1]; data[dst+2] = data[src+2];
+            }
+            const firstI = x * 4;
+            data[firstI] = r; data[firstI+1] = g; data[firstI+2] = b;
+        } else {
+            const firstI = x * 4;
+            const r = data[firstI], g = data[firstI+1], b = data[firstI+2];
+            for (let y = 0; y < H - 1; y++) {
+                const dst = (y * W + x) * 4;
+                const src = ((y + 1) * W + x) * 4;
+                data[dst] = data[src]; data[dst+1] = data[src+1]; data[dst+2] = data[src+2];
+            }
+            const lastI = ((H - 1) * W + x) * 4;
+            data[lastI] = r; data[lastI+1] = g; data[lastI+2] = b;
+        }
+    }
 }
 
 function sweep(w, oldP, newP) {
@@ -148,8 +213,12 @@ function frame() {
         w.progress = newP;
         if (newP >= 1) wipes.splice(i, 1);
     }
-    while (wipes.length < 2) spawnWipe();
-    if (wipes.length < 3 && Math.random() < 0.030) spawnWipe();
+    while (wipes.length < 1) spawnWipe();
+    if (wipes.length < 2 && Math.random() < 0.014) spawnWipe();
+
+    pixelSwap(5);
+    if (Math.random() < 0.014) rowShift();
+    if (Math.random() < 0.030) colDrift();
 
     bctx.putImageData(imgData, 0, 0);
     dctx.drawImage(buffer, 0, 0, display.width, display.height);

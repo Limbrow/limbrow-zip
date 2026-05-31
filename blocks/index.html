@@ -88,18 +88,14 @@ function fitDisplay() {
 window.addEventListener('resize', fitDisplay);
 fitDisplay();
 
-// ─── PALETTE (saturated flats — Mondrian + neon + Bauhaus mix) ─────────────
+// ─── PALETTE (6 refined flats — vivid digital, Asendorf-leaning) ───────────
 const PALETTE = [
-    [240,  60,  50],   // red
-    [255, 200,  40],   // yellow
-    [ 40, 100, 230],   // cobalt
-    [240, 240, 220],   // cream
-    [ 22,  22,  28],   // near-black
-    [ 50, 190, 100],   // green
-    [255, 110, 200],   // pink
-    [255, 140,  50],   // orange
-    [ 80, 220, 220],   // cyan
-    [180,  80, 240],   // violet
+    [255,  45, 112],   // hot magenta
+    [ 45, 238, 240],   // electric cyan
+    [248, 223,  58],   // saturated yellow
+    [123,  58, 255],   // violet
+    [ 24,  28,  47],   // deep navy
+    [240, 234, 219],   // warm off-white
 ];
 
 // ─── 8 DIRECTIONS for pixel-wipe phase ─────────────────────────────────────
@@ -185,7 +181,8 @@ function spawnWipe(opts = {}) {
         direction,
         region,
         progress: 0,
-        speed: opts.speed != null ? opts.speed : 0.006 + Math.random() * 0.020,
+        // Slower than before — wipes feel composed, not frantic
+        speed: opts.speed != null ? opts.speed : 0.0022 + Math.random() * 0.008,
     });
 }
 
@@ -210,6 +207,95 @@ function sweepWipe(wipe, oldP, newP) {
     }
 }
 
+// ─── SUBTLE GLITCH LAYER ───────────────────────────────────────────────────
+// Three small effects that run continuously on top of the wipe layer:
+//   pixelSwap   — N pairs of nearby pixels swap each frame (constant
+//                 micro-mixing; sharp boundaries shimmer)
+//   rowShift    — rare: a 1–2px row is translated horizontally with wrap
+//                 (the data-mosh tear)
+//   colDrift    — occasional: a 1–2px column slides up or down by 1px,
+//                 wrapping around (the gentle transverse flow)
+function pixelSwap(count) {
+    for (let i = 0; i < count; i++) {
+        const x = (Math.random() * W) | 0;
+        const y = (Math.random() * H) | 0;
+        const dx = ((Math.random() * 5) | 0) - 2;   // -2..+2
+        const dy = ((Math.random() * 5) | 0) - 2;
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
+        const i1 = (y  * W + x ) * 4;
+        const i2 = (ny * W + nx) * 4;
+        const r = data[i1], g = data[i1 + 1], b = data[i1 + 2];
+        data[i1]     = data[i2];
+        data[i1 + 1] = data[i2 + 1];
+        data[i1 + 2] = data[i2 + 2];
+        data[i2]     = r;
+        data[i2 + 1] = g;
+        data[i2 + 2] = b;
+    }
+}
+
+const _rowBuf = new Uint8ClampedArray(W * 3);
+function rowShift() {
+    const stripH = 1 + ((Math.random() * 2) | 0);
+    const y0 = (Math.random() * (H - stripH)) | 0;
+    const shift = 3 + ((Math.random() * 10) | 0);
+    const sign = Math.random() < 0.5 ? 1 : -1;
+    for (let y = y0; y < y0 + stripH; y++) {
+        for (let x = 0; x < W; x++) {
+            const i = (y * W + x) * 4;
+            _rowBuf[x * 3]     = data[i];
+            _rowBuf[x * 3 + 1] = data[i + 1];
+            _rowBuf[x * 3 + 2] = data[i + 2];
+        }
+        for (let x = 0; x < W; x++) {
+            const srcX = ((x - sign * shift) % W + W) % W;
+            const i = (y * W + x) * 4;
+            data[i]     = _rowBuf[srcX * 3];
+            data[i + 1] = _rowBuf[srcX * 3 + 1];
+            data[i + 2] = _rowBuf[srcX * 3 + 2];
+        }
+    }
+}
+
+function colDrift() {
+    const colW = 1 + ((Math.random() * 2) | 0);
+    const x0 = (Math.random() * (W - colW)) | 0;
+    const dir = Math.random() < 0.5 ? 1 : -1;  // 1 = down, -1 = up
+    for (let x = x0; x < x0 + colW; x++) {
+        if (dir > 0) {
+            // shift down by 1, wrap last to first
+            const lastI = ((H - 1) * W + x) * 4;
+            const r = data[lastI], g = data[lastI + 1], b = data[lastI + 2];
+            for (let y = H - 1; y > 0; y--) {
+                const dst = (y * W + x) * 4;
+                const src = ((y - 1) * W + x) * 4;
+                data[dst]     = data[src];
+                data[dst + 1] = data[src + 1];
+                data[dst + 2] = data[src + 2];
+            }
+            const firstI = x * 4;
+            data[firstI]     = r;
+            data[firstI + 1] = g;
+            data[firstI + 2] = b;
+        } else {
+            const firstI = x * 4;
+            const r = data[firstI], g = data[firstI + 1], b = data[firstI + 2];
+            for (let y = 0; y < H - 1; y++) {
+                const dst = (y * W + x) * 4;
+                const src = ((y + 1) * W + x) * 4;
+                data[dst]     = data[src];
+                data[dst + 1] = data[src + 1];
+                data[dst + 2] = data[src + 2];
+            }
+            const lastI = ((H - 1) * W + x) * 4;
+            data[lastI]     = r;
+            data[lastI + 1] = g;
+            data[lastI + 2] = b;
+        }
+    }
+}
+
 // ─── UPDATE & RENDER ───────────────────────────────────────────────────────
 function update() {
     for (let i = activeWipes.length - 1; i >= 0; i--) {
@@ -220,9 +306,14 @@ function update() {
         w.progress = newP;
         if (newP >= 1) activeWipes.splice(i, 1);
     }
-    // Keep 2 wipes in flight, occasionally let a third sneak in
-    while (activeWipes.length < 2) spawnWipe();
-    if (activeWipes.length < 3 && Math.random() < 0.018) spawnWipe();
+    // One wipe almost always in flight, sometimes two — composed, not frantic
+    while (activeWipes.length < 1) spawnWipe();
+    if (activeWipes.length < 2 && Math.random() < 0.010) spawnWipe();
+
+    // Subtle glitch layer — runs every frame
+    pixelSwap(6);                              // constant micro-mixing
+    if (Math.random() < 0.014) rowShift();     // rare data-mosh tear
+    if (Math.random() < 0.030) colDrift();     // gentle transverse flow
 }
 
 function render() {
