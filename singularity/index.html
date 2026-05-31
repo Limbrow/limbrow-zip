@@ -44,7 +44,7 @@
         left: 50%;
         transform: translateX(-50%);
         z-index: 10;
-        font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase;
+        font-size: 9px; letter-spacing: 0.24em; text-transform: uppercase;
         color: rgba(255, 255, 255, 0.45);
         mix-blend-mode: difference; pointer-events: none; white-space: nowrap;
     }
@@ -62,7 +62,7 @@
 
 <canvas id="gl"></canvas>
 
-<div class="credit">tap to feed it · drag to orbit · scroll to fall</div>
+<div class="credit">schwarzschild geodesics · drag to orbit · scroll to fall</div>
 
 <div class="err" id="err">
     WebGL is required to view this artwork.<br>
@@ -71,24 +71,26 @@
 
 <script>
 // ════════════════════════════════════════════════════════════════════════════
-// SINGULARITY — a Schwarzschild black hole with real gravitational lensing,
-// and planets you can throw into it.
+// SINGULARITY — a Schwarzschild black hole with real gravitational lensing.
 //
-// LIGHT: for every pixel a photon is traced backwards from the camera through
-// curved spacetime, integrating the null geodesic with the standard field
-// acceleration  a = −3/2·h²·x/|x|⁵  (rs = 1 units; h = |x × v|). That single
-// line of physics gives the photon sphere (r = 1.5), the Einstein ring, the
-// ~2.6× shadow, and the far side of the accretion disk bent up over the top.
+// For every pixel a photon is traced backwards from the camera through curved
+// spacetime. The null geodesic is integrated with the standard field
+// acceleration  a = −3/2 · h² · x / |x|⁵  (rs = 1 units; h = |x × v| is the
+// photon's conserved specific angular momentum). That single line of physics
+// reproduces the whole structure: the photon sphere at r = 1.5, the Einstein
+// ring, the ~2.6× shadow, and the way the far side of the accretion disk is
+// bent up and over the top of the hole.
 //
-// MATTER: tap the screen to hurl a planet in on a decaying orbit. The planets
-// are integrated under Newtonian gravity in JS, their positions fed to the
-// shader as uniforms; the photon ray tests against them as it marches, so the
-// planets are LENSED by the same curved spacetime — you watch them stretch,
-// duplicate around the ring, glow as they heat, and vanish past the horizon.
+// The disk is an emissive equatorial annulus shaded with a blackbody-ish
+// temperature ramp (hot blue-white inner → orange outer), Keplerian rotation
+// v(r)=√(M/r) with relativistic Doppler beaming — the side turning toward you
+// flares bright and blue, the receding side dims and reddens — and procedural
+// turbulence. The disk is semi-transparent so the lensed back of it arcs over
+// the top, the Gargantua geometry, computed rather than faked.
 //
-// DISK: emissive equatorial annulus with a blackbody temperature ramp,
-// Keplerian rotation + relativistic Doppler beaming, and procedural
-// turbulence. Semi-transparent, so the lensed back of the disk arcs overhead.
+// Behind it, a procedural star field the lensing visibly warps around the
+// shadow. Drag to orbit · scroll / pinch to change orbital radius · it drifts
+// on its own when released.
 // ════════════════════════════════════════════════════════════════════════════
 
 const canvas = document.getElementById('gl');
@@ -103,9 +105,8 @@ if (!gl) {
 
 const isMobile = window.matchMedia('(max-width: 600px)').matches;
 
-const STEPS = isMobile ? 170 : 320;
-const RENDER_SCALE = isMobile ? 0.72 : 0.85;
-const MAX_PLANETS = 6;
+const STEPS = isMobile ? 180 : 320;
+const RENDER_SCALE = isMobile ? 0.75 : 0.85;
 
 const VS = `
 attribute vec2 a_pos;
@@ -120,11 +121,6 @@ uniform float u_time;
 uniform vec3  u_camPos;
 uniform mat3  u_camBasis;
 uniform float u_focal;
-
-uniform int   u_nPlanets;
-uniform vec3  u_pPos[${MAX_PLANETS}];
-uniform vec3  u_pCol[${MAX_PLANETS}];
-uniform float u_pRad[${MAX_PLANETS}];
 
 const float HORIZON = 1.0;
 const float R_IN    = 2.6;
@@ -197,25 +193,16 @@ vec3 diskEmission(vec3 p, vec3 photonDir, out float alpha){
     return base * shift * bright * beam * edge;
 }
 
-// Shade a planet surface hit at hp belonging to planet centre pp, base colour bc
-vec3 shadePlanet(vec3 hp, vec3 pp, vec3 bc, vec3 viewDir){
-    vec3 nrm = normalize(hp - pp);
-    vec3 ldir = normalize(-pp);                          // lit by the glowing core/disk
-    float diff = max(dot(nrm, ldir), 0.0);
-    float r = length(pp);
-    float heat = clamp((4.2 - r) / 3.2, 0.0, 1.0);       // glow hotter as it falls
-    vec3 glow = mix(vec3(0.0), vec3(1.0, 0.45, 0.12), heat) * (1.0 + heat*1.5);
-    float rim = pow(1.0 - max(dot(nrm, -normalize(viewDir)), 0.0), 2.5);
-    return bc * (0.12 + 0.95*diff) + glow + vec3(1.0,0.8,0.6) * rim * 0.35;
-}
-
 vec3 tonemap(vec3 x){
     x *= 0.9;
     return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14), 0.0, 1.0);
 }
 
 void main(){
-    vec2 uv = (gl_FragCoord.xy - 0.5*u_res) / u_res.y;
+    // Normalise by the SMALLER screen dimension so the hole stays centred and
+    // correctly sized on any aspect ratio — crucial for tall phone screens.
+    float m = min(u_res.x, u_res.y);
+    vec2 uv = (gl_FragCoord.xy - 0.5*u_res) / m;
 
     vec3 pos = u_camPos;
     vec3 vel = normalize(u_camBasis * vec3(uv, u_focal));
@@ -225,7 +212,6 @@ void main(){
     vec3 col = vec3(0.0);
     float trans = 1.0;
     vec3 prevPos = pos;
-    bool done = false;
 
     for(int i=0; i<MAX_STEPS; i++){
         float r = length(pos);
@@ -237,22 +223,6 @@ void main(){
         vel += acc*dt;
         pos = newPos;
 
-        // Planet hits — opaque, lensed because the ray is already curved
-        for(int k=0; k<${MAX_PLANETS}; k++){
-            if(k >= u_nPlanets) break;
-            vec3 pp = u_pPos[k];
-            float pr = u_pRad[k];
-            vec3 dpos = pos - pp;
-            if(dot(dpos, dpos) < pr*pr){
-                col += trans * shadePlanet(pos, pp, u_pCol[k], vel);
-                trans = 0.0;
-                done = true;
-                break;
-            }
-        }
-        if(done) break;
-
-        // Disk crossing
         if(prevPos.y * pos.y < 0.0){
             float t = prevPos.y / (prevPos.y - pos.y);
             vec3 cp = mix(prevPos, pos, t);
@@ -301,20 +271,15 @@ const U = {
     cam:   gl.getUniformLocation(prog, 'u_camPos'),
     basis: gl.getUniformLocation(prog, 'u_camBasis'),
     focal: gl.getUniformLocation(prog, 'u_focal'),
-    nP:    gl.getUniformLocation(prog, 'u_nPlanets'),
-    pPos:  gl.getUniformLocation(prog, 'u_pPos'),
-    pCol:  gl.getUniformLocation(prog, 'u_pCol'),
-    pRad:  gl.getUniformLocation(prog, 'u_pRad'),
 };
 
 // ─── CAMERA ────────────────────────────────────────────────────────────────
 let az = 0.6;
-let el = isMobile ? 0.26 : 0.16;
-let dist = isMobile ? 11.5 : 15.0;
-const FOCAL = isMobile ? 1.65 : 1.5;
+let el = isMobile ? 0.34 : 0.16;
+let dist = isMobile ? 13.0 : 15.0;
+const FOCAL = isMobile ? 1.30 : 1.5;
 let vAz = 0.0004, vEl = 0.0;
 let dragging = false, lastX = 0, lastY = 0;
-let downX = 0, downY = 0, downT = 0, moved = false;
 
 function resize(){
     const w = Math.floor(window.innerWidth * RENDER_SCALE);
@@ -327,92 +292,9 @@ function resize(){
 window.addEventListener('resize', resize);
 resize();
 
-function cross(a, b){ return [ a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0] ]; }
-function norm(a){ const l = Math.hypot(a[0],a[1],a[2]) || 1; return [a[0]/l, a[1]/l, a[2]/l]; }
-
-// Current camera basis (recomputed each frame, cached for ray casting on tap)
-let camPos = [0,0,0], camRight = [1,0,0], camUp = [0,1,0], camFwd = [0,0,1];
-
-// ─── PLANETS ───────────────────────────────────────────────────────────────
-const GM = 1.6;                 // gravitational parameter for massive bodies
-const planets = [];             // {x,y,z, vx,vy,vz, r, col:[..]}
-const PLANET_COLORS = [
-    [0.40, 0.62, 1.00],   // blue
-    [0.95, 0.55, 0.25],   // orange
-    [0.55, 0.85, 0.55],   // green
-    [0.85, 0.78, 0.60],   // tan
-    [0.85, 0.45, 0.70],   // rose
-    [0.55, 0.80, 0.95],   // ice
-];
-let colorIdx = 0;
-
-function throwPlanet(clientX, clientY){
-    // World ray through the tapped pixel
-    const ux = (clientX - window.innerWidth * 0.5) / window.innerHeight;
-    const uy = -(clientY - window.innerHeight * 0.5) / window.innerHeight; // flip: GL y is up
-    const dir = norm([
-        camRight[0]*ux + camUp[0]*uy + camFwd[0]*FOCAL,
-        camRight[1]*ux + camUp[1]*uy + camFwd[1]*FOCAL,
-        camRight[2]*ux + camUp[2]*uy + camFwd[2]*FOCAL,
-    ]);
-    // Spawn out along that ray, near the orbital shell
-    const spawnDist = dist * 0.92;
-    const sp = [
-        camPos[0] + dir[0]*spawnDist,
-        camPos[1] + dir[1]*spawnDist,
-        camPos[2] + dir[2]*spawnDist,
-    ];
-    const r0 = Math.hypot(sp[0], sp[1], sp[2]) || 1;
-    // Tangential direction (prograde-ish) around the hole
-    let tang = norm(cross(sp, [0,1,0]));
-    if (!isFinite(tang[0])) tang = [1,0,0];
-    if (Math.random() < 0.5) tang = [-tang[0], -tang[1], -tang[2]];
-    const vc = Math.sqrt(GM / r0);
-    // Sub-orbital so it spirals in over a few seconds
-    const f = 0.45 + Math.random() * 0.30;
-    const vel = [ tang[0]*vc*f, tang[1]*vc*f, tang[2]*vc*f ];
-    // A little inward bias toward the disk plane for a nice plunge
-    vel[1] -= sp[1] * 0.02;
-
-    const col = PLANET_COLORS[colorIdx % PLANET_COLORS.length];
-    colorIdx++;
-
-    planets.push({
-        x: sp[0], y: sp[1], z: sp[2],
-        vx: vel[0], vy: vel[1], vz: vel[2],
-        r: 0.34 + Math.random() * 0.22,
-        col,
-    });
-    if (planets.length > MAX_PLANETS) planets.shift();
-}
-
-function stepPlanets(dtFrame){
-    const SUB = 5;
-    const h = (dtFrame / SUB) * 1.6;   // sim speed
-    for (let s = 0; s < SUB; s++){
-        for (let i = planets.length - 1; i >= 0; i--){
-            const p = planets[i];
-            const r = Math.hypot(p.x, p.y, p.z);
-            if (r < HORIZON_JS + p.r * 0.4){ planets.splice(i, 1); continue; }
-            const inv = GM / (r*r*r);
-            // Newtonian pull + a small extra inward term so orbits decay (inspiral)
-            const extra = 1.0 + 1.2 / (r*r);
-            p.vx -= p.x * inv * extra * h;
-            p.vy -= p.y * inv * extra * h;
-            p.vz -= p.z * inv * extra * h;
-            p.x += p.vx * h;
-            p.y += p.vy * h;
-            p.z += p.vz * h;
-        }
-    }
-}
-const HORIZON_JS = 1.0;
-
-// ─── INPUT ─────────────────────────────────────────────────────────────────
 canvas.addEventListener('pointerdown', e => {
     if (e.target.closest('.back')) return;
     dragging = true; lastX = e.clientX; lastY = e.clientY;
-    downX = e.clientX; downY = e.clientY; downT = performance.now(); moved = false;
     vAz = 0; vEl = 0;
     canvas.setPointerCapture(e.pointerId);
 });
@@ -420,17 +302,12 @@ canvas.addEventListener('pointermove', e => {
     if (!dragging) return;
     const dx = e.clientX - lastX, dy = e.clientY - lastY;
     lastX = e.clientX; lastY = e.clientY;
-    if (Math.abs(e.clientX - downX) > 8 || Math.abs(e.clientY - downY) > 8) moved = true;
     az -= dx * 0.005;
     el += dy * 0.005;
     el = Math.max(-1.45, Math.min(1.45, el));
     vAz = -dx * 0.0004; vEl = dy * 0.0004;
 });
-canvas.addEventListener('pointerup', e => {
-    dragging = false;
-    const dt = performance.now() - downT;
-    if (!moved && dt < 500) throwPlanet(e.clientX, e.clientY);
-});
+canvas.addEventListener('pointerup', () => { dragging = false; });
 canvas.addEventListener('pointercancel', () => { dragging = false; });
 
 canvas.addEventListener('wheel', e => {
@@ -453,16 +330,7 @@ canvas.addEventListener('touchend', () => { pinchD = 0; });
 
 // ─── RENDER LOOP ───────────────────────────────────────────────────────────
 const t0 = performance.now();
-let lastNow = t0;
-const pPosArr = new Float32Array(MAX_PLANETS * 3);
-const pColArr = new Float32Array(MAX_PLANETS * 3);
-const pRadArr = new Float32Array(MAX_PLANETS);
-
 function frame(now){
-    let dtFrame = (now - lastNow) / 1000;
-    lastNow = now;
-    if (dtFrame > 0.05) dtFrame = 0.05;
-
     if (!dragging){
         az += vAz; el += vEl;
         el = Math.max(-1.45, Math.min(1.45, el));
@@ -470,49 +338,35 @@ function frame(now){
         vEl *= 0.96;
     }
 
-    stepPlanets(dtFrame);
-
     const ce = Math.cos(el), se = Math.sin(el);
     const ca = Math.cos(az), sa = Math.sin(az);
-    camPos = [ dist*ce*ca, dist*se, dist*ce*sa ];
-    camFwd = norm([ -camPos[0], -camPos[1], -camPos[2] ]);
-    camRight = norm(cross(camFwd, [0,1,0]));
-    if (!isFinite(camRight[0])) camRight = [1,0,0];
-    camUp = cross(camRight, camFwd);
+    const camPos = [ dist*ce*ca, dist*se, dist*ce*sa ];
+
+    const fwd = norm([ -camPos[0], -camPos[1], -camPos[2] ]);
+    let right = norm(cross(fwd, [0,1,0]));
+    if (!isFinite(right[0])) right = [1,0,0];
+    const up = cross(right, fwd);
 
     const basis = [
-        camRight[0], camRight[1], camRight[2],
-        camUp[0],    camUp[1],    camUp[2],
-        camFwd[0],   camFwd[1],   camFwd[2],
+        right[0], right[1], right[2],
+        up[0],    up[1],    up[2],
+        fwd[0],   fwd[1],   fwd[2],
     ];
-
-    // Upload planets
-    const n = planets.length;
-    for (let i = 0; i < n; i++){
-        const p = planets[i];
-        pPosArr[i*3] = p.x; pPosArr[i*3+1] = p.y; pPosArr[i*3+2] = p.z;
-        pColArr[i*3] = p.col[0]; pColArr[i*3+1] = p.col[1]; pColArr[i*3+2] = p.col[2];
-        pRadArr[i] = p.r;
-    }
 
     gl.uniform2f(U.res, canvas.width, canvas.height);
     gl.uniform1f(U.time, (now - t0) * 0.001);
     gl.uniform3f(U.cam, camPos[0], camPos[1], camPos[2]);
     gl.uniformMatrix3fv(U.basis, false, basis);
     gl.uniform1f(U.focal, FOCAL);
-    gl.uniform1i(U.nP, n);
-    if (n > 0){
-        gl.uniform3fv(U.pPos, pPosArr.subarray(0, n*3));
-        gl.uniform3fv(U.pCol, pColArr.subarray(0, n*3));
-        gl.uniform1fv(U.pRad, pRadArr.subarray(0, n));
-    }
 
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     requestAnimationFrame(frame);
 }
-requestAnimationFrame(frame);
 
-document.addEventListener('visibilitychange', () => { if(!document.hidden) lastNow = performance.now(); });
+function cross(a, b){ return [ a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0] ]; }
+function norm(a){ const l = Math.hypot(a[0], a[1], a[2]) || 1; return [ a[0]/l, a[1]/l, a[2]/l ]; }
+
+requestAnimationFrame(frame);
 
 let _lastTouchEnd = 0;
 document.addEventListener('touchend', e => {
