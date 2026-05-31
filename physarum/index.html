@@ -55,7 +55,7 @@
         font-size: 9px;
         letter-spacing: 0.22em;
         text-transform: uppercase;
-        color: rgba(255, 255, 255, 0.55);
+        color: rgba(255, 255, 255, 0.50);
         mix-blend-mode: difference;
         pointer-events: none;
         white-space: nowrap;
@@ -68,32 +68,34 @@
 
 <canvas id="stage"></canvas>
 
-<div class="credit">physarum polycephalum</div>
+<div class="credit">physarum polycephalum · feed it</div>
 
 <script>
 // ════════════════════════════════════════════════════════════════════════════
-// PHYSARUM — slime-mould agents drawing themselves into a network.
+// PHYSARUM — competing slime-mould colonies drawing a living network.
 //
-// Each of ~6k agents holds (x, y, heading). Every frame it senses the trail
-// map at three points ahead (left / centre / right of its heading), turns
-// toward the strongest sensed reading, moves one step forward, and deposits
-// pheromone at its new position. The trail map then decays a little and
-// blurs a little. Over minutes the agents organise themselves into routes,
-// nodes, and eventually a delicate self-similar network — the same logic
-// real Physarum polycephalum uses to solve maze problems with no brain.
+// Two or three species share the dish. Each agent senses its OWN species'
+// trail (attraction) minus the FOREIGN trail (repulsion), so the colonies
+// carve out territories with sharp veined boundaries — exactly the cellular
+// frontiers real multi-species Physarum produces. Each species deposits on
+// its own colour channel; the channels are blended additively, so a colony
+// glows in its own hue and the seams between colonies flare white.
 //
-// Tap to re-seed: new agent parameters (sensor distance, turn angle, speed,
-// decay), new palette, fresh starting cloud.
+// Move the cursor / drag a finger to drop FOOD — a bright attractant that
+// pulls every colony toward it. Release and watch the veins reroute and the
+// network re-balance around where you fed it.
+//
+// Tap (no drag) to re-seed: new species count, palette, parameters, agents.
 // ════════════════════════════════════════════════════════════════════════════
 
 const display = document.getElementById('stage');
 const dctx = display.getContext('2d');
 
 const isMobile = window.matchMedia('(max-width: 600px)').matches;
-const W = isMobile ? 280 : 420;
+const W = isMobile ? 260 : 420;
 const H = Math.max(140, Math.floor(W * (window.innerHeight / window.innerWidth)));
+const N = W * H;
 
-// Display buffer (we putImageData into this each frame)
 const buffer = document.createElement('canvas');
 buffer.width = W;
 buffer.height = H;
@@ -102,10 +104,33 @@ const imgData = bctx.createImageData(W, H);
 const data8  = imgData.data;
 const data32 = new Uint32Array(data8.buffer);
 
-// Two trail maps so the decay+diffuse can read from one while writing to the
-// other (no read-after-write artefacts)
-const trail  = new Float32Array(W * H);
-const trail2 = new Float32Array(W * H);
+const SUB_STEPS = isMobile ? 1 : 2;
+
+// ─── SPECIES STATE ─────────────────────────────────────────────────────────
+// Up to 3 species. Each: own trail map, scratch buffer, colour, agents.
+const MAX_SPECIES = 3;
+const trail   = [];   // Float32Array per species
+const scratch = [];   // Float32Array per species
+const total   = new Float32Array(N);   // sum of all species each frame
+const food    = new Float32Array(N);   // interactive attractant field
+for (let s = 0; s < MAX_SPECIES; s++) {
+    trail.push(new Float32Array(N));
+    scratch.push(new Float32Array(N));
+}
+
+// Per-species colours (RGB 0..1)
+const colR = new Float32Array(MAX_SPECIES);
+const colG = new Float32Array(MAX_SPECIES);
+const colB = new Float32Array(MAX_SPECIES);
+
+// Agents stored flat, with a species index
+const N_AGENTS = isMobile ? 5200 : 10500;
+const aX  = new Float32Array(N_AGENTS);
+const aY  = new Float32Array(N_AGENTS);
+const aH  = new Float32Array(N_AGENTS);   // heading
+const aS  = new Uint8Array(N_AGENTS);     // species index
+
+const TWO_PI = Math.PI * 2;
 
 function fitDisplay() {
     display.width = window.innerWidth;
@@ -115,131 +140,113 @@ function fitDisplay() {
 window.addEventListener('resize', fitDisplay);
 fitDisplay();
 
-// ─── PALETTE (Iñigo Quilez form, randomised on reseed) ─────────────────────
-const PAL = { a:[0.5,0.45,0.6], b:[0.55,0.5,0.5], c:[1,1,0.9], d:[0,0.33,0.67] };
-const TWO_PI = Math.PI * 2;
-
-function generatePalette() {
-    // Pick a colour philosophy similar to /blocks: high-contrast neon, deep
-    // monochrome, or warm/cool gradient. Keeps the piece visually distinct
-    // between reseeds while never feeling random.
-    const sys = Math.floor(Math.random() * 4);
-    if (sys === 0) {
-        // Vivid spectrum drift
-        PAL.a[0] = 0.5; PAL.a[1] = 0.5; PAL.a[2] = 0.5;
-        PAL.b[0] = 0.5; PAL.b[1] = 0.5; PAL.b[2] = 0.5;
-        PAL.c[0] = 1.0 + Math.random() * 0.4;
-        PAL.c[1] = 1.0 + Math.random() * 0.4;
-        PAL.c[2] = 1.0 + Math.random() * 0.4;
-        PAL.d[0] = Math.random();
-        PAL.d[1] = Math.random();
-        PAL.d[2] = Math.random();
-    } else if (sys === 1) {
-        // Monochrome glow — single base hue, brightness varies with trail
-        const h = Math.random();
-        PAL.a[0] = h * 0.3;       PAL.a[1] = h * 0.4;       PAL.a[2] = h * 0.5;
-        PAL.b[0] = 0.5;           PAL.b[1] = 0.5;           PAL.b[2] = 0.5;
-        PAL.c[0] = 0.4;           PAL.c[1] = 0.4;           PAL.c[2] = 0.5;
-        PAL.d[0] = h;             PAL.d[1] = h + 0.1;       PAL.d[2] = h + 0.2;
-    } else if (sys === 2) {
-        // Warm — yellows, oranges, reds
-        PAL.a[0] = 0.6;  PAL.a[1] = 0.4;  PAL.a[2] = 0.25;
-        PAL.b[0] = 0.5;  PAL.b[1] = 0.45; PAL.b[2] = 0.35;
-        PAL.c[0] = 0.8;  PAL.c[1] = 0.9;  PAL.c[2] = 1.0;
-        PAL.d[0] = 0.0;  PAL.d[1] = 0.15; PAL.d[2] = 0.30;
-    } else {
-        // Cool — cyans, blues, violets
-        PAL.a[0] = 0.25; PAL.a[1] = 0.45; PAL.a[2] = 0.65;
-        PAL.b[0] = 0.35; PAL.b[1] = 0.45; PAL.b[2] = 0.55;
-        PAL.c[0] = 0.9;  PAL.c[1] = 0.95; PAL.c[2] = 1.0;
-        PAL.d[0] = 0.55; PAL.d[1] = 0.65; PAL.d[2] = 0.78;
-    }
-}
-
-// ─── PIECE PARAMS ──────────────────────────────────────────────────────────
-const N_AGENTS = isMobile ? 4500 : 7500;
-const agentX = new Float32Array(N_AGENTS);
-const agentY = new Float32Array(N_AGENTS);
-const agentA = new Float32Array(N_AGENTS);
-
+// ─── PIECE PARAMS (randomised per reseed) ──────────────────────────────────
+let speciesCount = 2;
 let SENSOR_DIST  = 12;
-let SENSOR_ANGLE = 0.5;     // radians
+let SENSOR_ANGLE = 0.5;
 let TURN_ANGLE   = 0.7;
 let SPEED        = 1.0;
 let DECAY        = 0.94;
-let DEPOSIT      = 28;
+let DEPOSIT      = 26;
+let REPEL        = 0.6;   // how strongly an agent avoids foreign trails
+
+// Distinct, saturated hues spaced around the wheel, jittered per reseed
+function setSpeciesColours(count) {
+    const baseHue = Math.random();
+    for (let s = 0; s < count; s++) {
+        const hue = (baseHue + s / count + (Math.random() - 0.5) * 0.06) % 1;
+        // HSV → RGB at full saturation, high value
+        const h6 = hue * 6;
+        const c = 1;
+        const x = c * (1 - Math.abs((h6 % 2) - 1));
+        let r, g, b;
+        if (h6 < 1)      { r = c; g = x; b = 0; }
+        else if (h6 < 2) { r = x; g = c; b = 0; }
+        else if (h6 < 3) { r = 0; g = c; b = x; }
+        else if (h6 < 4) { r = 0; g = x; b = c; }
+        else if (h6 < 5) { r = x; g = 0; b = c; }
+        else             { r = c; g = 0; b = x; }
+        colR[s] = r; colG[s] = g; colB[s] = b;
+    }
+}
 
 function reseed() {
-    SENSOR_DIST  = 6 + Math.random() * 22;
-    SENSOR_ANGLE = 0.20 + Math.random() * 0.70;
-    TURN_ANGLE   = 0.25 + Math.random() * 0.90;
-    SPEED        = 0.6 + Math.random() * 1.1;
-    DECAY        = 0.920 + Math.random() * 0.050;
-    DEPOSIT      = 18 + Math.random() * 32;
+    speciesCount = 2 + ((Math.random() < 0.5) ? 1 : 0);   // 2 or 3
+    if (isMobile) speciesCount = 2;
 
-    generatePalette();
+    SENSOR_DIST  = 7 + Math.random() * 20;
+    SENSOR_ANGLE = 0.25 + Math.random() * 0.65;
+    TURN_ANGLE   = 0.30 + Math.random() * 0.80;
+    SPEED        = 0.7 + Math.random() * 1.0;
+    DECAY        = 0.910 + Math.random() * 0.055;
+    DEPOSIT      = 18 + Math.random() * 30;
+    REPEL        = 0.35 + Math.random() * 0.75;
 
-    // Spawn agents in a cloud — sometimes uniform, sometimes a disk
-    const spawnDisk = Math.random() < 0.6;
-    if (spawnDisk) {
-        const cx = W * (0.3 + Math.random() * 0.4);
-        const cy = H * (0.3 + Math.random() * 0.4);
-        const radius = Math.min(W, H) * (0.15 + Math.random() * 0.25);
-        for (let i = 0; i < N_AGENTS; i++) {
-            const r = Math.sqrt(Math.random()) * radius;
-            const a = Math.random() * TWO_PI;
-            agentX[i] = cx + Math.cos(a) * r;
-            agentY[i] = cy + Math.sin(a) * r;
-            agentA[i] = Math.random() * TWO_PI;
-        }
-    } else {
-        for (let i = 0; i < N_AGENTS; i++) {
-            agentX[i] = Math.random() * W;
-            agentY[i] = Math.random() * H;
-            agentA[i] = Math.random() * TWO_PI;
-        }
+    setSpeciesColours(speciesCount);
+
+    for (let s = 0; s < MAX_SPECIES; s++) {
+        trail[s].fill(0);
+        scratch[s].fill(0);
     }
+    food.fill(0);
 
-    trail.fill(0);
-    trail2.fill(0);
+    // Each species spawns from its own disk so territories start separated
+    const centres = [];
+    for (let s = 0; s < speciesCount; s++) {
+        centres.push({
+            cx: W * (0.22 + Math.random() * 0.56),
+            cy: H * (0.22 + Math.random() * 0.56),
+            r: Math.min(W, H) * (0.10 + Math.random() * 0.16),
+        });
+    }
+    const per = (N_AGENTS / speciesCount) | 0;
+    for (let i = 0; i < N_AGENTS; i++) {
+        const s = Math.min(speciesCount - 1, (i / per) | 0);
+        const c = centres[s];
+        const rr = Math.sqrt(Math.random()) * c.r;
+        const ang = Math.random() * TWO_PI;
+        aX[i] = c.cx + Math.cos(ang) * rr;
+        aY[i] = c.cy + Math.sin(ang) * rr;
+        aH[i] = Math.random() * TWO_PI;
+        aS[i] = s;
+    }
 }
 reseed();
 
-// ─── PER-FRAME UPDATE ──────────────────────────────────────────────────────
-// Sample trail at (x, y) with edge wrap. Returns intensity 0..255-ish.
-function sample(x, y) {
-    let ix = x | 0;
-    let iy = y | 0;
+// ─── SENSING ───────────────────────────────────────────────────────────────
+// Sensed value for species s at (x,y): own trail + food − repel·foreign.
+// foreign = total − own, and total includes food already added below.
+function senseAt(s, x, y) {
+    let ix = x | 0, iy = y | 0;
     if (ix < 0) ix += W; else if (ix >= W) ix -= W;
     if (iy < 0) iy += H; else if (iy >= H) iy -= H;
-    return trail[iy * W + ix];
+    const idx = iy * W + ix;
+    const own = trail[s][idx];
+    const foreign = total[idx] - own;
+    return own + food[idx] - REPEL * foreign;
 }
 
 function stepAgents() {
-    const sd = SENSOR_DIST;
-    const sa = SENSOR_ANGLE;
-    const ta = TURN_ANGLE;
-    const sp = SPEED;
-    const dep = DEPOSIT;
+    const sd = SENSOR_DIST, sa = SENSOR_ANGLE, ta = TURN_ANGLE, sp = SPEED, dep = DEPOSIT;
     for (let i = 0; i < N_AGENTS; i++) {
-        const x = agentX[i], y = agentY[i], a = agentA[i];
-        const cf = Math.cos(a),       sf = Math.sin(a);
-        const cl = Math.cos(a - sa),  sl = Math.sin(a - sa);
-        const cr = Math.cos(a + sa),  sr = Math.sin(a + sa);
+        const s = aS[i];
+        const x = aX[i], y = aY[i], a = aH[i];
+        const cf = Math.cos(a),      sf = Math.sin(a);
+        const cl = Math.cos(a - sa), sl = Math.sin(a - sa);
+        const cr = Math.cos(a + sa), sr = Math.sin(a + sa);
 
-        const fv = sample(x + cf * sd, y + sf * sd);
-        const lv = sample(x + cl * sd, y + sl * sd);
-        const rv = sample(x + cr * sd, y + sr * sd);
+        const fv = senseAt(s, x + cf * sd, y + sf * sd);
+        const lv = senseAt(s, x + cl * sd, y + sl * sd);
+        const rv = senseAt(s, x + cr * sd, y + sr * sd);
 
         let na = a;
         if (fv >= lv && fv >= rv) {
-            // continue forward
+            // forward
         } else if (lv > rv) {
             na -= ta;
         } else if (rv > lv) {
             na += ta;
         } else {
-            // both sides equal but stronger than forward — random nudge
             na += (Math.random() < 0.5 ? -ta : ta);
         }
 
@@ -248,68 +255,72 @@ function stepAgents() {
         if (nx < 0) nx += W; else if (nx >= W) nx -= W;
         if (ny < 0) ny += H; else if (ny >= H) ny -= H;
 
-        agentX[i] = nx;
-        agentY[i] = ny;
-        agentA[i] = na;
+        aX[i] = nx; aY[i] = ny; aH[i] = na;
 
-        // Deposit
-        const px = nx | 0;
-        const py = ny | 0;
-        const idx = py * W + px;
-        const t = trail[idx] + dep;
-        trail[idx] = t > 255 ? 255 : t;
+        const idx = (ny | 0) * W + (nx | 0);
+        const t = trail[s][idx] + dep;
+        trail[s][idx] = t > 255 ? 255 : t;
     }
 }
 
-// Combined 3×3 box blur + decay — single pass, cache-friendly
+// ─── DECAY + DIFFUSE per species, and rebuild the total field ──────────────
 function decayDiffuse() {
     const k = (1 / 9) * DECAY;
-    // Interior
-    for (let y = 1; y < H - 1; y++) {
-        const yBase = y * W;
-        const ym = (y - 1) * W;
-        const yp = (y + 1) * W;
-        for (let x = 1; x < W - 1; x++) {
-            trail2[yBase + x] = (
-                trail[ym + x - 1] + trail[ym + x] + trail[ym + x + 1] +
-                trail[yBase + x - 1] + trail[yBase + x] + trail[yBase + x + 1] +
-                trail[yp + x - 1] + trail[yp + x] + trail[yp + x + 1]
-            ) * k;
+    total.fill(0);
+    for (let s = 0; s < speciesCount; s++) {
+        const tr = trail[s], sc = scratch[s];
+        for (let y = 1; y < H - 1; y++) {
+            const yB = y * W, ym = (y - 1) * W, yp = (y + 1) * W;
+            for (let x = 1; x < W - 1; x++) {
+                sc[yB + x] = (
+                    tr[ym + x - 1] + tr[ym + x] + tr[ym + x + 1] +
+                    tr[yB + x - 1] + tr[yB + x] + tr[yB + x + 1] +
+                    tr[yp + x - 1] + tr[yp + x] + tr[yp + x + 1]
+                ) * k;
+            }
         }
+        for (let x = 0; x < W; x++) {
+            sc[x] = tr[x] * DECAY;
+            sc[(H - 1) * W + x] = tr[(H - 1) * W + x] * DECAY;
+        }
+        for (let y = 0; y < H; y++) {
+            sc[y * W] = tr[y * W] * DECAY;
+            sc[y * W + W - 1] = tr[y * W + W - 1] * DECAY;
+        }
+        tr.set(sc);
+        for (let i = 0; i < N; i++) total[i] += tr[i];
     }
-    // Edges: simple decay (no diffusion)
-    for (let x = 0; x < W; x++) {
-        trail2[x] = trail[x] * DECAY;
-        trail2[(H - 1) * W + x] = trail[(H - 1) * W + x] * DECAY;
-    }
-    for (let y = 0; y < H; y++) {
-        trail2[y * W] = trail[y * W] * DECAY;
-        trail2[y * W + W - 1] = trail[y * W + W - 1] * DECAY;
-    }
-    trail.set(trail2);
+    // Food fades faster than trails
+    for (let i = 0; i < N; i++) food[i] *= 0.90;
 }
 
-// Map trail intensity → packed RGBA via the Quilez palette
+// ─── RENDER — additive blend of species colours weighted by trail ──────────
 function paintImage() {
-    const aR = PAL.a[0], aG = PAL.a[1], aB = PAL.a[2];
-    const bR = PAL.b[0], bG = PAL.b[1], bB = PAL.b[2];
-    const cR = PAL.c[0], cG = PAL.c[1], cB = PAL.c[2];
-    const dR = PAL.d[0], dG = PAL.d[1], dB = PAL.d[2];
+    for (let i = 0; i < N; i++) {
+        let r = 0, g = 0, b = 0;
+        for (let s = 0; s < speciesCount; s++) {
+            const v = trail[s][i] * (1 / 255);
+            if (v > 0.003) {
+                // Gamma-ish curve so faint trails stay dark, strong ones bloom
+                const w = v * v * (3 - 2 * v);
+                r += colR[s] * w;
+                g += colG[s] * w;
+                b += colB[s] * w;
+            }
+        }
+        // Food shows as a soft white halo
+        const fo = food[i] * (1 / 255);
+        if (fo > 0.004) { r += fo; g += fo; b += fo; }
 
-    for (let i = 0, n = W * H; i < n; i++) {
-        const t = trail[i] * (1 / 255);   // 0..1-ish
-        const r = (aR + bR * Math.cos(TWO_PI * (cR * t + dR))) * 255 * t;
-        const g = (aG + bG * Math.cos(TWO_PI * (cG * t + dG))) * 255 * t;
-        const b = (aB + bB * Math.cos(TWO_PI * (cB * t + dB))) * 255 * t;
-        const ri = r < 0 ? 0 : r > 255 ? 255 : r | 0;
-        const gi = g < 0 ? 0 : g > 255 ? 255 : g | 0;
-        const bi = b < 0 ? 0 : b > 255 ? 255 : b | 0;
+        const ri = r > 1 ? 255 : (r * 255) | 0;
+        const gi = g > 1 ? 255 : (g * 255) | 0;
+        const bi = b > 1 ? 255 : (b * 255) | 0;
         data32[i] = (255 << 24) | (bi << 16) | (gi << 8) | ri;
     }
 }
 
 function frame() {
-    stepAgents();
+    for (let k = 0; k < SUB_STEPS; k++) stepAgents();
     decayDiffuse();
     paintImage();
     bctx.putImageData(imgData, 0, 0);
@@ -318,9 +329,51 @@ function frame() {
 }
 requestAnimationFrame(frame);
 
+// ─── INTERACTION ───────────────────────────────────────────────────────────
+// Drag → drop food (attracts all colonies). Tap without drag → reseed.
+let downX = 0, downY = 0, downT = 0, moved = false;
+
+function dropFood(clientX, clientY, amount) {
+    const rect = display.getBoundingClientRect();
+    const fx = ((clientX - rect.left) / rect.width) * W;
+    const fy = ((clientY - rect.top) / rect.height) * H;
+    const R = Math.max(3, Math.min(W, H) * 0.035);
+    const R2 = R * R;
+    const x0 = Math.max(0, (fx - R) | 0), x1 = Math.min(W - 1, (fx + R) | 0);
+    const y0 = Math.max(0, (fy - R) | 0), y1 = Math.min(H - 1, (fy + R) | 0);
+    for (let y = y0; y <= y1; y++) {
+        const dy = y - fy;
+        for (let x = x0; x <= x1; x++) {
+            const dx = x - fx;
+            const d2 = dx * dx + dy * dy;
+            if (d2 < R2) {
+                const f = (1 - d2 / R2) * amount;
+                const idx = y * W + x;
+                const v = food[idx] + f;
+                food[idx] = v > 255 ? 255 : v;
+            }
+        }
+    }
+}
+
 window.addEventListener('pointerdown', e => {
     if (e.target.closest('.back')) return;
-    reseed();
+    downX = e.clientX; downY = e.clientY; downT = performance.now(); moved = false;
+});
+window.addEventListener('pointermove', e => {
+    if (e.buttons === 0 && e.pointerType === 'mouse') {
+        // Hover feeds lightly so the piece responds to the cursor on desktop
+        dropFood(e.clientX, e.clientY, 60);
+        return;
+    }
+    // Dragging feeds strongly
+    if (Math.abs(e.clientX - downX) > 6 || Math.abs(e.clientY - downY) > 6) moved = true;
+    dropFood(e.clientX, e.clientY, 140);
+}, { passive: true });
+window.addEventListener('pointerup', e => {
+    if (e.target.closest('.back')) return;
+    const dt = performance.now() - downT;
+    if (!moved && dt < 500) reseed();   // clean tap → new piece
 });
 
 let _lastTouchEnd = 0;
@@ -329,10 +382,6 @@ document.addEventListener('touchend', e => {
     if (now - _lastTouchEnd < 350) e.preventDefault();
     _lastTouchEnd = now;
 }, { passive: false });
-
-document.addEventListener('visibilitychange', () => {
-    // Nothing to reset — agents and trail map persist
-});
 </script>
 
 </body>

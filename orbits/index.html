@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0">
+<title>orbits · limbrow.zip</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+        background: #000;
+        color: #e8e8e8;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+        font-family: ui-monospace, 'JetBrains Mono', monospace;
+        -webkit-user-select: none; user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: none;
+    }
+
+    .back {
+        position: fixed;
+        top: 16px; left: 16px;
+        z-index: 100;
+        width: 36px; height: 36px;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0, 0, 0, 0.45);
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 50%;
+        color: rgba(255,255,255,0.92);
+        text-decoration: none;
+        font-size: 16px;
+        line-height: 1;
+        padding-bottom: 2px;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+    }
+
+    #stage {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        display: block;
+    }
+
+    .credit {
+        position: fixed;
+        bottom: max(14px, env(safe-area-inset-bottom));
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10;
+        font-size: 9px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.50);
+        mix-blend-mode: difference;
+        pointer-events: none;
+        white-space: nowrap;
+    }
+</style>
+</head>
+<body>
+
+<a class="back" href="/" aria-label="Back to grid">←</a>
+
+<canvas id="stage"></canvas>
+
+<div class="credit">n-body · hold to pull</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+// ORBITS — Newtonian n-body field.
+//
+// Thousands of massless test particles fall through the gravity of a handful
+// of attractors under a real softened inverse-square law:
+//
+//     a = Σ  G · mₖ · (pₖ − p) / (|pₖ − p|² + ε²)^{3/2}
+//
+// integrated with semi-implicit Euler (velocity then position). Particles
+// leave trails because the canvas is only partially cleared each frame, and
+// they are coloured by speed — slow apoapsis arcs cool, fast periapsis
+// whips hot. The attractors themselves drift on slow elliptical paths, so
+// stable orbits are continually perturbed: rings form, precess, shear into
+// streams, and re-capture.
+//
+// Hold / drag to add a moving gravity well under the cursor — sling the
+// particles around your finger. Tap (no drag) to re-seed a new system:
+// new attractor layout, masses, G, and a fresh particle field.
+// ════════════════════════════════════════════════════════════════════════════
+
+const canvas = document.getElementById('stage');
+const ctx = canvas.getContext('2d');
+
+let DPR = Math.min(window.devicePixelRatio || 1, 2);
+let VW = 0, VH = 0;
+function fit() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    VW = window.innerWidth;
+    VH = window.innerHeight;
+    canvas.width = Math.floor(VW * DPR);
+    canvas.height = Math.floor(VH * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    // Reset background to black on resize so trails don't smear stale pixels
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, VW, VH);
+}
+window.addEventListener('resize', fit);
+fit();
+
+const isMobile = window.matchMedia('(max-width: 600px)').matches;
+const COUNT = isMobile ? 2600 : 5200;
+
+// Particle arrays
+const px = new Float32Array(COUNT);
+const py = new Float32Array(COUNT);
+const vx = new Float32Array(COUNT);
+const vy = new Float32Array(COUNT);
+
+// Attractors
+let masses = [];      // {x, y, m, ox, oy, oa, or, os}  o* = orbit params
+let G = 1.0;
+let fade = 0.10;      // trail persistence (lower = longer trails)
+let hueBase = 0;
+
+const TWO_PI = Math.PI * 2;
+
+// Pointer attractor (active while pressed / hovering with button on desktop)
+const ptr = { x: 0, y: 0, active: false, m: 0 };
+
+function reseed() {
+    const cx = VW / 2, cy = VH / 2;
+    const minDim = Math.min(VW, VH);
+
+    G = 0.6 + Math.random() * 1.4;
+    fade = 0.06 + Math.random() * 0.10;
+    hueBase = Math.random() * 360;
+
+    const count = 1 + ((Math.random() * 4) | 0);   // 1..4 attractors
+    masses = [];
+    for (let i = 0; i < count; i++) {
+        const ang = (i / count) * TWO_PI + Math.random() * 0.6;
+        const orbR = count === 1 ? 0 : minDim * (0.10 + Math.random() * 0.22);
+        masses.push({
+            x: cx + Math.cos(ang) * orbR,
+            y: cy + Math.sin(ang) * orbR,
+            m: 1400 + Math.random() * 2600,
+            // slow elliptical drift of the attractor itself
+            ocx: cx, ocy: cy,
+            oa0: ang,   // base phase
+            orX: orbR * (0.8 + Math.random() * 0.4),
+            orY: orbR * (0.8 + Math.random() * 0.4),
+            os: (0.00006 + Math.random() * 0.00012) * (Math.random() < 0.5 ? 1 : -1),
+        });
+    }
+
+    // Seed particles in a broad disk with tangential velocity → instant orbits
+    const spawnR = minDim * 0.45;
+    for (let i = 0; i < COUNT; i++) {
+        const r = Math.sqrt(Math.random()) * spawnR;
+        const a = Math.random() * TWO_PI;
+        const x = cx + Math.cos(a) * r;
+        const y = cy + Math.sin(a) * r;
+        px[i] = x;
+        py[i] = y;
+        // Tangential kick scaled to give roughly circular orbits about centre
+        const speed = (0.4 + Math.random() * 0.8) * Math.sqrt(G * 2000 / (r + 40));
+        vx[i] = -Math.sin(a) * speed;
+        vy[i] =  Math.cos(a) * speed;
+    }
+
+    // Clear to black
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, VW, VH);
+}
+reseed();
+
+// ─── PHYSICS + RENDER ──────────────────────────────────────────────────────
+const EPS2 = 220;    // softening² — prevents singularities at the centre
+
+let lastT = performance.now();
+function frame(now) {
+    let dt = (now - lastT) / 16.67;   // normalise to ~60fps units
+    lastT = now;
+    if (dt > 3) dt = 3;               // clamp after tab was hidden
+
+    // Drift the attractors along their slow ellipses. Angle is computed from
+    // a stable base phase + now·speed, so it never accumulates unbounded.
+    for (let k = 0; k < masses.length; k++) {
+        const M = masses[k];
+        const ang = M.oa0 + now * M.os;
+        M.x = M.ocx + Math.cos(ang) * M.orX;
+        M.y = M.ocy + Math.sin(ang) * M.orY;
+    }
+
+    // Trail fade — translucent black wash
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = `rgba(0, 0, 0, ${fade})`;
+    ctx.fillRect(0, 0, VW, VH);
+
+    // Build a flat list of gravity sources for the inner loop
+    const sx = [], sy = [], sm = [];
+    for (const M of masses) { sx.push(M.x); sy.push(M.y); sm.push(M.m); }
+    if (ptr.active) { sx.push(ptr.x); sy.push(ptr.y); sm.push(ptr.m); }
+    const nS = sx.length;
+
+    // Integrate + draw
+    ctx.globalCompositeOperation = 'lighter';
+    const gdt = G * dt;
+    const dotSize = isMobile ? 1.4 : 1.2;
+
+    for (let i = 0; i < COUNT; i++) {
+        let x = px[i], y = py[i];
+        let ax = 0, ay = 0;
+        for (let k = 0; k < nS; k++) {
+            const dx = sx[k] - x;
+            const dy = sy[k] - y;
+            const r2 = dx * dx + dy * dy + EPS2;
+            const inv = 1 / (r2 * Math.sqrt(r2));   // 1 / r³
+            const f = sm[k] * inv;
+            ax += dx * f;
+            ay += dy * f;
+        }
+        let nvx = vx[i] + ax * gdt;
+        let nvy = vy[i] + ay * gdt;
+        x += nvx * dt;
+        y += nvy * dt;
+
+        // Wrap softly at the edges so particles aren't lost forever
+        if (x < -40) x = VW + 40; else if (x > VW + 40) x = -40;
+        if (y < -40) y = VH + 40; else if (y > VH + 40) y = -40;
+
+        px[i] = x; py[i] = y; vx[i] = nvx; vy[i] = nvy;
+
+        // Colour by speed — slow cool, fast hot
+        const spd = Math.sqrt(nvx * nvx + nvy * nvy);
+        const hue = (hueBase + spd * 14) % 360;
+        const lit = 45 + Math.min(40, spd * 4);
+        ctx.fillStyle = `hsl(${hue}, 90%, ${lit}%)`;
+        ctx.fillRect(x, y, dotSize, dotSize);
+    }
+
+    // Soft glow at each attractor
+    ctx.globalCompositeOperation = 'lighter';
+    for (let k = 0; k < masses.length; k++) {
+        const M = masses[k];
+        const R = 26;
+        const g = ctx.createRadialGradient(M.x, M.y, 0, M.x, M.y, R);
+        g.addColorStop(0, 'rgba(255, 255, 255, 0.5)');
+        g.addColorStop(0.4, 'rgba(200, 220, 255, 0.18)');
+        g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(M.x, M.y, R, 0, TWO_PI);
+        ctx.fill();
+    }
+    if (ptr.active) {
+        const R = 34;
+        const g = ctx.createRadialGradient(ptr.x, ptr.y, 0, ptr.x, ptr.y, R);
+        g.addColorStop(0, 'rgba(255, 240, 200, 0.6)');
+        g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(ptr.x, ptr.y, R, 0, TWO_PI);
+        ctx.fill();
+    }
+
+    ctx.globalCompositeOperation = 'source-over';
+    requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ─── INTERACTION ───────────────────────────────────────────────────────────
+let downX = 0, downY = 0, downT = 0, moved = false;
+
+window.addEventListener('pointerdown', e => {
+    if (e.target.closest('.back')) return;
+    downX = e.clientX; downY = e.clientY; downT = performance.now(); moved = false;
+    ptr.x = e.clientX; ptr.y = e.clientY; ptr.m = 5200; ptr.active = true;
+});
+window.addEventListener('pointermove', e => {
+    ptr.x = e.clientX; ptr.y = e.clientY;
+    if (e.buttons === 0 && e.pointerType === 'mouse') {
+        // Gentle hover pull on desktop
+        ptr.m = 2200; ptr.active = true;
+        return;
+    }
+    if (Math.abs(e.clientX - downX) > 6 || Math.abs(e.clientY - downY) > 6) moved = true;
+});
+window.addEventListener('pointerup', e => {
+    if (e.target.closest('.back')) return;
+    const dt = performance.now() - downT;
+    ptr.active = false;
+    if (!moved && dt < 500) reseed();   // clean tap → new system
+});
+window.addEventListener('pointerleave', () => { ptr.active = false; });
+
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) lastT = performance.now();
+});
+
+let _lastTouchEnd = 0;
+document.addEventListener('touchend', e => {
+    const now = Date.now();
+    if (now - _lastTouchEnd < 350) e.preventDefault();
+    _lastTouchEnd = now;
+}, { passive: false });
+</script>
+
+</body>
+</html>

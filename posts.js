@@ -24,16 +24,16 @@
 export const posts = [
 
     {
-        slug: 'meme',
+        slug: 'orbits',
         date: '2026-05-17',
-        preview: 'preview.html',  // famous-meme data-mesh — captions/emojis dissolved by the flow
+        preview: 'preview.html',  // newtonian n-body gravity field, particles on trails
         scale: 1.0
     },
 
     {
         slug: 'physarum',
         date: '2026-05-17',
-        preview: 'preview.html',  // slime-mould agents self-organising into a network
+        preview: 'preview.html',  // competing slime-mould colonies — feed it with the cursor
         scale: 1.0
     },
 

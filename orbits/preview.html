@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>orbits · preview</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { background: #000; width: 100%; height: 100vh; height: 100dvh; overflow: hidden; }
+    #stage { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: block; }
+</style>
+</head>
+<body>
+
+<canvas id="stage"></canvas>
+
+<script>
+// N-body gravity field at lower particle count. Auto-reseeds every 20s so the
+// card cycles through attractor configurations while each system settles.
+const canvas = document.getElementById('stage');
+const ctx = canvas.getContext('2d');
+
+let DPR = Math.min(window.devicePixelRatio || 1, 2);
+let VW = 0, VH = 0;
+function fit() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    VW = window.innerWidth; VH = window.innerHeight;
+    canvas.width = Math.floor(VW * DPR);
+    canvas.height = Math.floor(VH * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, VW, VH);
+}
+window.addEventListener('resize', fit);
+fit();
+
+const COUNT = 2400;
+const px = new Float32Array(COUNT), py = new Float32Array(COUNT);
+const vx = new Float32Array(COUNT), vy = new Float32Array(COUNT);
+const TWO_PI = Math.PI * 2;
+const EPS2 = 220;
+
+let masses = [], G = 1, fade = 0.1, hueBase = 0;
+
+function reseed() {
+    const cx = VW / 2, cy = VH / 2, minDim = Math.min(VW, VH);
+    G = 0.6 + Math.random() * 1.4;
+    fade = 0.06 + Math.random() * 0.10;
+    hueBase = Math.random() * 360;
+    const count = 1 + ((Math.random() * 4) | 0);
+    masses = [];
+    for (let i = 0; i < count; i++) {
+        const ang = (i / count) * TWO_PI + Math.random() * 0.6;
+        const orbR = count === 1 ? 0 : minDim * (0.10 + Math.random() * 0.22);
+        masses.push({
+            ocx: cx, ocy: cy, oa0: ang,
+            orX: orbR * (0.8 + Math.random() * 0.4),
+            orY: orbR * (0.8 + Math.random() * 0.4),
+            os: (0.00006 + Math.random() * 0.00012) * (Math.random() < 0.5 ? 1 : -1),
+            m: 1400 + Math.random() * 2600,
+            x: cx + Math.cos(ang) * orbR, y: cy + Math.sin(ang) * orbR,
+        });
+    }
+    const spawnR = minDim * 0.45;
+    for (let i = 0; i < COUNT; i++) {
+        const r = Math.sqrt(Math.random()) * spawnR, a = Math.random() * TWO_PI;
+        px[i] = cx + Math.cos(a) * r;
+        py[i] = cy + Math.sin(a) * r;
+        const speed = (0.4 + Math.random() * 0.8) * Math.sqrt(G * 2000 / (r + 40));
+        vx[i] = -Math.sin(a) * speed;
+        vy[i] =  Math.cos(a) * speed;
+    }
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, VW, VH);
+}
+reseed();
+
+const RESEED_MS = 20000;
+let lastReseed = performance.now();
+let lastT = performance.now();
+function frame(now) {
+    if (now - lastReseed > RESEED_MS) { reseed(); lastReseed = now; }
+    let dt = (now - lastT) / 16.67; lastT = now;
+    if (dt > 3) dt = 3;
+
+    for (let k = 0; k < masses.length; k++) {
+        const M = masses[k];
+        const ang = M.oa0 + now * M.os;
+        M.x = M.ocx + Math.cos(ang) * M.orX;
+        M.y = M.ocy + Math.sin(ang) * M.orY;
+    }
+
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = `rgba(0,0,0,${fade})`;
+    ctx.fillRect(0, 0, VW, VH);
+
+    const sx = [], sy = [], sm = [];
+    for (const M of masses) { sx.push(M.x); sy.push(M.y); sm.push(M.m); }
+    const nS = sx.length;
+
+    ctx.globalCompositeOperation = 'lighter';
+    const gdt = G * dt;
+    for (let i = 0; i < COUNT; i++) {
+        let x = px[i], y = py[i], ax = 0, ay = 0;
+        for (let k = 0; k < nS; k++) {
+            const dx = sx[k] - x, dy = sy[k] - y;
+            const r2 = dx * dx + dy * dy + EPS2;
+            const inv = 1 / (r2 * Math.sqrt(r2));
+            const f = sm[k] * inv;
+            ax += dx * f; ay += dy * f;
+        }
+        let nvx = vx[i] + ax * gdt, nvy = vy[i] + ay * gdt;
+        x += nvx * dt; y += nvy * dt;
+        if (x < -40) x = VW + 40; else if (x > VW + 40) x = -40;
+        if (y < -40) y = VH + 40; else if (y > VH + 40) y = -40;
+        px[i] = x; py[i] = y; vx[i] = nvx; vy[i] = nvy;
+        const spd = Math.sqrt(nvx * nvx + nvy * nvy);
+        const hue = (hueBase + spd * 14) % 360;
+        const lit = 45 + Math.min(40, spd * 4);
+        ctx.fillStyle = `hsl(${hue},90%,${lit}%)`;
+        ctx.fillRect(x, y, 1.2, 1.2);
+    }
+    for (let k = 0; k < masses.length; k++) {
+        const M = masses[k], R = 22;
+        const g = ctx.createRadialGradient(M.x, M.y, 0, M.x, M.y, R);
+        g.addColorStop(0, 'rgba(255,255,255,0.45)');
+        g.addColorStop(0.4, 'rgba(200,220,255,0.16)');
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(M.x, M.y, R, 0, TWO_PI); ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+
+</body>
+</html>
