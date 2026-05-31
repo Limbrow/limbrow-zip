@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>singularity · preview</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { background: #000; width: 100%; height: 100vh; height: 100dvh; overflow: hidden; }
+    #gl { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: block; }
+</style>
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+
+<script>
+// Lensing black hole that slowly auto-orbits. Lower step count + render scale
+// for the grid card. Same geodesic engine as the live post.
+const canvas = document.getElementById('gl');
+const gl = canvas.getContext('webgl2', { antialias: false }) || canvas.getContext('webgl', { antialias: false }) || canvas.getContext('experimental-webgl');
+if (!gl) { document.body.style.background = '#050505'; throw new Error('no webgl'); }
+
+const STEPS = 130;
+const RENDER_SCALE = 0.6;
+
+const VS = `attribute vec2 a_pos; void main(){ gl_Position = vec4(a_pos,0.0,1.0); }`;
+
+const FS = `
+precision highp float;
+uniform vec2 u_res; uniform float u_time; uniform vec3 u_camPos; uniform mat3 u_camBasis; uniform float u_focal;
+const float HORIZON=1.0, R_IN=2.6, R_OUT=9.0, R_ESC=36.0;
+const int MAX_STEPS=${STEPS};
+float hash11(float p){ p=fract(p*0.1031); p*=p+33.33; p*=p+p; return fract(p); }
+float hash31(vec3 p){ p=fract(p*0.1031); p+=dot(p,p.yzx+33.33); return fract((p.x+p.y)*p.z); }
+float vnoise(vec3 p){ vec3 i=floor(p),f=fract(p); f=f*f*(3.0-2.0*f);
+  float n000=hash31(i),n100=hash31(i+vec3(1,0,0)),n010=hash31(i+vec3(0,1,0)),n110=hash31(i+vec3(1,1,0));
+  float n001=hash31(i+vec3(0,0,1)),n101=hash31(i+vec3(1,0,1)),n011=hash31(i+vec3(0,1,1)),n111=hash31(i+vec3(1,1,1));
+  return mix(mix(mix(n000,n100,f.x),mix(n010,n110,f.x),f.y),mix(mix(n001,n101,f.x),mix(n011,n111,f.x),f.y),f.z); }
+float fbm(vec3 p){ float a=0.5,s=0.0; for(int i=0;i<4;i++){ s+=a*vnoise(p); p*=2.02; a*=0.5; } return s; }
+vec3 stars(vec3 dir){
+  float neb=smoothstep(0.55,1.0,fbm(dir*3.0+11.0));
+  vec3 col=mix(vec3(0.02,0.03,0.06),vec3(0.10,0.06,0.16),neb)*0.6;
+  for(float s=0.0;s<3.0;s+=1.0){ float scale=60.0+s*120.0; vec3 g=dir*scale; vec3 id=floor(g); float h=hash31(id+s*17.0);
+    if(h>0.86){ vec3 fp=fract(g)-0.5; float d=length(fp); float bright=(h-0.86)/0.14;
+      float star=smoothstep(0.16,0.0,d)*bright; float tw=0.6+0.4*sin(u_time*1.5+h*60.0);
+      vec3 sc=mix(vec3(0.6,0.75,1.0),vec3(1.0,0.85,0.6),hash11(h*7.0)); col+=sc*star*tw*1.4; } }
+  return col; }
+vec3 diskEmission(vec3 p, vec3 photonDir, out float alpha){
+  float r=length(p.xz); if(r<R_IN||r>R_OUT){ alpha=0.0; return vec3(0.0); }
+  float tNorm=(r-R_IN)/(R_OUT-R_IN);
+  vec3 hot=vec3(0.75,0.85,1.10),mid=vec3(1.10,0.70,0.30),cool=vec3(0.65,0.16,0.06);
+  vec3 base=(tNorm<0.5)?mix(hot,mid,tNorm*2.0):mix(mid,cool,(tNorm-0.5)*2.0);
+  float bright=1.7*pow(1.0-tNorm,1.3)+0.25;
+  float ang=atan(p.z,p.x); float swirl=ang*2.0-6.0/sqrt(r)+u_time*0.6;
+  float tex=fbm(vec3(cos(swirl)*r*0.5,sin(swirl)*r*0.5,r*0.6-u_time*0.3)); tex=0.55+0.85*tex; bright*=tex;
+  float M=0.5; float speed=min(sqrt(M/r),0.7); vec3 vdir=normalize(vec3(-p.z,0.0,p.x));
+  float cosA=dot(vdir,-normalize(photonDir)); float gamma=1.0/sqrt(1.0-speed*speed);
+  float doppler=1.0/(gamma*(1.0-speed*cosA)); float beam=pow(doppler,3.0);
+  vec3 shift=mix(vec3(1.0,0.55,0.35),vec3(0.55,0.75,1.2),clamp((doppler-0.6)/1.2,0.0,1.0));
+  float edge=smoothstep(0.0,0.10,tNorm)*smoothstep(0.0,0.10,1.0-tNorm);
+  alpha=clamp(0.92*edge*tex,0.0,1.0); return base*shift*bright*beam*edge; }
+vec3 tonemap(vec3 x){ x*=0.85; return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14),0.0,1.0); }
+void main(){
+  vec2 uv=(gl_FragCoord.xy-0.5*u_res)/u_res.y;
+  vec3 pos=u_camPos; vec3 vel=normalize(u_camBasis*vec3(uv,u_focal));
+  vec3 h=cross(pos,vel); float h2=dot(h,h);
+  vec3 col=vec3(0.0); float trans=1.0; vec3 prevPos=pos;
+  for(int i=0;i<MAX_STEPS;i++){
+    float r=length(pos); float dt=clamp(0.022*(r-HORIZON)+0.012,0.014,0.45);
+    prevPos=pos; vec3 acc=-1.5*h2*pos/pow(dot(pos,pos),2.5);
+    vec3 newPos=pos+vel*dt+0.5*acc*dt*dt; vel+=acc*dt; pos=newPos;
+    if(prevPos.y*pos.y<0.0){ float t=prevPos.y/(prevPos.y-pos.y); vec3 cp=mix(prevPos,pos,t);
+      float a; vec3 e=diskEmission(cp,vel,a); if(a>0.0){ col+=trans*e; trans*=(1.0-a); } }
+    float rr=length(pos);
+    if(rr<HORIZON) break; if(trans<0.02) break;
+    if(rr>R_ESC){ col+=trans*stars(normalize(vel)); break; } }
+  col=tonemap(col); float v=1.0-0.25*dot(uv,uv); col*=v;
+  gl_FragColor=vec4(col,1.0); }
+`;
+
+function compile(src,type){ const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s); return s; }
+const prog=gl.createProgram();
+gl.attachShader(prog,compile(VS,gl.VERTEX_SHADER));
+gl.attachShader(prog,compile(FS,gl.FRAGMENT_SHADER));
+gl.linkProgram(prog); gl.useProgram(prog);
+const buff=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,buff);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+const aPos=gl.getAttribLocation(prog,'a_pos'); gl.enableVertexAttribArray(aPos); gl.vertexAttribPointer(aPos,2,gl.FLOAT,false,0,0);
+const U={ res:gl.getUniformLocation(prog,'u_res'), time:gl.getUniformLocation(prog,'u_time'),
+  cam:gl.getUniformLocation(prog,'u_camPos'), basis:gl.getUniformLocation(prog,'u_camBasis'), focal:gl.getUniformLocation(prog,'u_focal') };
+
+function resize(){
+    const w=Math.floor(window.innerWidth*RENDER_SCALE), h=Math.floor(window.innerHeight*RENDER_SCALE);
+    canvas.width=w; canvas.height=h; canvas.style.width=window.innerWidth+'px'; canvas.style.height=window.innerHeight+'px';
+    gl.viewport(0,0,w,h);
+}
+window.addEventListener('resize',resize); resize();
+
+function cross(a,b){ return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]]; }
+function norm(a){ const l=Math.hypot(a[0],a[1],a[2])||1; return [a[0]/l,a[1]/l,a[2]/l]; }
+
+let az = Math.random()*6.28, el = 0.14, dist = 15;
+const t0 = performance.now();
+function frame(now){
+    az += 0.0011;
+    const ce=Math.cos(el),se=Math.sin(el),ca=Math.cos(az),sa=Math.sin(az);
+    const camPos=[dist*ce*ca,dist*se,dist*ce*sa];
+    const fwd=norm([-camPos[0],-camPos[1],-camPos[2]]);
+    let right=norm(cross(fwd,[0,1,0])); if(!isFinite(right[0])) right=[1,0,0];
+    const up=cross(right,fwd);
+    const basis=[right[0],right[1],right[2],up[0],up[1],up[2],fwd[0],fwd[1],fwd[2]];
+    gl.uniform2f(U.res,canvas.width,canvas.height);
+    gl.uniform1f(U.time,(now-t0)*0.001);
+    gl.uniform3f(U.cam,camPos[0],camPos[1],camPos[2]);
+    gl.uniformMatrix3fv(U.basis,false,basis);
+    gl.uniform1f(U.focal,1.5);
+    gl.drawArrays(gl.TRIANGLES,0,3);
+    requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+
+</body>
+</html>

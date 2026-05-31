@@ -24,6 +24,13 @@
 export const posts = [
 
     {
+        slug: 'singularity',
+        date: '2026-05-17',
+        preview: 'preview.html',  // schwarzschild black hole, real per-pixel geodesic lensing
+        scale: 1.0
+    },
+
+    {
         slug: 'moire',
         date: '2026-05-17',
         preview: 'preview.html',  // moiré editor — layered line/ring/radial/spiral patterns
