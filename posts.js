@@ -24,9 +24,9 @@
 export const posts = [
 
     {
-        slug: 'orbits',
+        slug: 'moire',
         date: '2026-05-17',
-        preview: 'preview.html',  // newtonian n-body gravity field, particles on trails
+        preview: 'preview.html',  // moiré editor — layered line/ring/radial/spiral patterns
         scale: 1.0
     },
 

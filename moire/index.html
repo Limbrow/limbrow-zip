@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0">
+<title>moiré · limbrow.zip</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+        background: #04050a;
+        color: #e8e8e8;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+        font-family: ui-monospace, 'JetBrains Mono', monospace;
+        -webkit-user-select: none; user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: none;
+    }
+
+    .back {
+        position: fixed;
+        top: 16px; left: 16px;
+        z-index: 100;
+        width: 36px; height: 36px;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(10, 14, 30, 0.55);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,0.10);
+        border-radius: 50%;
+        color: #fff;
+        text-decoration: none;
+        font-size: 16px;
+        line-height: 1;
+        padding-bottom: 2px;
+    }
+
+    #stage {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        display: block;
+        z-index: 1;
+        touch-action: none;
+    }
+
+    /* ─── PANEL (floating bottom, minimizable) — shared design system ─── */
+    .panel {
+        position: fixed;
+        bottom: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10;
+        width: min(560px, calc(100vw - 32px));
+        background: rgba(8, 10, 22, 0.65);
+        backdrop-filter: blur(20px) saturate(140%);
+        -webkit-backdrop-filter: blur(20px) saturate(140%);
+        border: 1px solid rgba(180, 160, 230, 0.15);
+        border-radius: 14px;
+        padding: 14px;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04) inset;
+        transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1), border-radius 0.32s ease;
+    }
+    .panel.minimized {
+        transform: translateX(-50%) translateY(calc(100% - 38px));
+        border-radius: 18px 18px 0 0;
+    }
+
+    .panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 12px;
+        margin-bottom: 12px;
+        border-bottom: 1px solid rgba(180, 160, 230, 0.08);
+        cursor: pointer;
+    }
+    .panel.minimized .panel-head { padding-bottom: 0; margin-bottom: 0; border-bottom: none; }
+
+    .panel-title {
+        font-size: 9px; letter-spacing: 0.25em; text-transform: uppercase;
+        color: rgba(220, 200, 255, 0.7);
+        display: flex; align-items: center; gap: 6px;
+    }
+    .panel-title::before {
+        content: ''; width: 6px; height: 6px; border-radius: 50%;
+        background: #c8a4ff; box-shadow: 0 0 6px rgba(200, 164, 255, 0.8);
+    }
+
+    .panel-toggle-btn {
+        background: none; border: 0; color: rgba(220, 200, 255, 0.6);
+        font-size: 14px; cursor: pointer; padding: 4px 8px; margin: -4px -8px;
+        font-family: inherit; transition: color 0.15s, transform 0.32s;
+    }
+    .panel.minimized .panel-toggle-btn { transform: rotate(180deg); }
+
+    .panel-body {
+        transition: opacity 0.2s, max-height 0.32s ease;
+        max-height: 460px; overflow: hidden;
+        display: flex; flex-direction: column; gap: 12px;
+    }
+    .panel.minimized .panel-body { opacity: 0; max-height: 0; pointer-events: none; }
+
+    h3 {
+        font-size: 8px; font-weight: 500; letter-spacing: 0.28em;
+        text-transform: uppercase; color: rgba(180, 170, 220, 0.5); margin-bottom: 6px;
+    }
+
+    /* ─── Layer chips ─── */
+    .layers { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .chip {
+        display: flex; align-items: center; gap: 6px;
+        padding: 6px 10px; border-radius: 8px;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        cursor: pointer; font-size: 9px; letter-spacing: 0.1em;
+        color: rgba(220,200,255,0.6); transition: all 0.15s;
+    }
+    .chip.active { border-color: rgba(200,164,255,0.6); color: #fff; background: rgba(200,164,255,0.10); }
+    .chip .swatch { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .chip .rm {
+        opacity: 0.5; font-size: 11px; margin-left: 2px;
+    }
+    .chip .rm:hover { opacity: 1; }
+    .chip-add {
+        padding: 6px 11px; border-radius: 8px;
+        background: rgba(200,164,255,0.12);
+        border: 1px solid rgba(200,164,255,0.25);
+        color: #fff; cursor: pointer; font-size: 13px; line-height: 1;
+    }
+
+    /* ─── Type segmented ─── */
+    .seg {
+        display: grid; grid-template-columns: repeat(4, 1fr);
+        background: rgba(255,255,255,0.03); border-radius: 8px; padding: 3px;
+    }
+    .seg button {
+        background: transparent; border: 0; color: rgba(220,200,255,0.55);
+        padding: 7px 4px; font-family: inherit; font-size: 8.5px;
+        letter-spacing: 0.1em; text-transform: uppercase; font-weight: 500;
+        border-radius: 5px; cursor: pointer; transition: all 0.15s;
+    }
+    .seg button.active {
+        background: rgba(200,164,255,0.18); color: #fff;
+        box-shadow: 0 0 12px rgba(180,100,255,0.25) inset;
+    }
+
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    label {
+        display: flex; justify-content: space-between; align-items: baseline;
+        font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase;
+        color: rgba(180,170,220,0.5); margin-bottom: 4px;
+    }
+    label .val { color: rgba(220,200,255,0.95); letter-spacing: 0; font-size: 10px; }
+
+    input[type=range] {
+        width: 100%; -webkit-appearance: none; appearance: none;
+        height: 2px; background: rgba(180,160,230,0.12); outline: none; border-radius: 1px;
+    }
+    input[type=range]::-webkit-slider-thumb {
+        -webkit-appearance: none; width: 14px; height: 14px;
+        background: radial-gradient(circle at 30% 30%, #e0c8ff 0%, #8060e0 100%);
+        border-radius: 50%; cursor: pointer; box-shadow: 0 0 12px rgba(180,100,255,0.6); border: 0;
+    }
+    input[type=range]::-moz-range-thumb {
+        width: 14px; height: 14px; background: #c8a4ff; border-radius: 50%; cursor: pointer; border: 0;
+    }
+
+    .ctl-row { display: flex; gap: 12px; align-items: flex-end; }
+    .ctl-row .grow { flex: 1; }
+
+    /* Color input styled as a swatch */
+    .color-wrap { display: flex; flex-direction: column; }
+    input[type=color] {
+        -webkit-appearance: none; appearance: none; border: 0; padding: 0;
+        width: 38px; height: 26px; border-radius: 7px; cursor: pointer; background: none;
+    }
+    input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
+    input[type=color]::-webkit-color-swatch { border: 1px solid rgba(255,255,255,0.2); border-radius: 7px; }
+
+    select {
+        width: 100%; background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(180,160,230,0.12); color: rgba(220,200,255,0.9);
+        padding: 7px 26px 7px 10px; font-family: inherit; font-size: 10px;
+        border-radius: 7px; cursor: pointer; -webkit-appearance: none; appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M0 2 L4 6 L8 2' stroke='%23c8a4ff' stroke-width='1.2' fill='none'/%3E%3C/svg%3E");
+        background-repeat: no-repeat; background-position: right 9px center;
+    }
+    select option { background: #0a0c1a; color: #d8dcf0; }
+
+    .hint {
+        font-size: 8px; letter-spacing: 0.15em; text-transform: uppercase;
+        color: rgba(180,170,220,0.4); text-align: center;
+    }
+
+    @media (max-width: 480px) {
+        .panel { padding: 12px; }
+        .row2 { grid-template-columns: 1fr; gap: 10px; }
+    }
+</style>
+</head>
+<body>
+
+<a class="back" href="/" aria-label="Back to grid">←</a>
+
+<canvas id="stage"></canvas>
+
+<div class="panel" id="panel">
+    <div class="panel-head" id="panel-head">
+        <div class="panel-title">MOIRÉ</div>
+        <button class="panel-toggle-btn" id="panel-toggle" aria-label="Minimize">▾</button>
+    </div>
+
+    <div class="panel-body">
+        <div>
+            <h3>Layers</h3>
+            <div class="layers" id="layers"></div>
+        </div>
+
+        <div>
+            <h3>Pattern</h3>
+            <div class="seg" id="type-seg">
+                <button data-type="lines">Lines</button>
+                <button data-type="rings">Rings</button>
+                <button data-type="radial">Radial</button>
+                <button data-type="spiral">Spiral</button>
+            </div>
+        </div>
+
+        <div class="ctl-row">
+            <div class="color-wrap">
+                <h3>Color</h3>
+                <input type="color" id="color" value="#33eef0">
+            </div>
+            <div class="grow">
+                <label>Scale <span class="val" id="scale-val">14</span></label>
+                <input type="range" id="scale" min="3" max="60" value="14">
+            </div>
+            <div class="grow">
+                <label>Rotate <span class="val" id="angle-val">0°</span></label>
+                <input type="range" id="angle" min="0" max="180" value="0">
+            </div>
+        </div>
+
+        <div class="row2">
+            <div>
+                <h3>Blend</h3>
+                <select id="blend">
+                    <option value="screen">Screen</option>
+                    <option value="lighter">Add</option>
+                    <option value="difference">Difference</option>
+                    <option value="multiply">Multiply</option>
+                    <option value="exclusion">Exclusion</option>
+                </select>
+            </div>
+            <div>
+                <h3>Background</h3>
+                <select id="bg">
+                    <option value="#04050a">Black</option>
+                    <option value="#f4f0e8">Paper</option>
+                    <option value="#ffffff">White</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="hint">drag the canvas to move the selected layer</div>
+    </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+// MOIRÉ — a layer-based moiré editor.
+//
+// Each layer is a hard-edged repeating pattern (parallel lines / concentric
+// rings / radial rays / archimedean spiral) in its own colour, positioned by
+// a movable centre. Layers composite with a chosen blend mode (screen / add /
+// difference / multiply / exclusion); the interference between two or more
+// layers is the moiré. Drag the canvas to move the selected layer's centre,
+// so you can slide patterns over each other and watch the fringes breathe.
+//
+// Add / remove / select layers via the chips. Per layer: pattern type, colour,
+// scale (period), and rotation. Background colour and blend are global.
+// ════════════════════════════════════════════════════════════════════════════
+
+const canvas = document.getElementById('stage');
+const ctx = canvas.getContext('2d');
+
+let DPR = 1, VW = 0, VH = 0;
+function fit() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    VW = window.innerWidth; VH = window.innerHeight;
+    canvas.width = Math.floor(VW * DPR);
+    canvas.height = Math.floor(VH * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    render();
+}
+window.addEventListener('resize', fit);
+
+// ─── MODEL ─────────────────────────────────────────────────────────────────
+let bg = '#04050a';
+let blend = 'screen';
+
+function makeLayer(opts) {
+    return Object.assign({
+        type: 'lines',
+        color: '#33eef0',
+        scale: 14,        // pattern period in px
+        angle: 0,         // degrees
+        cx: 0.5,          // normalised centre
+        cy: 0.5,
+    }, opts);
+}
+
+let layers = [
+    makeLayer({ type: 'lines', color: '#33eef0', scale: 14, angle: 0,  cx: 0.48, cy: 0.5 }),
+    makeLayer({ type: 'lines', color: '#ff2d70', scale: 14, angle: 6,  cx: 0.52, cy: 0.5 }),
+];
+let active = 1;
+
+// ─── DRAW ONE LAYER ────────────────────────────────────────────────────────
+function drawLayer(L) {
+    const cx = L.cx * VW, cy = L.cy * VH;
+    const p = L.scale;
+    const duty = 0.5;
+    const diag = Math.sqrt(VW * VW + VH * VH);
+    ctx.fillStyle = L.color;
+    ctx.strokeStyle = L.color;
+
+    if (L.type === 'lines') {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(L.angle * Math.PI / 180);
+        const w = p * duty;
+        const n = Math.ceil(diag / p) + 2;
+        for (let i = -n; i <= n; i++) {
+            const x = i * p;
+            ctx.fillRect(x - w / 2, -diag, w, diag * 2);
+        }
+        ctx.restore();
+    } else if (L.type === 'rings') {
+        const lw = p * duty;
+        ctx.lineWidth = lw;
+        const maxR = diag;
+        for (let r = p; r < maxR; r += p) {
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+    } else if (L.type === 'radial') {
+        // Rays — count derived from scale so the slider controls density
+        const count = Math.max(6, Math.round(720 / p));
+        const step = Math.PI * 2 / count;
+        const a0 = L.angle * Math.PI / 180;
+        ctx.save();
+        ctx.translate(cx, cy);
+        for (let i = 0; i < count; i++) {
+            const a = a0 + i * step;
+            // Filled wedge half the angular pitch wide
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.arc(0, 0, diag, a - step * 0.25, a + step * 0.25);
+            ctx.closePath();
+            ctx.fill();
+        }
+        ctx.restore();
+    } else if (L.type === 'spiral') {
+        const lw = p * duty;
+        ctx.lineWidth = lw;
+        const a0 = L.angle * Math.PI / 180;
+        const turns = diag / p;
+        ctx.beginPath();
+        const steps = Math.ceil(turns * 60);
+        for (let s = 0; s <= steps; s++) {
+            const th = (s / 60) * Math.PI * 2;
+            const r = (p / (Math.PI * 2)) * th;
+            const x = cx + Math.cos(th + a0) * r;
+            const y = cy + Math.sin(th + a0) * r;
+            if (s === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+    }
+}
+
+function drawHandles() {
+    ctx.globalCompositeOperation = 'source-over';
+    layers.forEach((L, i) => {
+        const cx = L.cx * VW, cy = L.cy * VH;
+        const sel = i === active;
+        ctx.beginPath();
+        ctx.arc(cx, cy, sel ? 9 : 5, 0, Math.PI * 2);
+        ctx.strokeStyle = sel ? '#fff' : 'rgba(255,255,255,0.4)';
+        ctx.lineWidth = sel ? 2 : 1.5;
+        ctx.stroke();
+        if (sel) {
+            ctx.beginPath();
+            ctx.moveTo(cx - 14, cy); ctx.lineTo(cx + 14, cy);
+            ctx.moveTo(cx, cy - 14); ctx.lineTo(cx, cy + 14);
+            ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
+    });
+}
+
+function render() {
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, VW, VH);
+
+    for (let i = 0; i < layers.length; i++) {
+        ctx.globalCompositeOperation = (i === 0) ? 'source-over' : blend;
+        drawLayer(layers[i]);
+    }
+    drawHandles();
+    ctx.globalCompositeOperation = 'source-over';
+}
+
+// ─── PANEL UI ──────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const layersEl = $('layers');
+
+function rebuildChips() {
+    layersEl.innerHTML = '';
+    layers.forEach((L, i) => {
+        const chip = document.createElement('div');
+        chip.className = 'chip' + (i === active ? ' active' : '');
+        chip.innerHTML = `<span class="swatch" style="background:${L.color}"></span>L${i + 1}` +
+                         (layers.length > 1 ? `<span class="rm" data-rm="${i}">✕</span>` : '');
+        chip.addEventListener('click', e => {
+            if (e.target.dataset.rm !== undefined) {
+                layers.splice(i, 1);
+                if (active >= layers.length) active = layers.length - 1;
+                rebuildChips(); syncControls(); render();
+                return;
+            }
+            active = i; rebuildChips(); syncControls(); render();
+        });
+        layersEl.appendChild(chip);
+    });
+    const add = document.createElement('div');
+    add.className = 'chip-add';
+    add.textContent = '+';
+    add.title = 'Add layer';
+    add.addEventListener('click', () => {
+        const palette = ['#33eef0', '#ff2d70', '#f8df3a', '#7b3aff', '#3aff9a', '#ff8a3a'];
+        const col = palette[layers.length % palette.length];
+        layers.push(makeLayer({
+            type: layers[active] ? layers[active].type : 'lines',
+            color: col,
+            scale: 14 + ((Math.random() * 8) | 0),
+            angle: (Math.random() * 20) | 0,
+            cx: 0.5 + (Math.random() - 0.5) * 0.1,
+            cy: 0.5 + (Math.random() - 0.5) * 0.1,
+        }));
+        active = layers.length - 1;
+        rebuildChips(); syncControls(); render();
+    });
+    layersEl.appendChild(add);
+}
+
+function syncControls() {
+    const L = layers[active];
+    if (!L) return;
+    document.querySelectorAll('#type-seg button').forEach(b =>
+        b.classList.toggle('active', b.dataset.type === L.type));
+    $('color').value = L.color;
+    $('scale').value = L.scale;  $('scale-val').textContent = L.scale;
+    $('angle').value = L.angle;  $('angle-val').textContent = L.angle + '°';
+}
+
+document.querySelectorAll('#type-seg button').forEach(b => {
+    b.addEventListener('click', () => {
+        layers[active].type = b.dataset.type;
+        syncControls(); render();
+    });
+});
+$('color').addEventListener('input', e => {
+    layers[active].color = e.target.value;
+    rebuildChips(); render();
+});
+$('scale').addEventListener('input', e => {
+    layers[active].scale = parseInt(e.target.value, 10);
+    $('scale-val').textContent = e.target.value;
+    render();
+});
+$('angle').addEventListener('input', e => {
+    layers[active].angle = parseInt(e.target.value, 10);
+    $('angle-val').textContent = e.target.value + '°';
+    render();
+});
+$('blend').addEventListener('change', e => { blend = e.target.value; render(); });
+$('bg').addEventListener('change', e => { bg = e.target.value; render(); });
+
+// Panel minimize
+const panel = $('panel');
+$('panel-head').addEventListener('click', () => panel.classList.toggle('minimized'));
+
+// ─── DRAG THE SELECTED LAYER ON THE CANVAS ─────────────────────────────────
+let dragging = false;
+function pointInPanel(x, y) {
+    const r = panel.getBoundingClientRect();
+    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+}
+canvas.addEventListener('pointerdown', e => {
+    if (pointInPanel(e.clientX, e.clientY) || e.target.closest('.back')) return;
+    // If the press lands near another layer's handle, select that layer first
+    let best = -1, bestD = 26;
+    layers.forEach((L, i) => {
+        const dx = e.clientX - L.cx * VW;
+        const dy = e.clientY - L.cy * VH;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d < bestD) { bestD = d; best = i; }
+    });
+    if (best >= 0 && best !== active) { active = best; rebuildChips(); syncControls(); }
+    dragging = true;
+    canvas.setPointerCapture(e.pointerId);
+    moveActive(e);
+});
+canvas.addEventListener('pointermove', e => { if (dragging) moveActive(e); });
+canvas.addEventListener('pointerup', () => { dragging = false; });
+canvas.addEventListener('pointercancel', () => { dragging = false; });
+
+function moveActive(e) {
+    const L = layers[active];
+    if (!L) return;
+    L.cx = Math.max(0, Math.min(1, e.clientX / VW));
+    L.cy = Math.max(0, Math.min(1, e.clientY / VH));
+    render();
+}
+
+// Prevent iOS double-tap zoom
+let _lastTouchEnd = 0;
+document.addEventListener('touchend', e => {
+    const now = Date.now();
+    if (now - _lastTouchEnd < 350) e.preventDefault();
+    _lastTouchEnd = now;
+}, { passive: false });
+
+// ─── INIT ──────────────────────────────────────────────────────────────────
+rebuildChips();
+syncControls();
+fit();
+</script>
+
+</body>
+</html>
