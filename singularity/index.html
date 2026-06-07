@@ -148,7 +148,8 @@ float fbm(vec3 p){ float a=0.5, s=0.0; for(int i=0;i<5;i++){ s+=a*vnoise(p); p*=
 
 vec3 stars(vec3 dir){
     float neb = smoothstep(0.55, 1.0, fbm(dir*3.0 + 11.0));
-    vec3 col = mix(vec3(0.02,0.03,0.06), vec3(0.10,0.06,0.16), neb) * 0.6;
+    // Faint, near-neutral dark backdrop with a touch of warmth — no purple
+    vec3 col = mix(vec3(0.013,0.012,0.014), vec3(0.06,0.035,0.030), neb) * 0.6;
     for(float s=0.0; s<3.0; s+=1.0){
         float scale = 60.0 + s*120.0;
         vec3 g = dir*scale, id = floor(g);
@@ -159,7 +160,8 @@ vec3 stars(vec3 dir){
             float bright = (h-0.86)/0.14;
             float star = smoothstep(0.16, 0.0, d) * bright;
             float tw = 0.6 + 0.4*sin(u_time*1.5 + h*60.0);
-            vec3 sc = mix(vec3(0.6,0.75,1.0), vec3(1.0,0.85,0.6), hash11(h*7.0));
+            // Cool steel ↔ warm white — restrained
+            vec3 sc = mix(vec3(0.72,0.76,0.82), vec3(1.0,0.88,0.66), hash11(h*7.0));
             col += sc * star * tw * 1.4;
         }
     }
@@ -170,9 +172,10 @@ vec3 diskEmission(vec3 p, vec3 photonDir, out float alpha){
     float r = length(p.xz);
     if(r < R_IN || r > R_OUT){ alpha = 0.0; return vec3(0.0); }
     float tNorm = (r - R_IN) / (R_OUT - R_IN);
-    vec3 hot  = vec3(0.75, 0.85, 1.10);
-    vec3 mid  = vec3(1.10, 0.70, 0.30);
-    vec3 cool = vec3(0.65, 0.16, 0.06);
+    // Black → amber → deep red, like the real Event-Horizon-Telescope images
+    vec3 hot  = vec3(1.00, 0.82, 0.45);    // warm yellow-white inner
+    vec3 mid  = vec3(0.96, 0.38, 0.11);    // orange
+    vec3 cool = vec3(0.42, 0.05, 0.03);    // deep red outer
     vec3 base = (tNorm < 0.5) ? mix(hot, mid, tNorm*2.0) : mix(mid, cool, (tNorm-0.5)*2.0);
     float bright = 1.7 * pow(1.0 - tNorm, 1.3) + 0.25;
     float ang = atan(p.z, p.x);
@@ -187,7 +190,8 @@ vec3 diskEmission(vec3 p, vec3 photonDir, out float alpha){
     float gamma = 1.0 / sqrt(1.0 - speed*speed);
     float doppler = 1.0 / (gamma * (1.0 - speed*cosA));
     float beam = pow(doppler, 3.0);
-    vec3 shift = mix(vec3(1.0,0.55,0.35), vec3(0.55,0.75,1.2), clamp((doppler-0.6)/1.2, 0.0, 1.0));
+    // Doppler stays in the warm range: receding deep red, approaching bright gold
+    vec3 shift = mix(vec3(0.55,0.12,0.06), vec3(1.0,0.92,0.70), clamp((doppler-0.6)/1.2, 0.0, 1.0));
     float edge = smoothstep(0.0, 0.10, tNorm) * smoothstep(0.0, 0.10, 1.0 - tNorm);
     alpha = clamp(0.92 * edge * tex, 0.0, 1.0);
     return base * shift * bright * beam * edge;

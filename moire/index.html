@@ -315,8 +315,8 @@ function makeLayer(opts) {
 }
 
 let layers = [
-    makeLayer({ type: 'lines', color: '#33eef0', scale: 14, angle: 0,  cx: 0.48, cy: 0.5 }),
-    makeLayer({ type: 'lines', color: '#ff2d70', scale: 14, angle: 6,  cx: 0.52, cy: 0.5 }),
+    makeLayer({ type: 'lines', color: '#3a7bd5', scale: 14, angle: 0,  cx: 0.48, cy: 0.5 }),  // blue
+    makeLayer({ type: 'lines', color: '#e3342e', scale: 14, angle: 6,  cx: 0.52, cy: 0.5 }),  // red
 ];
 let active = 1;
 
@@ -445,7 +445,8 @@ function rebuildChips() {
     add.textContent = '+';
     add.title = 'Add layer';
     add.addEventListener('click', () => {
-        const palette = ['#33eef0', '#ff2d70', '#f8df3a', '#7b3aff', '#3aff9a', '#ff8a3a'];
+        // Site palette — red / gold / green / blue + metallic steel
+        const palette = ['#3a7bd5', '#e3342e', '#f2c24d', '#4cb86b', '#9fa6ad'];
         const col = palette[layers.length % palette.length];
         layers.push(makeLayer({
             type: layers[active] ? layers[active].type : 'lines',

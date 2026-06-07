@@ -177,6 +177,16 @@ function fit() {
 window.addEventListener('resize', fit);
 fit();
 
+// ─── SITE PALETTE — refined red / gold / green / blue + metallic steel ─────
+const PAL = [[227,52,46],[242,194,77],[76,184,107],[58,123,213],[159,166,173]];
+function pcol(t, al){
+    t = t - Math.floor(t);
+    const n = PAL.length, f = t * n, i = Math.floor(f) % n, fr = f - Math.floor(f);
+    const a = PAL[i], b = PAL[(i+1) % n];
+    const r = (a[0]+(b[0]-a[0])*fr)|0, g = (a[1]+(b[1]-a[1])*fr)|0, c = (a[2]+(b[2]-a[2])*fr)|0;
+    return 'rgba(' + r + ',' + g + ',' + c + ',' + al + ')';
+}
+
 // ─── AUDIO GRAPH ───────────────────────────────────────────────────────────
 let actx = null, analyser = null, timeData = null, freqData = null;
 function initAudioGraph() {
@@ -253,11 +263,11 @@ function frame(now) {
     }
 
     phase  += 0.004 + bass * 0.02;
-    hueRot += 0.25 + bass * 2.2;
+    hueRot += 0.0007 + bass * 0.006;   // palette rotation in [0,1] units
 
     ctx.globalCompositeOperation = 'lighter';
 
-    // ── Spectral corona — frequency bars radiating outward in rainbow ──
+    // ── Spectral corona — frequency bars radiating outward in the palette ──
     const NB = 128;
     for (let i = 0; i < NB; i++) {
         let amp;
@@ -270,8 +280,7 @@ function frame(now) {
         const a = (i / NB) * Math.PI * 2 + phase * 0.3;
         const r0 = wallR + 4;
         const r1 = r0 + amp * baseR * 1.5;
-        const hue = (i / NB * 360 + hueRot) % 360;
-        ctx.strokeStyle = `hsla(${hue}, 95%, ${55 + amp * 25}%, ${0.25 + amp * 0.7})`;
+        ctx.strokeStyle = pcol(i / NB + hueRot, 0.22 + amp * 0.7);
         ctx.lineWidth = (Math.PI * 2 * r0 / NB) * 0.6;
         ctx.lineCap = 'round';
         ctx.beginPath();
@@ -280,9 +289,9 @@ function frame(now) {
         ctx.stroke();
     }
 
-    // ── The confining ring (faint, prismatic) ──
+    // ── The confining ring (faint, metallic) ──
     ctx.lineWidth = 1.5;
-    ctx.strokeStyle = `hsla(${hueRot % 360}, 60%, 70%, ${0.10 + energy * 0.14})`;
+    ctx.strokeStyle = pcol(hueRot, 0.12 + energy * 0.16);
     ctx.beginPath();
     ctx.arc(cx, cy, wallR, 0, Math.PI * 2);
     ctx.stroke();
@@ -306,25 +315,25 @@ function frame(now) {
         pts.push([cx + Math.cos(a + phase * 0.3) * r, cy + Math.sin(a + phase * 0.3) * r]);
     }
 
-    // Soft multi-stop fill
+    // Soft multi-stop fill drawn from the palette
     const grad = ctx.createRadialGradient(cx, cy, baseR * 0.15, cx, cy, wallR);
-    grad.addColorStop(0.0, `hsla(${(hueRot) % 360}, 90%, 60%, ${0.10 + energy * 0.18})`);
-    grad.addColorStop(0.5, `hsla(${(hueRot + 120) % 360}, 90%, 58%, ${0.07 + energy * 0.14})`);
-    grad.addColorStop(1.0, `hsla(${(hueRot + 240) % 360}, 95%, 55%, ${0.03 + energy * 0.10})`);
+    grad.addColorStop(0.0, pcol(hueRot,        0.10 + energy * 0.18));
+    grad.addColorStop(0.5, pcol(hueRot + 0.33, 0.07 + energy * 0.14));
+    grad.addColorStop(1.0, pcol(hueRot + 0.66, 0.03 + energy * 0.10));
     ctx.fillStyle = grad;
     ctx.beginPath();
     pts.forEach((p, i) => i === 0 ? ctx.moveTo(p[0], p[1]) : ctx.lineTo(p[0], p[1]));
     ctx.closePath();
     ctx.fill();
 
-    // Stroke each segment with its own hue → rainbow outline
+    // Stroke each segment with its own palette colour
     ctx.lineWidth = 1.8 + energy * 2.6;
     ctx.lineCap = 'round';
     ctx.shadowBlur = 12 + energy * 24;
     for (let i = 0; i < N; i++) {
-        const hue = (i / N * 360 + hueRot) % 360;
-        ctx.strokeStyle = `hsla(${hue}, 95%, ${62 + energy * 18}%, ${0.75 + energy * 0.25})`;
-        ctx.shadowColor = `hsla(${hue}, 95%, 60%, 0.7)`;
+        const c = pcol(i / N + hueRot, 0.78 + energy * 0.22);
+        ctx.strokeStyle = c;
+        ctx.shadowColor = c;
         ctx.beginPath();
         ctx.moveTo(pts[i][0], pts[i][1]);
         ctx.lineTo(pts[i + 1][0], pts[i + 1][1]);
@@ -334,7 +343,7 @@ function frame(now) {
 
     // Contact flare where the wave nears the wall
     if (maxReach > 0.93) {
-        ctx.strokeStyle = `hsla(${(hueRot + 60) % 360}, 100%, 78%, ${(maxReach - 0.93) * 6})`;
+        ctx.strokeStyle = pcol(hueRot + 0.15, (maxReach - 0.93) * 6);
         ctx.lineWidth = 2.5;
         ctx.beginPath();
         ctx.arc(cx, cy, wallR, 0, Math.PI * 2);

@@ -42,6 +42,11 @@ fit();
 const PI = Math.PI;
 const startSeed = Math.random() * 1000;   // each card differs slightly
 
+const PAL = [[227,52,46],[242,194,77],[76,184,107],[58,123,213],[159,166,173]];
+function pcol(t, bri){ t=t-Math.floor(t); const n=PAL.length,f=t*n,i=Math.floor(f)%n,fr=f-Math.floor(f);
+    const a=PAL[i],b=PAL[(i+1)%n]; let r=(a[0]+(b[0]-a[0])*fr)*bri,g=(a[1]+(b[1]-a[1])*fr)*bri,c=(a[2]+(b[2]-a[2])*fr)*bri;
+    r=r>255?255:r|0; g=g>255?255:g|0; c=c>255?255:c|0; return 'rgb('+r+','+g+','+c+')'; }
+
 function frame(now) {
     const W = canvas.clientWidth, H = canvas.clientHeight;
     ctx.fillStyle = '#060608';
@@ -75,11 +80,9 @@ function frame(now) {
                 Math.cos(ny * 3.5 + t * 0.85) * wOct2 +
                 Math.sin((nx + ny) * 5.5 + t * 1.30) * wOct3 +
                 Math.cos((nx - ny) * 7.0 - t * 0.70) * wOct4;
-            const hue = ((nx + ny) * 100 + t * 26 + Math.sin(nx * 4 + t) * 32 + driftSlow * 30) % 360;
-            const hueWrapped = hue < 0 ? hue + 360 : hue;
-            const lit = 60 + Math.sin(nx * 5 - ny * 3 + t * 1.5) * 14;
-            const sat = 68 + Math.cos(ny * 4 + nx * 2 - t * 0.8) * 16;
-            ctx.strokeStyle = `hsl(${hueWrapped}, ${sat}%, ${lit}%)`;
+            const pt = ((nx + ny) * 0.30 + t * 0.05 + Math.sin(nx * 4 + t) * 0.09 + driftSlow * 0.08);
+            const bri = 0.86 + Math.sin(nx * 5 - ny * 3 + t * 1.5) * 0.20;
+            ctx.strokeStyle = pcol(pt, bri);
             const half = lineLen * 0.5;
             const dx = Math.cos(angle * PI) * half;
             const dy = Math.sin(angle * PI) * half;

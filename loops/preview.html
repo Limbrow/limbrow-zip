@@ -34,6 +34,11 @@ const PARTICLES_PER_CELL = 80;
 const MARCH_SPEED = 0.05;
 const TWO_PI = Math.PI * 2;
 
+const PAL = [[227,52,46],[242,194,77],[76,184,107],[58,123,213],[159,166,173]];
+function pcol(t){ t=t-Math.floor(t); const n=PAL.length,f=t*n,i=Math.floor(f)%n,fr=f-Math.floor(f);
+    const a=PAL[i],b=PAL[(i+1)%n];
+    return 'rgb('+((a[0]+(b[0]-a[0])*fr)|0)+','+((a[1]+(b[1]-a[1])*fr)|0)+','+((a[2]+(b[2]-a[2])*fr)|0)+')'; }
+
 function resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = Math.floor(window.innerWidth * dpr);
@@ -109,12 +114,12 @@ function drawCell(cell, idx, mode, marchShift) {
     const r = Math.min(cell.w, cell.h) * 0.40;
     const N = PARTICLES_PER_CELL;
     const dotR = Math.max(0.8, Math.min(cell.w, cell.h) * 0.014);
+    const colShift = t * 0.00004;
     for (let i = 0; i < N; i++) {
         const tt = ((i / N) + marchShift) * TWO_PI;
         const x = cx + r * Math.sin(a * tt + d);
         const y = cy + r * Math.sin(b * tt);
-        const hue = (i / N) * 360;
-        ctx.fillStyle = `hsl(${hue}, 75%, 60%)`;
+        ctx.fillStyle = pcol(i / N + colShift);
         ctx.beginPath();
         ctx.arc(x, y, dotR, 0, TWO_PI);
         ctx.fill();
