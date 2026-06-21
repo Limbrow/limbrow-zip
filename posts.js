@@ -24,6 +24,13 @@
 export const posts = [
 
     {
+        slug: 'ascii',
+        date: '2026-05-31',
+        preview: 'preview.html',  // text-mode toolbox — six classic effects as monospace glyph grids
+        scale: 1.0
+    },
+
+    {
         slug: 'meltdown',
         date: '2026-05-31',
         preview: 'preview.html',  // generative colour field melting downward in ragged drips

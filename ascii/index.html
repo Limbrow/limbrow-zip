@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0">
+<title>ascii · limbrow.zip</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+        background: #050505;
+        color: #d8d8d8;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+        font-family: ui-monospace, 'SF Mono', Menlo, 'JetBrains Mono', monospace;
+        -webkit-user-select: none; user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: none;
+    }
+
+    .back {
+        position: fixed;
+        top: 16px; left: 16px;
+        z-index: 100;
+        width: 36px; height: 36px;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0, 0, 0, 0.4);
+        border: 1px solid rgba(255,255,255,0.14);
+        border-radius: 50%;
+        color: rgba(255,255,255,0.9);
+        text-decoration: none;
+        font-size: 16px; line-height: 1; padding-bottom: 2px;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+    }
+
+    #screen {
+        position: fixed;
+        inset: 0;
+        margin: 0;
+        z-index: 1;
+        white-space: pre;
+        overflow: hidden;
+        color: #cfcfcf;
+        font-family: inherit;
+        font-variant-ligatures: none;
+        letter-spacing: 0;
+        user-select: none;
+    }
+
+    .hud {
+        position: fixed;
+        top: 16px; right: 16px;
+        z-index: 10;
+        font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase;
+        color: rgba(255,255,255,0.55);
+        mix-blend-mode: difference; pointer-events: none;
+        text-align: right; line-height: 1.7;
+    }
+    .hud .ed { color: rgba(255,255,255,0.9); }
+
+    .dots {
+        position: fixed;
+        bottom: max(20px, env(safe-area-inset-bottom));
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10;
+        display: flex;
+        gap: 9px;
+        padding: 6px 10px;
+        background: rgba(0, 0, 0, 0.3);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border-radius: 999px;
+    }
+    .dot {
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.28);
+        cursor: pointer;
+        transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), background 0.22s ease;
+    }
+    .dot.active { background: #fff; transform: scale(1.4); }
+</style>
+</head>
+<body>
+
+<a class="back" href="/" aria-label="Back to grid">←</a>
+
+<pre id="screen" aria-hidden="true"></pre>
+
+<div class="hud"><span class="ed" id="ed-name">PLASMA</span><br>edition <span id="ed-num">1</span>/6</div>
+
+<div class="dots" id="dots"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+// ASCII — a text-mode toolbox. Six "editions", each a classic algorithmic
+// effect rendered as a grid of monospace characters. One string is rebuilt per
+// frame and written to a <pre> — the cheap, faithful way text-mode art is drawn
+// (in the tradition of ertdfgcvb.xyz / the demoscene). Every effect is
+// implemented from its underlying maths:
+//
+//   1 PLASMA  — summed sine field
+//   2 RIPPLE  — interfering circular waves from moving sources
+//   3 FLOW    — domain-warped flow field
+//   4 LIFE    — Conway's Game of Life
+//   5 RAIN    — falling-column cascade
+//   6 TORUS   — a rotating 3-D donut, luminance → glyph ramp
+//
+// Swipe / arrow keys / tap a dot to change edition. Tap the screen to reseed
+// the current edition.
+// ════════════════════════════════════════════════════════════════════════════
+
+const screen = document.getElementById('screen');
+const RAMP = ' .\'`^",:;Il!i~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@';
+const RN = RAMP.length - 1;
+
+let cols = 0, rows = 0, charW = 8, charH = 14;
+let buf = [];
+
+function measure() {
+    const fs = window.innerWidth < 520 ? 11 : 13;
+    screen.style.fontSize = fs + 'px';
+    screen.style.lineHeight = (fs + 2) + 'px';
+    const probe = document.createElement('span');
+    probe.style.cssText = `position:absolute;visibility:hidden;font-family:${getComputedStyle(screen).fontFamily};font-size:${fs}px;`;
+    probe.textContent = '0'.repeat(80);
+    document.body.appendChild(probe);
+    charW = probe.getBoundingClientRect().width / 80;
+    document.body.removeChild(probe);
+    charH = fs + 2;
+    cols = Math.max(8, Math.ceil(window.innerWidth / charW) + 1);
+    rows = Math.max(8, Math.ceil(window.innerHeight / charH) + 1);
+    buf = new Array(cols * rows).fill(' ');
+    if (editions[current].reset) editions[current].reset();
+}
+
+function aspect() { return charW / charH; }   // < 1 (cells are tall)
+function rnd() { return Math.random(); }
+function glyph(v) {
+    let i = (v * RN) | 0;
+    if (i < 0) i = 0; else if (i > RN) i = RN;
+    return RAMP[i];
+}
+
+// ─── EDITIONS ────────────────────────────────────────────────────────────────
+// 1 — PLASMA
+const plasma = {
+    name: 'PLASMA', seed: 0,
+    reset() { this.seed = rnd() * 100; },
+    step(buf, t) {
+        const s = this.seed, ar = aspect();
+        const cxp = cols/2, cyp = rows*ar/2;
+        for (let y = 0; y < rows; y++) {
+            const ny = y * ar;
+            for (let x = 0; x < cols; x++) {
+                let v =
+                    Math.sin(x * 0.12 + t * 1.3 + s) +
+                    Math.sin(ny * 0.16 - t * 1.0) +
+                    Math.sin((x * 0.08 + ny * 0.09) + t * 1.7) +
+                    Math.sin(Math.sqrt((x-cxp)*(x-cxp) + (ny-cyp)*(ny-cyp)) * 0.18 - t * 2.0);
+                buf[y * cols + x] = glyph((v / 4) * 0.5 + 0.5);
+            }
+        }
+    },
+};
+
+// 2 — RIPPLE
+const ripple = {
+    name: 'RIPPLE', srcs: [],
+    reset() {
+        this.srcs = [];
+        const n = 3 + (rnd() * 3 | 0);
+        for (let i = 0; i < n; i++)
+            this.srcs.push({ x: rnd(), y: rnd(), k: 0.5 + rnd() * 1.3, sp: 1.5 + rnd() * 2.5, ph: rnd() * 6.28 });
+    },
+    step(buf, t) {
+        const ar = aspect(), W = cols, H = rows * ar;
+        for (let y = 0; y < rows; y++) {
+            const ny = y * ar;
+            for (let x = 0; x < cols; x++) {
+                let v = 0;
+                for (const s of this.srcs) {
+                    const dx = x - s.x * W, dy = ny - s.y * H;
+                    v += Math.cos(Math.sqrt(dx*dx + dy*dy) * 0.16 * s.k - t * s.sp + s.ph);
+                }
+                buf[y * cols + x] = glyph((v / this.srcs.length) * 0.5 + 0.5);
+            }
+        }
+    },
+};
+
+// 3 — FLOW (domain-warped field)
+const flow = {
+    name: 'FLOW', seed: 0,
+    reset() { this.seed = rnd() * 100; },
+    step(buf, t) {
+        const s = this.seed, ar = aspect();
+        for (let y = 0; y < rows; y++) {
+            const ny = y * ar;
+            for (let x = 0; x < cols; x++) {
+                const wx = Math.sin(ny * 0.08 + t * 0.7 + s) * 6.0;
+                const wy = Math.cos(x * 0.07 - t * 0.6) * 6.0;
+                let v =
+                    Math.sin((x + wx) * 0.10 + t * 0.9) +
+                    Math.cos((ny + wy) * 0.12 - t * 0.7) +
+                    Math.sin((x + wx + ny + wy) * 0.05 + t * 1.3);
+                buf[y * cols + x] = glyph((v / 3) * 0.5 + 0.5);
+            }
+        }
+    },
+};
+
+// 4 — LIFE (Conway)
+const life = {
+    name: 'LIFE', cur: null, nxt: null, acc: 0, stepMs: 90, still: 0, lastPop: -1,
+    reset() {
+        this.cur = new Uint8Array(cols * rows);
+        this.nxt = new Uint8Array(cols * rows);
+        for (let i = 0; i < this.cur.length; i++) this.cur[i] = rnd() < 0.30 ? 1 : 0;
+        this.acc = 0; this.still = 0; this.lastPop = -1;
+    },
+    tick() {
+        const c = this.cur, n = this.nxt;
+        for (let y = 0; y < rows; y++) {
+            const ym = ((y - 1 + rows) % rows) * cols;
+            const yp = ((y + 1) % rows) * cols;
+            const y0 = y * cols;
+            for (let x = 0; x < cols; x++) {
+                const xm = (x - 1 + cols) % cols, xp = (x + 1) % cols;
+                const s = c[ym+xm]+c[ym+x]+c[ym+xp]+c[y0+xm]+c[y0+xp]+c[yp+xm]+c[yp+x]+c[yp+xp];
+                n[y0+x] = (c[y0+x] ? (s === 2 || s === 3) : (s === 3)) ? 1 : 0;
+            }
+        }
+        const tmp = this.cur; this.cur = this.nxt; this.nxt = tmp;
+    },
+    step(buf, t, dt) {
+        if (!this.cur) this.reset();
+        this.acc += dt;
+        while (this.acc >= this.stepMs) {
+            this.tick();
+            this.acc -= this.stepMs;
+            let pop = 0; for (let i = 0; i < this.cur.length; i++) pop += this.cur[i];
+            if (pop === this.lastPop) { if (++this.still > 24) this.reset(); }
+            else this.still = 0;
+            this.lastPop = pop;
+        }
+        const c = this.cur;
+        for (let i = 0; i < c.length; i++) buf[i] = c[i] ? '#' : ' ';
+    },
+};
+
+// 5 — RAIN (falling cascade)
+const rain = {
+    name: 'RAIN', drops: null,
+    GLY: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789=+*<>/\\|',
+    reset() {
+        this.drops = [];
+        for (let x = 0; x < cols; x++)
+            this.drops.push({ y: rnd() * rows, sp: 6 + rnd() * 22, len: 6 + (rnd() * 18 | 0) });
+    },
+    step(buf, t, dt) {
+        if (!this.drops || this.drops.length !== cols) this.reset();
+        for (let i = 0; i < buf.length; i++) buf[i] = ' ';
+        const G = this.GLY, gn = G.length, dts = dt / 1000, tf = (t * 8) | 0;
+        for (let x = 0; x < cols; x++) {
+            const d = this.drops[x];
+            d.y += d.sp * dts;
+            if (d.y - d.len > rows) { d.y = -(rnd() * 6); d.sp = 6 + rnd() * 22; d.len = 6 + (rnd() * 18 | 0); }
+            const head = d.y | 0;
+            for (let k = 0; k < d.len; k++) {
+                const yy = head - k;
+                if (yy < 0 || yy >= rows) continue;
+                const lit = 1 - k / d.len;
+                let ch;
+                if (k === 0) ch = G[((tf + x) % gn + gn) % gn];
+                else if (lit > 0.4) ch = G[((x * 7 + yy * 13 + tf) % gn + gn) % gn];
+                else ch = (lit > 0.18) ? ':' : '.';
+                buf[yy * cols + x] = ch;
+            }
+        }
+    },
+};
+
+// 6 — TORUS (rotating donut: standard torus projection, luminance → ramp)
+const torus = {
+    name: 'TORUS', A: 0, B: 0, spA: 1, spB: 0.6, zbuf: null,
+    reset() { this.A = rnd()*6.28; this.B = rnd()*6.28; this.spA = 0.6 + rnd()*0.8; this.spB = 0.4 + rnd()*0.7; },
+    step(buf, t, dt) {
+        const dts = dt / 1000;
+        this.A += this.spA * dts;
+        this.B += this.spB * dts;
+        for (let i = 0; i < buf.length; i++) buf[i] = ' ';
+        if (!this.zbuf || this.zbuf.length !== cols * rows) this.zbuf = new Float32Array(cols * rows);
+        const zb = this.zbuf; zb.fill(0);
+
+        const A = this.A, B = this.B;
+        const cA = Math.cos(A), sA = Math.sin(A), cB = Math.cos(B), sB = Math.sin(B);
+        const R1 = 1, R2 = 2, K2 = 5;
+        const ar = aspect();
+        // Fit the donut to the grid; Ky compressed by the cell aspect so it's round
+        const Kx = Math.min(cols, rows / ar) * 0.33;
+        const Ky = Kx * ar;
+        const cxp = cols / 2, cyp = rows / 2;
+
+        for (let th = 0; th < 6.2832; th += 0.07) {
+            const ct = Math.cos(th), st = Math.sin(th);
+            const circx = R2 + R1 * ct, circy = R1 * st;
+            for (let ph = 0; ph < 6.2832; ph += 0.02) {
+                const cp = Math.cos(ph), sp = Math.sin(ph);
+                // 3D point after rotation about X (A) then Z (B)
+                const x = circx * (cB * cp + sA * sB * sp) - circy * cA * sB;
+                const y = circx * (sB * cp - sA * cB * sp) + circy * cA * cB;
+                const z = K2 + cA * circx * sp + circy * sA;
+                const ooz = 1 / z;
+                const xp = (cxp + Kx * ooz * x) | 0;
+                const yp = (cyp - Ky * ooz * y) | 0;
+                if (xp < 0 || xp >= cols || yp < 0 || yp >= rows) continue;
+                // luminance (surface normal · light)
+                const L = cp * ct * sB - cA * ct * sp - sA * st + cB * (cA * st - ct * sA * sp);
+                if (L > 0) {
+                    const idx = yp * cols + xp;
+                    if (ooz > zb[idx]) {
+                        zb[idx] = ooz;
+                        buf[idx] = glyph(0.18 + (L / 1.414) * 0.82);
+                    }
+                }
+            }
+        }
+    },
+};
+
+const editions = [plasma, ripple, flow, life, rain, torus];
+let current = 0;
+
+// ─── EDITION SWITCH ──────────────────────────────────────────────────────────
+const dotsEl = document.getElementById('dots');
+editions.forEach((e, i) => {
+    const d = document.createElement('div');
+    d.className = 'dot' + (i === 0 ? ' active' : '');
+    d.title = e.name;
+    d.addEventListener('click', () => setEdition(i));
+    dotsEl.appendChild(d);
+});
+const dotEls = dotsEl.querySelectorAll('.dot');
+
+function setEdition(i) {
+    current = (i + editions.length) % editions.length;
+    const e = editions[current];
+    if (e.reset) e.reset();
+    dotEls.forEach((d, k) => d.classList.toggle('active', k === current));
+    document.getElementById('ed-name').textContent = e.name;
+    document.getElementById('ed-num').textContent = current + 1;
+}
+
+window.addEventListener('resize', measure);
+measure();
+
+// ─── MAIN LOOP ───────────────────────────────────────────────────────────────
+const t0 = performance.now();
+let lastT = t0;
+function render(now) {
+    const dt = Math.min(64, now - lastT);
+    lastT = now;
+    const t = (now - t0) * 0.0011;
+
+    editions[current].step(buf, t, dt);
+
+    let out = '';
+    for (let y = 0; y < rows; y++) {
+        out += buf.slice(y * cols, y * cols + cols).join('') + '\n';
+    }
+    screen.textContent = out;
+    requestAnimationFrame(render);
+}
+requestAnimationFrame(render);
+
+// ─── INPUT — swipe / keys / tap ──────────────────────────────────────────────
+let pStart = null;
+window.addEventListener('pointerdown', e => {
+    if (e.target.closest('.dots') || e.target.closest('.back')) return;
+    pStart = { x: e.clientX, y: e.clientY, t: performance.now() };
+}, { passive: true });
+window.addEventListener('pointerup', e => {
+    if (!pStart) return;
+    const dx = e.clientX - pStart.x, dy = e.clientY - pStart.y;
+    const dur = performance.now() - pStart.t;
+    pStart = null;
+    if (dur > 700) return;
+    if (Math.abs(dx) < 12 && Math.abs(dy) < 12) {
+        // clean tap → reseed current edition
+        if (editions[current].reset) editions[current].reset();
+        return;
+    }
+    if (Math.abs(dx) >= 50 && Math.abs(dy) < Math.abs(dx) * 0.7) {
+        setEdition(dx > 0 ? current - 1 : current + 1);
+    }
+}, { passive: true });
+window.addEventListener('keydown', e => {
+    if (e.key === 'ArrowLeft')  setEdition(current - 1);
+    if (e.key === 'ArrowRight') setEdition(current + 1);
+});
+
+let _lastTouchEnd = 0;
+document.addEventListener('touchend', e => {
+    const now = Date.now();
+    if (now - _lastTouchEnd < 350) e.preventDefault();
+    _lastTouchEnd = now;
+}, { passive: false });
+</script>
+
+</body>
+</html>
