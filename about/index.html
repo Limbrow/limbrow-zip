@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0">
-<title>references · limbrow.zip</title>
-<meta name="description" content="limbrow.zip — references & influences.">
+<title>limbrow · about</title>
+<meta name="description" content="Marc — limbrow.zip. Net-art, code, cryptography & digital systems.">
 <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -33,7 +33,9 @@
         letter-spacing: 0;
         user-select: none;
         pointer-events: none;
+        transition: color 1.1s ease;
     }
+    #field.pulse { color: #6e6e76; transition: color 0.06s ease; }
 
     .back {
         position: fixed;
@@ -51,7 +53,6 @@
         -webkit-backdrop-filter: blur(10px);
     }
 
-    /* ── readable content over the field ── */
     .content {
         position: fixed;
         inset: 0;
@@ -59,9 +60,10 @@
         display: flex;
         flex-direction: column;
         justify-content: center;
-        padding: clamp(48px, 9vw, 110px) clamp(22px, 7vw, 96px);
+        padding: clamp(44px, 9vw, 110px) clamp(22px, 7vw, 96px);
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
+        pointer-events: none;   /* let clicks reach the field; re-enable on links */
     }
     .content::-webkit-scrollbar { display: none; }
     .content { scrollbar-width: none; }
@@ -69,23 +71,23 @@
     .wrap { max-width: 680px; margin: auto 0; width: 100%; }
 
     h1 {
-        font-size: clamp(15px, 4.2vw, 22px);
+        font-size: clamp(15px, 4.4vw, 23px);
         font-weight: 500;
-        letter-spacing: 0.18em;
+        letter-spacing: 0.16em;
         text-transform: uppercase;
         color: #fff;
     }
     .lead {
         margin-top: 14px;
         font-size: clamp(11px, 2.9vw, 13px);
-        line-height: 1.7;
-        color: rgba(255,255,255,0.62);
-        max-width: 46ch;
+        line-height: 1.75;
+        color: rgba(255,255,255,0.64);
+        max-width: 52ch;
     }
 
     h2 {
-        margin-top: clamp(26px, 5vh, 44px);
-        margin-bottom: 14px;
+        margin-top: clamp(24px, 4.5vh, 40px);
+        margin-bottom: 12px;
         font-size: 9px;
         letter-spacing: 0.34em;
         text-transform: uppercase;
@@ -102,22 +104,37 @@
         line-height: 1.5;
     }
     li .name { color: rgba(255,255,255,0.95); white-space: nowrap; }
-    li .dot  { flex: 1; border-bottom: 1px dotted rgba(255,255,255,0.14); transform: translateY(-3px); }
-    li .tag  { color: rgba(255,255,255,0.42); font-size: 0.84em; letter-spacing: 0.06em; text-align: right; }
+    li .dot  { flex: 1; border-bottom: 1px dotted rgba(255,255,255,0.16); transform: translateY(-3px); }
+    li .tag  { color: rgba(255,255,255,0.46); font-size: 0.84em; letter-spacing: 0.05em; text-align: right; }
 
-    .foot {
-        margin-top: clamp(26px, 5vh, 44px);
-        font-size: 10px;
-        letter-spacing: 0.1em;
-        color: rgba(255,255,255,0.32);
-        line-height: 1.7;
+    .tags { display: flex; flex-wrap: wrap; gap: 7px; }
+    .tags span {
+        font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+        color: rgba(255,255,255,0.7);
+        border: 1px solid rgba(255,255,255,0.16);
+        border-radius: 999px;
+        padding: 5px 11px;
     }
-    .foot a { color: rgba(255,255,255,0.55); text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.18); }
-    .foot a:hover { color: #fff; }
 
-    @media (max-width: 520px) {
-        li { gap: 8px; }
-        li .tag { font-size: 0.78em; }
+    .links {
+        margin-top: clamp(24px, 4.5vh, 40px);
+        display: flex; flex-wrap: wrap; gap: 8px 22px;
+        font-size: 11px; letter-spacing: 0.06em;
+    }
+    .links a {
+        pointer-events: auto;
+        color: rgba(255,255,255,0.6);
+        text-decoration: none;
+        border-bottom: 1px solid rgba(255,255,255,0.2);
+        padding-bottom: 1px;
+        transition: color 0.18s, border-color 0.18s;
+    }
+    .links a:hover { color: #fff; border-color: rgba(255,255,255,0.55); }
+
+    .hint {
+        margin-top: 18px;
+        font-size: 8.5px; letter-spacing: 0.2em; text-transform: uppercase;
+        color: rgba(255,255,255,0.28);
     }
 </style>
 </head>
@@ -129,98 +146,149 @@
 
 <main class="content">
     <div class="wrap">
-        <h1>limbrow.zip</h1>
+        <h1>Marc · limbrow</h1>
         <p class="lead">
-            An archive of net-art made by programming with AI — every tile a small
-            machine for finding a language. These are the works and people it leans on.
+            Net-artist and systems builder working where code, cryptography and image
+            meet. By day I run operations and digital systems for an artist studio and
+            push technological transition for the projects around me; by night this
+            archive is where I program art with AI to find a language of my own.
         </p>
 
-        <h2>References &amp; Influences</h2>
-        <ul id="refs"></ul>
+        <h2>Background</h2>
+        <ul>
+            <li><span class="name">Felipe Pantone</span><span class="dot"></span><span class="tag">operations &amp; digital systems</span></li>
+            <li><span class="name">Boramar</span><span class="dot"></span><span class="tag">technological transition</span></li>
+            <li><span class="name">Concreto Abstracto</span><span class="dot"></span><span class="tag">founder · custom software</span></li>
+        </ul>
 
-        <div class="foot">
-            Coded live, one piece at a time. ·
-            <a href="https://instagram.com/limbrow" target="_blank" rel="noopener">@limbrow</a>
+        <h2>Focus</h2>
+        <div class="tags">
+            <span>crypto</span>
+            <span>advanced blockchain</span>
+            <span>cryptography</span>
+            <span>generative · net-art</span>
+            <span>creative coding</span>
         </div>
+
+        <div class="links">
+            <a href="https://instagram.com/limbrow.zip" target="_blank" rel="noopener">instagram ↗</a>
+            <a href="https://concretoabstracto.com" target="_blank" rel="noopener">concretoabstracto.com ↗</a>
+            <!-- TODO: drop your exact LinkedIn profile URL here -->
+            <a href="https://www.linkedin.com/" target="_blank" rel="noopener">linkedin ↗</a>
+        </div>
+
+        <div class="hint">tap anywhere — the field transforms, then resolves</div>
     </div>
 </main>
 
 <script>
 // ════════════════════════════════════════════════════════════════════════════
-// REFERENCES — text-mode (after Andreas Gysin / ertdfgcvb.xyz).
+// ABOUT — text-mode (after Andreas Gysin / ertdfgcvb.xyz).
 //
-// The background is a live grid of monospace characters: each cell picks a
-// glyph from a density ramp by sampling a slow multi-octave flow field of
-// (col, row, time). One string is rebuilt per frame and written to a <pre> —
-// the cheap, faithful way Gysin renders text-mode. The references list sits
-// crisp on top.
+// A live grid of monospace characters: each cell picks a glyph from a density
+// ramp by sampling a slow multi-octave flow field. One string is rebuilt per
+// frame into a <pre>. Tapping the screen sends an expanding shockwave from the
+// touch point: as the ring sweeps each cell, its glyph cycles through random
+// characters (a "transformation") and then resolves back to the field value —
+// the click effect from ertdfgcvb's pieces.
 // ════════════════════════════════════════════════════════════════════════════
 
-// ── content (edit freely) ───────────────────────────────────────────────────
-const REFERENCES = [
-    ['Felipe Pantone',            'kinetic · chromatic · op'],
-    ['Julio Le Parc',             'kinetic · light · op'],
-    ['Kim Asendorf',              'pixel sort · generative'],
-    ['Andreas Gysin · ertdfgcvb', 'text-mode'],
-    ['Vera Molnár',               'generative pioneer'],
-    ['Manfred Mohr',              'algorithmic art'],
-    ['Casey Reas',                'processing · software'],
-    ['Ryoji Ikeda',               'data · sound'],
-    ['Zach Lieberman',            'daily sketches'],
-    ['Aphex Twin · Autechre',     'idm'],
-];
-const ul = document.getElementById('refs');
-REFERENCES.forEach(([name, tag]) => {
-    const li = document.createElement('li');
-    li.innerHTML = `<span class="name">${name}</span><span class="dot"></span><span class="tag">${tag}</span>`;
-    ul.appendChild(li);
-});
-
-// ── ASCII field ──────────────────────────────────────────────────────────────
-const RAMP = ' .\'`^",:;Il!i~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$';
+const RAMP = ' .\'`^",:;Il!i~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@';
+const RN = RAMP.length - 1;
 const field = document.getElementById('field');
 
-let cols = 0, rows = 0, charW = 8, charH = 14;
+let cols = 0, rows = 0, charW = 8, charH = 14, aspect = 0.55;
 
 function measure() {
     const fs = window.innerWidth < 520 ? 11 : 13;
     field.style.fontSize = fs + 'px';
     field.style.lineHeight = (fs + 2) + 'px';
-    // Measure a monospace cell
     const probe = document.createElement('span');
     probe.style.cssText = `position:absolute;visibility:hidden;font-family:${getComputedStyle(field).fontFamily};font-size:${fs}px;`;
-    probe.textContent = '0'.repeat(50);
+    probe.textContent = '0'.repeat(80);
     document.body.appendChild(probe);
-    charW = probe.getBoundingClientRect().width / 50;
+    charW = probe.getBoundingClientRect().width / 80;
     document.body.removeChild(probe);
     charH = fs + 2;
+    aspect = charW / charH;
     cols = Math.ceil(window.innerWidth / charW) + 1;
     rows = Math.ceil(window.innerHeight / charH) + 1;
 }
 window.addEventListener('resize', measure);
 measure();
 
+// ─── click ripples — the transformation effect ──────────────────────────────
+const ripples = [];           // {cx, cy, t0}
+const FRONT = 62;             // wavefront speed (cells / second)
+const BAND  = 7;              // width of the disturbed ring (cells)
+
+function addRipple(clientX, clientY) {
+    const cx = clientX / charW;
+    const cy = clientY / charH;
+    ripples.push({ cx, cy, t0: performance.now() });
+    if (ripples.length > 6) ripples.shift();
+    field.classList.add('pulse');
+    clearTimeout(addRipple._to);
+    addRipple._to = setTimeout(() => field.classList.remove('pulse'), 90);
+}
+window.addEventListener('pointerdown', e => {
+    if (e.target.closest('a')) return;     // let links work untouched
+    addRipple(e.clientX, e.clientY);
+});
+
+function hash(a, b) { let h = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return h - Math.floor(h); }
+
 const t0 = performance.now();
-const line = new Array(0);
 function render(now) {
     const t = (now - t0) * 0.0006;
+    const flick = Math.floor(now * 0.045);   // scramble cycling speed
+
+    // prune dead ripples
+    const maxR = Math.hypot(cols, rows * aspect) + BAND;
+    for (let i = ripples.length - 1; i >= 0; i--) {
+        const age = (now - ripples[i].t0) / 1000;
+        if (age * FRONT > maxR) ripples.splice(i, 1);
+    }
+
     const out = [];
-    const aspect = charW / charH;     // correct the cell aspect so the flow is round
     for (let y = 0; y < rows; y++) {
         const ny = y * aspect;
         let row = '';
         for (let x = 0; x < cols; x++) {
-            // multi-octave flowing field
+            // base flow field
             let v =
                 Math.sin(x * 0.06 + t * 1.3) * 0.5 +
                 Math.cos(ny * 0.10 - t * 1.0) * 0.4 +
                 Math.sin((x * 0.04 + ny * 0.05) + t * 1.7) * 0.35 +
                 Math.cos((x * 0.018 - ny * 0.03) - t * 0.6) * 0.3;
-            // gentle radial breathing from the centre
             const dx = (x - cols / 2) * 0.02, dy = (ny - rows * aspect / 2) * 0.02;
             v += Math.sin(Math.sqrt(dx*dx + dy*dy) * 3.0 - t * 2.0) * 0.4;
             v = v * 0.5 + 0.5;
-            const idx = Math.max(0, Math.min(RAMP.length - 1, (v * (RAMP.length - 1)) | 0));
+
+            // ripple disturbance — strongest at the wavefront
+            let scramble = 0;
+            for (let k = 0; k < ripples.length; k++) {
+                const r = ripples[k];
+                const age = (now - r.t0) / 1000;
+                const front = age * FRONT;
+                const dist = Math.hypot((x - r.cx) * aspect, (y - r.cy) * aspect);
+                const d = Math.abs(dist - front);
+                if (d < BAND) {
+                    const s = 1 - d / BAND;
+                    if (s > scramble) scramble = s;
+                }
+            }
+
+            let idx;
+            if (scramble > 0.04) {
+                // transforming: cycle through random glyphs, biased denser at the crest
+                const rr = hash(x * 1.3 + flick, y * 0.7 - flick);
+                const mixed = rr * scramble + v * (1 - scramble);
+                idx = (mixed * RN) | 0;
+            } else {
+                idx = (v * RN) | 0;
+            }
+            if (idx < 0) idx = 0; else if (idx > RN) idx = RN;
             row += RAMP[idx];
         }
         out.push(row);
@@ -229,6 +297,13 @@ function render(now) {
     requestAnimationFrame(render);
 }
 requestAnimationFrame(render);
+
+let _lastTouchEnd = 0;
+document.addEventListener('touchend', e => {
+    const now = Date.now();
+    if (now - _lastTouchEnd < 350) e.preventDefault();
+    _lastTouchEnd = now;
+}, { passive: false });
 </script>
 
 </body>
