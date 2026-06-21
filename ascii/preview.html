@@ -17,15 +17,19 @@
 <pre id="screen"></pre>
 
 <script>
-// Same text-mode engine; cycles a few editions every 6s for the grid card.
+// ASCII preview — always the code rain: columns of source-ish glyphs falling,
+// bright heads, fading tails. Matches the text-mode editor's monospace look.
 const screen = document.getElementById('screen');
-const RAMP = ' .\'`^",:;Il!i~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@';
-const RN = RAMP.length - 1;
 let cols = 0, rows = 0, charW = 8, charH = 14;
 let buf = [];
+let drops = null;
+
+// A code-flavoured glyph set (letters, digits, operators, brackets)
+const GLY = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789' +
+            '{}[]()<>=+-*/%!?;:.,&|^~$#@';
 
 function measure() {
-    const fs = window.innerWidth < 420 ? 9 : 11;
+    const fs = window.innerWidth < 420 ? 10 : 12;
     screen.style.fontSize = fs + 'px';
     screen.style.lineHeight = (fs + 2) + 'px';
     const probe = document.createElement('span');
@@ -38,75 +42,48 @@ function measure() {
     cols = Math.max(8, Math.ceil(window.innerWidth / charW) + 1);
     rows = Math.max(8, Math.ceil(window.innerHeight / charH) + 1);
     buf = new Array(cols * rows).fill(' ');
-    seedTorus();
+    drops = [];
+    for (let x = 0; x < cols; x++)
+        drops.push({ y: Math.random() * rows, sp: 7 + Math.random() * 24, len: 8 + (Math.random() * 22 | 0) });
 }
 window.addEventListener('resize', measure);
-
-function aspect(){ return charW / charH; }
-function glyph(v){ let i=(v*RN)|0; if(i<0)i=0; else if(i>RN)i=RN; return RAMP[i]; }
-
-function plasma(t){
-    const ar=aspect(), cxp=cols/2, cyp=rows*ar/2;
-    for(let y=0;y<rows;y++){ const ny=y*ar;
-        for(let x=0;x<cols;x++){
-            let v=Math.sin(x*0.12+t*1.3)+Math.sin(ny*0.16-t*1.0)+Math.sin((x*0.08+ny*0.09)+t*1.7)
-                 +Math.sin(Math.sqrt((x-cxp)*(x-cxp)+(ny-cyp)*(ny-cyp))*0.18-t*2.0);
-            buf[y*cols+x]=glyph((v/4)*0.5+0.5);
-        } }
-}
-
-let tA=0,tB=0,zbuf=null;
-function seedTorus(){ tA=Math.random()*6.28; tB=Math.random()*6.28; }
-function torus(dt){
-    tA+=0.9*dt/1000; tB+=0.55*dt/1000;
-    for(let i=0;i<buf.length;i++) buf[i]=' ';
-    if(!zbuf||zbuf.length!==cols*rows) zbuf=new Float32Array(cols*rows); zbuf.fill(0);
-    const cA=Math.cos(tA),sA=Math.sin(tA),cB=Math.cos(tB),sB=Math.sin(tB);
-    const R1=1,R2=2,K2=5,ar=aspect();
-    const Kx=Math.min(cols,rows/ar)*0.33, Ky=Kx*ar, cxp=cols/2, cyp=rows/2;
-    for(let th=0;th<6.2832;th+=0.08){ const ct=Math.cos(th),st=Math.sin(th); const ccx=R2+R1*ct,ccy=R1*st;
-        for(let ph=0;ph<6.2832;ph+=0.03){ const cp=Math.cos(ph),sp=Math.sin(ph);
-            const x=ccx*(cB*cp+sA*sB*sp)-ccy*cA*sB, y=ccx*(sB*cp-sA*cB*sp)+ccy*cA*cB, z=K2+cA*ccx*sp+ccy*sA;
-            const ooz=1/z, xp=(cxp+Kx*ooz*x)|0, yp=(cyp-Ky*ooz*y)|0;
-            if(xp<0||xp>=cols||yp<0||yp>=rows) continue;
-            const L=cp*ct*sB-cA*ct*sp-sA*st+cB*(cA*st-ct*sA*sp);
-            if(L>0){ const idx=yp*cols+xp; if(ooz>zbuf[idx]){ zbuf[idx]=ooz; buf[idx]=glyph(0.18+(L/1.414)*0.82); } }
-        } }
-}
-
-let drops=null;
-const GLY='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789=+*<>/\\|';
-function rain(t,dt){
-    if(!drops||drops.length!==cols){ drops=[]; for(let x=0;x<cols;x++) drops.push({y:Math.random()*rows,sp:6+Math.random()*22,len:6+(Math.random()*18|0)}); }
-    for(let i=0;i<buf.length;i++) buf[i]=' ';
-    const gn=GLY.length, dts=dt/1000, tf=(t*8)|0;
-    for(let x=0;x<cols;x++){ const d=drops[x]; d.y+=d.sp*dts;
-        if(d.y-d.len>rows){ d.y=-(Math.random()*6); d.sp=6+Math.random()*22; d.len=6+(Math.random()*18|0); }
-        const head=d.y|0;
-        for(let k=0;k<d.len;k++){ const yy=head-k; if(yy<0||yy>=rows) continue;
-            const lit=1-k/d.len; let ch;
-            if(k===0) ch=GLY[((tf+x)%gn+gn)%gn];
-            else if(lit>0.4) ch=GLY[((x*7+yy*13+tf)%gn+gn)%gn];
-            else ch=(lit>0.18)?':':'.';
-            buf[yy*cols+x]=ch;
-        } }
-}
-
 measure();
 
-const CYCLE=['plasma','torus','rain'];
-const CYCLE_MS=6000;
-const t0=performance.now();
-let lastT=t0;
-function frame(now){
-    const dt=Math.min(64,now-lastT); lastT=now;
-    const t=(now-t0)*0.0011;
-    const mode=CYCLE[Math.floor((now-t0)/CYCLE_MS)%CYCLE.length];
-    if(mode==='plasma') plasma(t);
-    else if(mode==='torus') torus(dt);
-    else rain(t,dt);
-    let out=''; for(let y=0;y<rows;y++) out+=buf.slice(y*cols,y*cols+cols).join('')+'\n';
-    screen.textContent=out;
+const gn = GLY.length;
+const t0 = performance.now();
+let lastT = t0;
+function frame(now) {
+    const dt = Math.min(64, now - lastT); lastT = now;
+    const dts = dt / 1000;
+    const tf = ((now - t0) * 0.012) | 0;
+
+    for (let i = 0; i < buf.length; i++) buf[i] = ' ';
+
+    for (let x = 0; x < cols; x++) {
+        const d = drops[x];
+        d.y += d.sp * dts;
+        if (d.y - d.len > rows) {
+            d.y = -(Math.random() * 8);
+            d.sp = 7 + Math.random() * 24;
+            d.len = 8 + (Math.random() * 22 | 0);
+        }
+        const head = d.y | 0;
+        for (let k = 0; k < d.len; k++) {
+            const yy = head - k;
+            if (yy < 0 || yy >= rows) continue;
+            const lit = 1 - k / d.len;
+            let ch;
+            if (k === 0)        ch = GLY[((tf + x * 3) % gn + gn) % gn];          // bright head
+            else if (lit > 0.45) ch = GLY[((x * 7 + yy * 13 + tf) % gn + gn) % gn]; // body glyphs
+            else if (lit > 0.18) ch = (((x + yy) & 1) ? ':' : '.');               // faint tail
+            else                 ch = '.';
+            buf[yy * cols + x] = ch;
+        }
+    }
+
+    let out = '';
+    for (let y = 0; y < rows; y++) out += buf.slice(y * cols, y * cols + cols).join('') + '\n';
+    screen.textContent = out;
     requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
