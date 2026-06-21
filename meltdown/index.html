@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0">
+<title>meltdown · limbrow.zip</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+        background: #000;
+        color: #e8e8e8;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+        font-family: ui-monospace, 'JetBrains Mono', monospace;
+        -webkit-user-select: none; user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: none;
+    }
+
+    .back {
+        position: fixed;
+        top: 16px; left: 16px;
+        z-index: 100;
+        width: 36px; height: 36px;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0, 0, 0, 0.4);
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 50%;
+        color: rgba(255,255,255,0.9);
+        text-decoration: none;
+        font-size: 16px; line-height: 1; padding-bottom: 2px;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+    }
+
+    #stage {
+        position: fixed; top: 0; left: 0;
+        width: 100%; height: 100%;
+        display: block;
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+    }
+
+    .credit {
+        position: fixed;
+        bottom: max(14px, env(safe-area-inset-bottom));
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10;
+        font-size: 9px; letter-spacing: 0.24em; text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.5);
+        mix-blend-mode: difference; pointer-events: none; white-space: nowrap;
+    }
+</style>
+</head>
+<body>
+
+<a class="back" href="/" aria-label="Back to grid">←</a>
+
+<canvas id="stage"></canvas>
+
+<div class="credit">meltdown · tap to pour</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+// MELTDOWN — a screen that melts. (After meltd.ooo.)
+//
+// A low-resolution buffer is fed fresh generative colour at the top each frame
+// and then "melts": every cell, scanned bottom-up, has a per-column probability
+// of pulling the colour from the cell above it down by one pixel. Columns melt
+// at different rates (a per-column speed field), and the pull is stochastic per
+// cell, so colours smear and stretch into ragged vertical drips that pool and
+// run — the whole image sags downward like hot wax while new colour keeps
+// pouring in from the top. Hot (bright) colours melt faster than dark ones.
+//
+// Chunky pixels (nearest-neighbour upscale). Tap to pour a new palette + field.
+// ════════════════════════════════════════════════════════════════════════════
+
+const display = document.getElementById('stage');
+const dctx = display.getContext('2d');
+
+const isMobile = window.matchMedia('(max-width: 600px)').matches;
+const W = isMobile ? 150 : 230;
+const H = Math.max(80, Math.floor(W * (window.innerHeight / window.innerWidth)));
+const N = W * H;
+
+const buffer = document.createElement('canvas');
+buffer.width = W; buffer.height = H;
+const bctx = buffer.getContext('2d');
+const imgData = bctx.createImageData(W, H);
+const data8  = imgData.data;
+const data32 = new Uint32Array(data8.buffer);
+
+function fitDisplay() {
+    display.width = window.innerWidth;
+    display.height = window.innerHeight;
+    dctx.imageSmoothingEnabled = false;
+}
+window.addEventListener('resize', fitDisplay);
+fitDisplay();
+
+// ─── SITE PALETTE — refined red / gold / green / blue + metallic steel ─────
+const ANCHORS = [[227,52,46],[242,194,77],[76,184,107],[58,123,213],[159,166,173]];
+// Build a smooth 256-entry packed ramp (rotatable per pour)
+const RAMP = new Uint32Array(256);
+function buildRamp(offset, contrast) {
+    const n = ANCHORS.length;
+    for (let i = 0; i < 256; i++) {
+        let t = (i / 256 + offset) % 1;
+        // contrast curve so bands read as distinct pours
+        t = Math.pow(t, contrast);
+        const f = t * n, k = Math.floor(f) % n, fr = f - Math.floor(f);
+        const a = ANCHORS[k], b = ANCHORS[(k + 1) % n];
+        const r = (a[0] + (b[0]-a[0])*fr) | 0;
+        const g = (a[1] + (b[1]-a[1])*fr) | 0;
+        const bl = (a[2] + (b[2]-a[2])*fr) | 0;
+        RAMP[i] = (255 << 24) | (bl << 16) | (g << 8) | r;
+    }
+}
+
+// Per-column melt speed (0..1) — some columns run fast, some barely move
+const colSpeed = new Float32Array(W);
+let fieldSeed = 0, fieldScaleX = 1, fieldScaleY = 1, rampOffset = 0;
+
+function reseed() {
+    fieldSeed = Math.random() * 1000;
+    fieldScaleX = 3 + Math.random() * 6;
+    fieldScaleY = 2 + Math.random() * 5;
+    rampOffset = Math.random();
+    buildRamp(rampOffset, 0.7 + Math.random() * 0.9);
+    for (let x = 0; x < W; x++) {
+        // smooth noise-ish per-column speed
+        const n = Math.sin(x * 0.21 + fieldSeed) * 0.5 + Math.sin(x * 0.07 + fieldSeed * 1.7) * 0.5;
+        colSpeed[x] = 0.12 + (n * 0.5 + 0.5) * 0.62;   // 0.12 .. 0.74
+    }
+}
+
+// Cheap hash for stochastic gating
+let frameN = 0;
+function hash(x, y, f) {
+    let h = (x * 374761393 + y * 668265263 + f * 2246822519) >>> 0;
+    h = (h ^ (h >> 13)) * 1274126177 >>> 0;
+    return ((h ^ (h >> 16)) >>> 0) / 4294967295;
+}
+
+// Generative source colour for the top inflow
+function srcIndex(x, y, t) {
+    const nx = x / W, ny = y / H;
+    let v =
+        Math.sin(nx * fieldScaleX + t * 0.7 + fieldSeed) * 0.5 +
+        Math.cos(ny * fieldScaleY - t * 0.5) * 0.3 +
+        Math.sin((nx + ny) * (fieldScaleX * 0.6) + t * 1.1) * 0.2;
+    v = v * 0.5 + 0.5;
+    return (v * 255) & 255;
+}
+
+function initFill(t) {
+    for (let y = 0; y < H; y++)
+        for (let x = 0; x < W; x++)
+            data32[y * W + x] = RAMP[srcIndex(x, y, t)];
+}
+
+reseed();
+initFill(0);
+
+// ─── MELT STEP ─────────────────────────────────────────────────────────────
+const INJECT = 6;   // rows of fresh source poured in at the top each frame
+function melt(t) {
+    frameN++;
+    // Pull colours downward, bottom-up, stochastically per cell
+    for (let x = 0; x < W; x++) {
+        const sp = colSpeed[x];
+        for (let y = H - 1; y >= 1; y--) {
+            const idx = y * W + x;
+            const above = data32[idx - W];
+            // brightness of the source cell — hotter melts more readily
+            const r = above & 255, g = (above >> 8) & 255, b = (above >> 16) & 255;
+            const lum = (r + g + b) / 765;            // 0..1
+            const p = sp * (0.45 + lum * 0.85);
+            if (hash(x, y, frameN) < p) data32[idx] = above;
+        }
+    }
+    // Pour fresh colour into the top rows
+    for (let y = 0; y < INJECT; y++)
+        for (let x = 0; x < W; x++)
+            data32[y * W + x] = RAMP[srcIndex(x, y, t)];
+}
+
+const t0 = performance.now();
+function frame(now) {
+    const t = (now - t0) * 0.001;
+    melt(t);
+    bctx.putImageData(imgData, 0, 0);
+    dctx.drawImage(buffer, 0, 0, display.width, display.height);
+    requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// Tap → new pour (palette + field + column speeds)
+window.addEventListener('pointerdown', e => {
+    if (e.target.closest('.back')) return;
+    reseed();
+});
+
+let _lastTouchEnd = 0;
+document.addEventListener('touchend', e => {
+    const now = Date.now();
+    if (now - _lastTouchEnd < 350) e.preventDefault();
+    _lastTouchEnd = now;
+}, { passive: false });
+</script>
+
+</body>
+</html>

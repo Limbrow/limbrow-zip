@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>meltdown · preview</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { background: #000; width: 100%; height: 100vh; height: 100dvh; overflow: hidden; }
+    #stage { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: block;
+             image-rendering: pixelated; image-rendering: crisp-edges; }
+</style>
+</head>
+<body>
+
+<canvas id="stage"></canvas>
+
+<script>
+// Same melt engine at lower res; auto-reseeds every 16s so the card pours a
+// new palette while each melt has time to run.
+const display = document.getElementById('stage');
+const dctx = display.getContext('2d');
+
+const W = 120;
+const H = Math.max(70, Math.floor(W * (window.innerHeight / window.innerWidth))) || W;
+const buffer = document.createElement('canvas');
+buffer.width = W; buffer.height = H;
+const bctx = buffer.getContext('2d');
+const imgData = bctx.createImageData(W, H);
+const data8 = imgData.data;
+const data32 = new Uint32Array(data8.buffer);
+
+function fitDisplay(){ display.width = window.innerWidth; display.height = window.innerHeight; dctx.imageSmoothingEnabled = false; }
+window.addEventListener('resize', fitDisplay); fitDisplay();
+
+const ANCHORS = [[227,52,46],[242,194,77],[76,184,107],[58,123,213],[159,166,173]];
+const RAMP = new Uint32Array(256);
+function buildRamp(offset, contrast){
+    const n = ANCHORS.length;
+    for (let i = 0; i < 256; i++){
+        let t = (i/256 + offset) % 1; t = Math.pow(t, contrast);
+        const f = t*n, k = Math.floor(f)%n, fr = f-Math.floor(f);
+        const a = ANCHORS[k], b = ANCHORS[(k+1)%n];
+        RAMP[i] = (255<<24) | (((a[2]+(b[2]-a[2])*fr)|0)<<16) | (((a[1]+(b[1]-a[1])*fr)|0)<<8) | ((a[0]+(b[0]-a[0])*fr)|0);
+    }
+}
+const colSpeed = new Float32Array(W);
+let fieldSeed=0, fieldScaleX=1, fieldScaleY=1;
+function reseed(){
+    fieldSeed = Math.random()*1000;
+    fieldScaleX = 3 + Math.random()*6;
+    fieldScaleY = 2 + Math.random()*5;
+    buildRamp(Math.random(), 0.7 + Math.random()*0.9);
+    for (let x=0;x<W;x++){
+        const n = Math.sin(x*0.21+fieldSeed)*0.5 + Math.sin(x*0.07+fieldSeed*1.7)*0.5;
+        colSpeed[x] = 0.12 + (n*0.5+0.5)*0.62;
+    }
+}
+let frameN=0;
+function hash(x,y,f){ let h=(x*374761393+y*668265263+f*2246822519)>>>0; h=(h^(h>>13))*1274126177>>>0; return ((h^(h>>16))>>>0)/4294967295; }
+function srcIndex(x,y,t){
+    const nx=x/W, ny=y/H;
+    let v = Math.sin(nx*fieldScaleX+t*0.7+fieldSeed)*0.5 + Math.cos(ny*fieldScaleY-t*0.5)*0.3 + Math.sin((nx+ny)*(fieldScaleX*0.6)+t*1.1)*0.2;
+    v = v*0.5+0.5; return (v*255)&255;
+}
+function initFill(t){ for(let y=0;y<H;y++) for(let x=0;x<W;x++) data32[y*W+x]=RAMP[srcIndex(x,y,t)]; }
+reseed(); initFill(0);
+
+const INJECT=5;
+function melt(t){
+    frameN++;
+    for (let x=0;x<W;x++){
+        const sp=colSpeed[x];
+        for (let y=H-1;y>=1;y--){
+            const idx=y*W+x; const above=data32[idx-W];
+            const r=above&255,g=(above>>8)&255,b=(above>>16)&255; const lum=(r+g+b)/765;
+            if (hash(x,y,frameN) < sp*(0.45+lum*0.85)) data32[idx]=above;
+        }
+    }
+    for (let y=0;y<INJECT;y++) for(let x=0;x<W;x++) data32[y*W+x]=RAMP[srcIndex(x,y,t)];
+}
+
+const RESEED_MS=16000;
+let lastReseed=performance.now();
+const t0=performance.now();
+function frame(now){
+    if (now-lastReseed > RESEED_MS){ reseed(); lastReseed=now; }
+    melt((now-t0)*0.001);
+    bctx.putImageData(imgData,0,0);
+    dctx.drawImage(buffer,0,0,display.width,display.height);
+    requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+
+</body>
+</html>

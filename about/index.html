@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0">
+<title>references · limbrow.zip</title>
+<meta name="description" content="limbrow.zip — references & influences.">
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+        background: #050505;
+        color: #e8e8e8;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+        font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-text-size-adjust: 100%;
+    }
+
+    /* ── ASCII field (text-mode, after ertdfgcvb.xyz) ── */
+    #field {
+        position: fixed;
+        inset: 0;
+        margin: 0;
+        z-index: 1;
+        color: #2b2b2e;
+        white-space: pre;
+        overflow: hidden;
+        font-family: inherit;
+        font-variant-ligatures: none;
+        letter-spacing: 0;
+        user-select: none;
+        pointer-events: none;
+    }
+
+    .back {
+        position: fixed;
+        top: 16px; left: 16px;
+        z-index: 100;
+        width: 36px; height: 36px;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0, 0, 0, 0.4);
+        border: 1px solid rgba(255,255,255,0.14);
+        border-radius: 50%;
+        color: rgba(255,255,255,0.9);
+        text-decoration: none;
+        font-size: 16px; line-height: 1; padding-bottom: 2px;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+    }
+
+    /* ── readable content over the field ── */
+    .content {
+        position: fixed;
+        inset: 0;
+        z-index: 2;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: clamp(48px, 9vw, 110px) clamp(22px, 7vw, 96px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .content::-webkit-scrollbar { display: none; }
+    .content { scrollbar-width: none; }
+
+    .wrap { max-width: 680px; margin: auto 0; width: 100%; }
+
+    h1 {
+        font-size: clamp(15px, 4.2vw, 22px);
+        font-weight: 500;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: #fff;
+    }
+    .lead {
+        margin-top: 14px;
+        font-size: clamp(11px, 2.9vw, 13px);
+        line-height: 1.7;
+        color: rgba(255,255,255,0.62);
+        max-width: 46ch;
+    }
+
+    h2 {
+        margin-top: clamp(26px, 5vh, 44px);
+        margin-bottom: 14px;
+        font-size: 9px;
+        letter-spacing: 0.34em;
+        text-transform: uppercase;
+        color: rgba(255,255,255,0.4);
+    }
+
+    ul { list-style: none; }
+    li {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        padding: 5px 0;
+        font-size: clamp(11px, 2.9vw, 13.5px);
+        line-height: 1.5;
+    }
+    li .name { color: rgba(255,255,255,0.95); white-space: nowrap; }
+    li .dot  { flex: 1; border-bottom: 1px dotted rgba(255,255,255,0.14); transform: translateY(-3px); }
+    li .tag  { color: rgba(255,255,255,0.42); font-size: 0.84em; letter-spacing: 0.06em; text-align: right; }
+
+    .foot {
+        margin-top: clamp(26px, 5vh, 44px);
+        font-size: 10px;
+        letter-spacing: 0.1em;
+        color: rgba(255,255,255,0.32);
+        line-height: 1.7;
+    }
+    .foot a { color: rgba(255,255,255,0.55); text-decoration: none; border-bottom: 1px solid rgba(255,255,255,0.18); }
+    .foot a:hover { color: #fff; }
+
+    @media (max-width: 520px) {
+        li { gap: 8px; }
+        li .tag { font-size: 0.78em; }
+    }
+</style>
+</head>
+<body>
+
+<pre id="field" aria-hidden="true"></pre>
+
+<a class="back" href="/" aria-label="Back to grid">←</a>
+
+<main class="content">
+    <div class="wrap">
+        <h1>limbrow.zip</h1>
+        <p class="lead">
+            An archive of net-art made by programming with AI — every tile a small
+            machine for finding a language. These are the works and people it leans on.
+        </p>
+
+        <h2>References &amp; Influences</h2>
+        <ul id="refs"></ul>
+
+        <div class="foot">
+            Coded live, one piece at a time. ·
+            <a href="https://instagram.com/limbrow" target="_blank" rel="noopener">@limbrow</a>
+        </div>
+    </div>
+</main>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+// REFERENCES — text-mode (after Andreas Gysin / ertdfgcvb.xyz).
+//
+// The background is a live grid of monospace characters: each cell picks a
+// glyph from a density ramp by sampling a slow multi-octave flow field of
+// (col, row, time). One string is rebuilt per frame and written to a <pre> —
+// the cheap, faithful way Gysin renders text-mode. The references list sits
+// crisp on top.
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── content (edit freely) ───────────────────────────────────────────────────
+const REFERENCES = [
+    ['Felipe Pantone',            'kinetic · chromatic · op'],
+    ['Julio Le Parc',             'kinetic · light · op'],
+    ['Kim Asendorf',              'pixel sort · generative'],
+    ['Andreas Gysin · ertdfgcvb', 'text-mode'],
+    ['Vera Molnár',               'generative pioneer'],
+    ['Manfred Mohr',              'algorithmic art'],
+    ['Casey Reas',                'processing · software'],
+    ['Ryoji Ikeda',               'data · sound'],
+    ['Zach Lieberman',            'daily sketches'],
+    ['Aphex Twin · Autechre',     'idm'],
+];
+const ul = document.getElementById('refs');
+REFERENCES.forEach(([name, tag]) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="name">${name}</span><span class="dot"></span><span class="tag">${tag}</span>`;
+    ul.appendChild(li);
+});
+
+// ── ASCII field ──────────────────────────────────────────────────────────────
+const RAMP = ' .\'`^",:;Il!i~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$';
+const field = document.getElementById('field');
+
+let cols = 0, rows = 0, charW = 8, charH = 14;
+
+function measure() {
+    const fs = window.innerWidth < 520 ? 11 : 13;
+    field.style.fontSize = fs + 'px';
+    field.style.lineHeight = (fs + 2) + 'px';
+    // Measure a monospace cell
+    const probe = document.createElement('span');
+    probe.style.cssText = `position:absolute;visibility:hidden;font-family:${getComputedStyle(field).fontFamily};font-size:${fs}px;`;
+    probe.textContent = '0'.repeat(50);
+    document.body.appendChild(probe);
+    charW = probe.getBoundingClientRect().width / 50;
+    document.body.removeChild(probe);
+    charH = fs + 2;
+    cols = Math.ceil(window.innerWidth / charW) + 1;
+    rows = Math.ceil(window.innerHeight / charH) + 1;
+}
+window.addEventListener('resize', measure);
+measure();
+
+const t0 = performance.now();
+const line = new Array(0);
+function render(now) {
+    const t = (now - t0) * 0.0006;
+    const out = [];
+    const aspect = charW / charH;     // correct the cell aspect so the flow is round
+    for (let y = 0; y < rows; y++) {
+        const ny = y * aspect;
+        let row = '';
+        for (let x = 0; x < cols; x++) {
+            // multi-octave flowing field
+            let v =
+                Math.sin(x * 0.06 + t * 1.3) * 0.5 +
+                Math.cos(ny * 0.10 - t * 1.0) * 0.4 +
+                Math.sin((x * 0.04 + ny * 0.05) + t * 1.7) * 0.35 +
+                Math.cos((x * 0.018 - ny * 0.03) - t * 0.6) * 0.3;
+            // gentle radial breathing from the centre
+            const dx = (x - cols / 2) * 0.02, dy = (ny - rows * aspect / 2) * 0.02;
+            v += Math.sin(Math.sqrt(dx*dx + dy*dy) * 3.0 - t * 2.0) * 0.4;
+            v = v * 0.5 + 0.5;
+            const idx = Math.max(0, Math.min(RAMP.length - 1, (v * (RAMP.length - 1)) | 0));
+            row += RAMP[idx];
+        }
+        out.push(row);
+    }
+    field.textContent = out.join('\n');
+    requestAnimationFrame(render);
+}
+requestAnimationFrame(render);
+</script>
+
+</body>
+</html>

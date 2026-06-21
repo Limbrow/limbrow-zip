@@ -103,37 +103,6 @@
             margin-top: -8px;
         }
 
-        /* ── AVATAR FULLSCREEN OVERLAY ── */
-        .avatar-overlay {
-            position: fixed;
-            inset: 0;
-            background: #000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.3s ease;
-            z-index: 100;
-            cursor: pointer;
-            padding: 24px;
-        }
-        .avatar-overlay.open {
-            opacity: 1;
-            pointer-events: auto;
-        }
-        .avatar-overlay img {
-            width: 100%;
-            max-width: 480px;
-            height: auto;
-            border-radius: 50%;
-            transform: scale(0.9);
-            transition: transform 0.3s ease;
-        }
-        .avatar-overlay.open img {
-            transform: scale(1);
-        }
-
         /* ── GRID — IG-style 3 columns, infinite scroll ── */
         main {
             padding: 0 var(--gap) 48px;
@@ -231,14 +200,10 @@
 <body>
 
     <header>
-        <button class="avatar" id="avatar-btn" aria-label="View avatar">
+        <a class="avatar" href="/about/" aria-label="References & influences">
             <img src="avatar.jpg" alt="">
-        </button>
+        </a>
     </header>
-
-    <div class="avatar-overlay" id="avatar-overlay" aria-hidden="true">
-        <img src="avatar.jpg" alt="">
-    </div>
 
     <main>
         <div class="grid" id="grid"></div>
@@ -296,25 +261,6 @@
             .slice()
             .sort((a, b) => b.date.localeCompare(a.date))
             .forEach(post => grid.appendChild(makeCard(post)));
-
-        // Avatar fullscreen
-        const avatarBtn = document.getElementById('avatar-btn');
-        const overlay = document.getElementById('avatar-overlay');
-        function openAvatar() {
-            overlay.classList.add('open');
-            overlay.setAttribute('aria-hidden', 'false');
-            document.body.style.overflow = 'hidden';
-        }
-        function closeAvatar() {
-            overlay.classList.remove('open');
-            overlay.setAttribute('aria-hidden', 'true');
-            document.body.style.overflow = '';
-        }
-        avatarBtn.addEventListener('click', openAvatar);
-        overlay.addEventListener('click', closeAvatar);
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && overlay.classList.contains('open')) closeAvatar();
-        });
     </script>
 </body>
 </html>

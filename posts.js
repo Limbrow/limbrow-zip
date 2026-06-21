@@ -24,6 +24,13 @@
 export const posts = [
 
     {
+        slug: 'meltdown',
+        date: '2026-05-31',
+        preview: 'preview.html',  // generative colour field melting downward in ragged drips
+        scale: 1.0
+    },
+
+    {
         slug: 'help',
         date: '2026-05-31',
         preview: 'preview.html',  // single track — "I can't get out", confined-waveform player
