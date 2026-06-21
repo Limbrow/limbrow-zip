@@ -160,7 +160,7 @@
         <textarea id="code" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea>
         <div class="foot">
             <div class="err ok" id="err">runs live — return 0..1 or a character</div>
-            <div class="hint">f(x, y, t, cols, rows)</div>
+            <div class="hint">f(x, y, t, cols, rows, aspect)</div>
         </div>
     </div>
 </div>
@@ -205,40 +205,104 @@ measure();
 const MODULES = [
     { name: 'plasma', code:
 `// plasma — summed sine field. edit me!
-return 0.5 + 0.2 * (
+const cx = cols/2, cy = rows/2;
+const dx = (x - cx) * aspect, dy = (y - cy);
+const r  = hypot(dx, dy);
+let v =
   sin(x*0.12 + t*1.3) +
   cos(y*0.16 - t) +
-  sin((x + y)*0.05 + t*1.6)
-);` },
+  sin((x + y)*0.05 + t*1.6) +
+  sin(r*0.22 - t*2.0);
+return 0.5 + v * 0.13;` },
 
-    { name: 'rings', code:
-`// concentric rings ( *2 corrects the cell aspect )
-const dx = x - cols/2, dy = (y - rows/2) * 2;
-const d = hypot(dx, dy);
-return 0.5 + 0.5 * sin(d*0.25 - t*3);` },
+    { name: 'clouds', code:
+`// fractal noise — domain-warped fbm
+const q  = fbm(x*0.05 + t*0.10, y*0.06 - t*0.04);
+const q2 = fbm(x*0.05 + 4.0*q, y*0.06 + 4.0*q + t*0.05);
+const f  = fbm(x*0.05 + 4.0*q2, y*0.06 + 4.0*q2);
+return smoothstep(0.15, 0.95, f * 1.4);` },
 
     { name: 'flow', code:
-`// domain-warped flow field
-const wx = sin(y*0.08 + t) * 6;
-const wy = cos(x*0.07 - t) * 6;
-return 0.5 + 0.3 * sin((x+wx)*0.10 + (y+wy)*0.12 + t);` },
+`// curl-ish flow: warp coords by noise, sample again
+const a = fbm(x*0.04 + t*0.07, y*0.05) * TAU;
+const ux = x + cos(a) * 8.0;
+const uy = y + sin(a) * 8.0;
+const v  = fbm(ux*0.05, uy*0.06 - t*0.10);
+return smoothstep(0.25, 0.85, v + 0.15*sin(t));` },
 
-    { name: 'tunnel', code:
-`// spinning tunnel
-const dx = x - cols/2, dy = (y - rows/2) * 2;
-const a = atan2(dy, dx);
-const r = hypot(dx, dy) + 0.001;
-return 0.5 + 0.5 * sin(40/r + a*3 + t*2);` },
+    { name: 'mandelbrot', code:
+`// mandelbrot — slow breathing zoom
+const zoom = 0.55 + 0.42*sin(t*0.18);
+const px = (x/cols - 0.5) * 3.0 / zoom * (cols/rows) * aspect;
+const py = (y/rows - 0.5) * 3.0 / zoom;
+const cRe = px - 0.745, cIm = py + 0.112;
+let zr = 0, zi = 0, i = 0;
+const M = 64;
+while (i < M && zr*zr + zi*zi < 4) {
+  const r = zr*zr - zi*zi + cRe;
+  zi = 2*zr*zi + cIm; zr = r; i++;
+}
+if (i >= M) return 0;
+// smooth escape colouring
+const sm = i + 1 - log(log(zr*zr + zi*zi) / 2) / log(2);
+return 0.12 + fract(sm * 0.06) * 0.88;` },
 
-    { name: 'grid', code:
-`// pulsing grid
-const g = sin(x*0.4 + t) * sin(y*0.4 - t);
-return g > 0 ? 0.92 : 0.06;` },
+    { name: 'julia', code:
+`// julia set — the constant orbits with time
+const px = (x/cols - 0.5) * 3.2 * (cols/rows) * aspect;
+const py = (y/rows - 0.5) * 3.2;
+const cr = 0.7885 * cos(t*0.3);
+const ci = 0.7885 * sin(t*0.3);
+let zr = px, zi = py, i = 0;
+const M = 56;
+while (i < M && zr*zr + zi*zi < 4) {
+  const r = zr*zr - zi*zi + cr;
+  zi = 2*zr*zi + ci; zr = r; i++;
+}
+return i >= M ? 0 : 0.1 + (i / M) * 0.9;` },
+
+    { name: 'metaballs', code:
+`// metaballs — inverse-square blobs that merge
+let v = 0;
+for (let i = 0; i < 5; i++) {
+  const bx = cols * (0.5 + 0.36*sin(t*0.6 + i*1.7));
+  const by = rows * (0.5 + 0.36*cos(t*0.5 + i*2.3));
+  const dx = (x - bx) * aspect, dy = (y - by);
+  v += 70 / (dx*dx + dy*dy + 1);
+}
+return smoothstep(0.7, 1.5, v);` },
+
+    { name: 'sphere', code:
+`// a lit, rotating wire sphere
+const R  = min(cols, rows/aspect) * 0.42;
+const dx = (x - cols/2);
+const dy = (y - rows/2) / aspect;
+const r2 = dx*dx + dy*dy;
+if (r2 > R*R) return 0;
+const z  = sqrt(R*R - r2);
+const nx = dx/R, ny = dy/R, nz = z/R;
+const lon = atan2(nx, nz) + t;          // spin
+const lat = asin(clamp(ny, -1, 1));
+const grid = (0.5 + 0.5*sin(lon*9)) * (0.5 + 0.5*sin(lat*9));
+const light = clamp(nx*0.4 - ny*0.5 + nz*0.85, 0, 1);
+return clamp(light*0.65 + grid*0.45, 0, 1);` },
+
+    { name: 'moire', code:
+`// interference of two rotating gratings
+const a1 =  t*0.20, a2 = -t*0.13;
+const u1 = (x*cos(a1) + (y/aspect)*sin(a1)) * 0.42;
+const u2 = (x*cos(a2) + (y/aspect)*sin(a2)) * 0.47;
+const m  = sin(u1) * sin(u2);
+return 0.5 + 0.5 * m;` },
 
     { name: 'chars', code:
-`// return a character directly
-const v = sin(x*0.2 + t) + cos(y*0.2 - t);
-return v > 0.6 ? '#' : v > -0.2 ? '+' : v > -1.2 ? '.' : ' ';` },
+`// return a character directly, not a number
+const v = sin(x*0.2 + t) + cos(y*0.2 - t)
+        + 0.6*sin((x+y)*0.1 + t*1.7);
+return v >  1.2 ? '@'
+     : v >  0.4 ? '#'
+     : v > -0.4 ? '+'
+     : v > -1.2 ? ':' : ' ';` },
 ];
 
 const codeEl = document.getElementById('code');
@@ -264,15 +328,26 @@ function loadModule(i) {
 
 // ─── COMPILE user code into a per-cell function ──────────────────────────────
 let fn = null;
-const PRELUDE =
-    'const {sin,cos,tan,asin,acos,atan,atan2,sqrt,cbrt,abs,floor,ceil,round,sign,hypot,min,max,pow,exp,log}=Math;'
-  + 'const PI=Math.PI, TAU=Math.PI*2;';
+// Prelude exposed to every program: Math fns + a small graphics toolkit
+// (value noise, fbm, smoothstep, clamp, mix, …) so the modules can get dense.
+const PRELUDE = [
+    'const {sin,cos,tan,asin,acos,atan,atan2,sqrt,cbrt,abs,floor,ceil,round,sign,hypot,min,max,pow,exp,log}=Math;',
+    'const PI=Math.PI, TAU=Math.PI*2;',
+    'const fract=v=>v-Math.floor(v);',
+    'const clamp=(v,a,b)=>v<a?a:(v>b?b:v);',
+    'const mix=(a,b,k)=>a+(b-a)*k;',
+    'const stepf=(e,v)=>v<e?0:1;',
+    'const smoothstep=(e0,e1,v)=>{const k=clamp((v-e0)/(e1-e0),0,1);return k*k*(3-2*k);};',
+    'function hash(px,py){let h=Math.sin(px*127.1+py*311.7)*43758.5453;return h-Math.floor(h);}',
+    'function noise(px,py){const ix=Math.floor(px),iy=Math.floor(py),fx=px-ix,fy=py-iy;const ux=fx*fx*(3-2*fx),uy=fy*fy*(3-2*fy);const a=hash(ix,iy),b=hash(ix+1,iy),c=hash(ix,iy+1),d=hash(ix+1,iy+1);return a+(b-a)*ux+(c-a)*uy+(a-b-c+d)*ux*uy;}',
+    'function fbm(px,py){let v=0,amp=0.5,f=1;for(let o=0;o<5;o++){v+=amp*noise(px*f,py*f);f*=2;amp*=0.5;}return v;}',
+].join('\n');
 
 function compile() {
     const body = codeEl.value;
     try {
-        const candidate = new Function('x', 'y', 't', 'cols', 'rows', PRELUDE + '\n' + body);
-        const test = candidate(0, 0, 0, cols, rows);   // smoke-test
+        const candidate = new Function('x', 'y', 't', 'cols', 'rows', 'aspect', PRELUDE + '\n' + body);
+        const test = candidate(0, 0, 0, cols, rows, charW / charH);   // smoke-test
         if (test === undefined) throw new Error('nothing returned — add a `return`');
         fn = candidate;
         errEl.textContent = 'ok';
@@ -298,13 +373,14 @@ loadModule(0);
 const t0 = performance.now();
 function frame(now) {
     const t = (now - t0) * 0.001;
+    const ar = charW / charH;
     let out = '';
     if (fn) {
         for (let y = 0; y < rows; y++) {
             let row = '';
             for (let x = 0; x < cols; x++) {
                 let r;
-                try { r = fn(x, y, t, cols, rows); } catch (e) { r = 0; }
+                try { r = fn(x, y, t, cols, rows, ar); } catch (e) { r = 0; }
                 if (typeof r === 'string') {
                     row += r.length ? r[0] : ' ';
                 } else {
