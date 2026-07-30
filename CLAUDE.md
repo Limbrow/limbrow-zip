@@ -76,6 +76,22 @@ buffer gets allocated with height 0, `createImageData` throws, and the piece is
 black *forever* because that size is never recomputed. `blocks`, `physarum` and
 `melt` were all dead this way. Always end the expression with `|| W`.
 
+**The feed is 25 live simulations, so it needs a budget.** `index.html` keeps a
+window: only cards near the viewport are mounted, never more than `MAX_LIVE`
+(10 desktop / 6 mobile), and a card that drifts away has its iframe *destroyed*
+— blanking `src` and removing the element is the only way to be sure the
+buffers and the rAF loop are really gone. Mounting is staggered one per 130ms,
+because starting a dozen engines in the same frame is what made arriving at the
+page stutter. Every shared engine takes an `fps` option (0 = every animation
+frame, the default): cards run at 15–20fps, posts run uncapped. Where a piece
+advances one simulation step per drawn frame, the preview raises `steps`/`iters`
+to match, so capping the paint rate doesn't also slow the physics.
+
+**Never select cards by measuring rects against `window.innerHeight`.** It reads
+0 in an iframe and before layout, and the arithmetic then quietly selects
+nothing — a blank feed. Use `IntersectionObserver` and keep a fallback that
+mounts the top of the grid if nothing reports as near.
+
 **Interpolate and light colour in LINEAR light,** not in sRGB. Blending
 `rgb()` values directly is what makes gradients go chalky and grey through the
 mid-tones. Every engine here converts to linear, works there, and encodes back

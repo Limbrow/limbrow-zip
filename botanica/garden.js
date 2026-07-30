@@ -107,6 +107,12 @@ function expand(sp) {
 }
 
 export function createGarden(canvas, opts = {}) {
+
+    // A grid card is a couple of hundred pixels wide and there are two dozen of
+    // them on screen. Capping the draw rate is the cheapest lever there is:
+    // the simulation still advances on real elapsed time, we just stop
+    // repainting it sixty times a second. 0 means "every animation frame".
+    const FRAME_MS = opts.fps ? 1000 / opts.fps : 0;
     const PLANTS      = opts.plants ?? 7;
     const SEASON_MS   = opts.seasonMs ?? 22000;
     const GROW_MS     = opts.growMs ?? 14000;
@@ -414,9 +420,13 @@ export function createGarden(canvas, opts = {}) {
 
     // ─── FRAME ─────────────────────────────────────────────────────────────
     let raf = 0;
+    let lastDraw = 0;
     const t0 = performance.now();
 
     function frame(now) {
+        raf = requestAnimationFrame(frame);
+        if (FRAME_MS && now - lastDraw < FRAME_MS) return;
+        lastDraw = now;
         const W = canvas.clientWidth || window.innerWidth || 1;
         const H = canvas.clientHeight || window.innerHeight || 1;
 
@@ -450,7 +460,6 @@ export function createGarden(canvas, opts = {}) {
         ctx.fillStyle = 'rgba(0,0,0,0.55)';
         ctx.fillRect(0, H * 0.962, W, H * 0.04);
 
-        raf = requestAnimationFrame(frame);
     }
 
     return {

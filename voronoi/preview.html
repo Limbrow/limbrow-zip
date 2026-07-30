@@ -26,8 +26,9 @@
 import { createCells, METRICS } from './cells.js';
 
 const cells = createCells(document.getElementById('stage'), {
-    res: 170,
-    seeds: 22,
+    res: 130,
+    seeds: 18,
+    fps: 20,
 });
 cells.randomPalette();
 cells.start();

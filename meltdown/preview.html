@@ -30,9 +30,11 @@
 import { createMelt } from './melt.js';
 
 const melt = createMelt(document.getElementById('stage'), {
-    res: 130,
+    res: 110,
     inject: 3,
+    steps: 3,      // 3 melt steps per painted frame, so 20fps still runs
     bloom: 0.5,
+    fps: 20,
 });
 melt.start();
 setInterval(() => melt.reseed(melt.time(), false), 15000);

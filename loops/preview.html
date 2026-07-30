@@ -27,6 +27,7 @@ import { createLoops, MODES } from './curves.js';
 
 const loops = createLoops(document.getElementById('canvas'), {
     seed: Math.random() * 40000,
+    fps: 20,
 });
 loops.start();
 

@@ -26,8 +26,9 @@
 import { createBulb } from './bulb.js';
 
 const bulb = createBulb(document.getElementById('stage'), {
-    scale: 0.34,
+    scale: 0.26,
     spin: 0.7,
+    fps: 15,      // the priciest per pixel of the lot
     interactive: false,
 });
 if (bulb) {

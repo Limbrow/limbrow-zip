@@ -157,6 +157,12 @@ function s2l(c) {
 }
 
 export function createBulb(canvas, opts = {}) {
+
+    // A grid card is a couple of hundred pixels wide and there are two dozen of
+    // them on screen. Capping the draw rate is the cheapest lever there is:
+    // the simulation still advances on real elapsed time, we just stop
+    // repainting it sixty times a second. 0 means "every animation frame".
+    const FRAME_MS = opts.fps ? 1000 / opts.fps : 0;
     // Ray marching a fractal is expensive per pixel, so the backing store is
     // deliberately smaller than the element and upscaled by the compositor.
     const SCALE = opts.scale ?? 0.55;
@@ -247,9 +253,13 @@ export function createBulb(canvas, opts = {}) {
 
     const cam = new Float32Array(9);
     let raf = 0;
+    let lastDraw = 0;
     const t0 = performance.now();
 
     function frame(now) {
+        raf = requestAnimationFrame(frame);
+        if (FRAME_MS && now - lastDraw < FRAME_MS) return;
+        lastDraw = now;
         const t = (now - t0) * 0.001;
 
         // hand momentum, then back to a slow drift
@@ -289,7 +299,6 @@ export function createBulb(canvas, opts = {}) {
         gl.uniform1f(uFov, 1.15);
 
         gl.drawArrays(gl.TRIANGLES, 0, 3);
-        raf = requestAnimationFrame(frame);
     }
 
     return {

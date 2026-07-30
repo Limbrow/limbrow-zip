@@ -59,6 +59,12 @@ const C = 0.34;          // must stay under 0.5
 const DAMP = 0.9975;
 
 export function createTank(canvas, opts = {}) {
+
+    // A grid card is a couple of hundred pixels wide and there are two dozen of
+    // them on screen. Capping the draw rate is the cheapest lever there is:
+    // the simulation still advances on real elapsed time, we just stop
+    // repainting it sixty times a second. 0 means "every animation frame".
+    const FRAME_MS = opts.fps ? 1000 / opts.fps : 0;
     const RES    = opts.res ?? 340;
     const STEPS  = opts.steps ?? 2;        // integration steps per frame
     const RELIEF = opts.relief ?? 1.0;
@@ -278,10 +284,13 @@ export function createTank(canvas, opts = {}) {
     });
 
     let raf = 0;
-    function frame() {
+    let lastDraw = 0;
+    function frame(now) {
+        raf = requestAnimationFrame(frame);
+        if (FRAME_MS && now - lastDraw < FRAME_MS) return;
+        lastDraw = now;
         for (let s = 0; s < STEPS; s++) step();
         render();
-        raf = requestAnimationFrame(frame);
     }
 
     return {

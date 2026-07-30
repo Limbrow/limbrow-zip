@@ -59,6 +59,12 @@ const MODES = [
 ];
 
 export function createSand(canvas, opts = {}) {
+
+    // A grid card is a couple of hundred pixels wide and there are two dozen of
+    // them on screen. Capping the draw rate is the cheapest lever there is:
+    // the simulation still advances on real elapsed time, we just stop
+    // repainting it sixty times a second. 0 means "every animation frame".
+    const FRAME_MS = opts.fps ? 1000 / opts.fps : 0;
     const RES     = opts.res ?? 460;
     const GRAINS  = opts.grains ?? 25000;
     const DECAY   = opts.decay ?? 0.55;      // brief trails, not a long exposure
@@ -265,12 +271,15 @@ export function createSand(canvas, opts = {}) {
     window.addEventListener('resize', fitDisplay);
 
     let raf = 0, last = 0;
+    let lastDraw = 0;
     function frame(now) {
+        raf = requestAnimationFrame(frame);
+        if (FRAME_MS && now - lastDraw < FRAME_MS) return;
+        lastDraw = now;
         const dt = last ? Math.min(64, now - last) : 16;
         last = now;
         step(dt);
         render();
-        raf = requestAnimationFrame(frame);
     }
 
     document.addEventListener('visibilitychange', () => {

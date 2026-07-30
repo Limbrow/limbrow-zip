@@ -126,6 +126,12 @@ const PRESETS = {
 };
 
 export function createLoops(canvas, opts = {}) {
+
+    // A grid card is a couple of hundred pixels wide and there are two dozen of
+    // them on screen. Capping the draw rate is the cheapest lever there is:
+    // the simulation still advances on real elapsed time, we just stop
+    // repainting it sixty times a second. 0 means "every animation frame".
+    const FRAME_MS = opts.fps ? 1000 / opts.fps : 0;
     // More, shorter runs means smaller width steps between them — long runs
     // leave visible pearls where a fat round cap overhangs a thin neighbour.
     const CHUNKS = opts.chunks ?? 34;     // stroked runs per curve
@@ -230,8 +236,12 @@ export function createLoops(canvas, opts = {}) {
     }
 
     let raf = 0, last = performance.now();
+    let lastDraw = 0;
 
     function frame(now) {
+        raf = requestAnimationFrame(frame);
+        if (FRAME_MS && now - lastDraw < FRAME_MS) return;
+        lastDraw = now;
         t += now - last;
         last = now;
 
@@ -258,7 +268,6 @@ export function createLoops(canvas, opts = {}) {
         }
 
         ctx.globalCompositeOperation = 'source-over';
-        raf = requestAnimationFrame(frame);
     }
 
     // A long dt while hidden would compound into the evolution

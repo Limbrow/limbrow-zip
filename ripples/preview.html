@@ -26,8 +26,9 @@
 import { createTank, BARRIERS } from './tank.js';
 
 const tank = createTank(document.getElementById('stage'), {
-    res: 190,
-    steps: 2,
+    res: 150,
+    steps: 4,       // 4 wave steps per painted frame
+    fps: 20,
 });
 tank.randomPalette();
 

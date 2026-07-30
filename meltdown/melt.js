@@ -78,8 +78,15 @@ function vnoise(x, y, seed) {
 
 // ─── ENGINE ────────────────────────────────────────────────────────────────
 export function createMelt(canvas, opts = {}) {
+
+    // A grid card is a couple of hundred pixels wide and there are two dozen of
+    // them on screen. Capping the draw rate is the cheapest lever there is:
+    // the simulation still advances on real elapsed time, we just stop
+    // repainting it sixty times a second. 0 means "every animation frame".
+    const FRAME_MS = opts.fps ? 1000 / opts.fps : 0;
     const RES        = opts.res        ?? 300;   // buffer width in cells
     const INJECT     = opts.inject     ?? 3;     // rows of fresh pour per frame
+    const STEPS      = opts.steps      ?? 1;     // melt steps per painted frame
     const COOL       = opts.cool       ?? 0.9972;
     const BLOOM      = opts.bloom      ?? 0.40;
     const CRUST      = opts.crust      ?? 0.28;  // floor brightness of cold wax
@@ -347,11 +354,14 @@ export function createMelt(canvas, opts = {}) {
 
     const t0 = performance.now();
     let raf = 0;
+    let lastDraw = 0;
     function frame(now) {
-        const t = (now - t0) * 0.001;
-        step(t);
-        render(t);
         raf = requestAnimationFrame(frame);
+        if (FRAME_MS && now - lastDraw < FRAME_MS) return;
+        lastDraw = now;
+        const t = (now - t0) * 0.001;
+        for (let s = 0; s < STEPS; s++) step(t);
+        render(t);
     }
 
     return {

@@ -26,10 +26,11 @@
 import { createSand } from './sand.js';
 
 const sand = createSand(document.getElementById('stage'), {
-    res: 220,
-    grains: 11000,
+    res: 170,
+    grains: 7000,
     hold: 6000,
     morph: 2600,
+    fps: 20,
 });
 sand.randomPalette();
 sand.randomMode();

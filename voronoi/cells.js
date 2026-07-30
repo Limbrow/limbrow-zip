@@ -55,6 +55,12 @@ export const PALETTES = [
 export const METRICS = ['EUCLID', 'MANHATTAN', 'CHEBYSHEV', 'CUBIC'];
 
 export function createCells(canvas, opts = {}) {
+
+    // A grid card is a couple of hundred pixels wide and there are two dozen of
+    // them on screen. Capping the draw rate is the cheapest lever there is:
+    // the simulation still advances on real elapsed time, we just stop
+    // repainting it sixty times a second. 0 means "every animation frame".
+    const FRAME_MS = opts.fps ? 1000 / opts.fps : 0;
     const RES   = opts.res ?? 300;
     const SEEDS = opts.seeds ?? 34;
     const BAND  = opts.band ?? 1.0;      // strength of the contour banding
@@ -224,11 +230,14 @@ export function createCells(canvas, opts = {}) {
     });
 
     let raf = 0;
+    let lastDraw = 0;
     const t0 = performance.now();
     function frame(now) {
+        raf = requestAnimationFrame(frame);
+        if (FRAME_MS && now - lastDraw < FRAME_MS) return;
+        lastDraw = now;
         move(now - t0);
         render();
-        raf = requestAnimationFrame(frame);
     }
 
     return {

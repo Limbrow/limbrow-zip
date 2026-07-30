@@ -26,9 +26,10 @@
 import { createRD, PRESETS, PALETTES } from './rd.js';
 
 const rd = createRD(document.getElementById('stage'), {
-    res: 150,
-    iters: 3,
+    res: 120,
+    iters: 8,       // 8 reaction steps per painted frame
     warmup: 1100,
+    fps: 20,
 });
 rd.setPreset(PRESETS[(Math.random() * PRESETS.length) | 0].name);
 rd.setPalette(PALETTES[(Math.random() * PALETTES.length) | 0].name);

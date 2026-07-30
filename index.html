@@ -210,50 +210,142 @@
     </main>
 
     <script type="module">
+        // ── FEED SCHEDULER ────────────────────────────────────────────────
+        // Every tile is a live piece running its own animation loop, and there
+        // are two dozen of them. Mounting them all and leaving them running is
+        // what made the feed stutter: two dozen simulations competing for one
+        // main thread, most of them several screens away.
+        //
+        // So the feed keeps a WINDOW. Only cards near the viewport are mounted,
+        // never more than MAX_LIVE at once, and a card that drifts far away has
+        // its iframe destroyed outright — which is the only way to be sure its
+        // buffers and its animation loop are actually gone.
+        //
+        // Mounting is also spread out, one iframe every LOAD_GAP. Arriving at
+        // the page used to start a dozen engines in the same frame, each
+        // allocating buffers and building colour tables; that burst was the
+        // stutter you saw on entry.
         import { posts } from './posts.js';
 
         const grid = document.getElementById('grid');
+        const MOBILE = window.matchMedia('(max-width: 600px)').matches;
+
+        const MAX_LIVE = MOBILE ? 6 : 10;   // hard ceiling on running pieces
+        const LOAD_GAP = 130;               // ms between one mount and the next
+        const NEAR = 0.75;                  // viewports of slack around the screen
+
+        const cards = [];
 
         function makeCard(post) {
-            const card = document.createElement('a');
-            card.className = 'card';
-            card.href = `/${post.slug}/`;
-            card.setAttribute('aria-label', `Open ${post.slug}`);
+            const el = document.createElement('a');
+            el.className = 'card';
+            el.href = `/${post.slug}/`;
+            el.setAttribute('aria-label', `Open ${post.slug}`);
 
             // Special span overrides — for hero / breaking-the-grid posts
-            if (post.span === '2cols') card.classList.add('span-2-cols');
-            else if (post.span === '2rows') card.classList.add('span-2-rows');
-            else if (post.span === '2x2') card.classList.add('span-2x2');
+            if (post.span === '2cols') el.classList.add('span-2-cols');
+            else if (post.span === '2rows') el.classList.add('span-2-rows');
+            else if (post.span === '2x2') el.classList.add('span-2x2');
 
             // Aspect override only if absolutely needed
-            if (post.aspect) card.style.setProperty('--aspect', post.aspect);
-            card.style.setProperty('--scale', post.scale ?? 0.4);
+            if (post.aspect) el.style.setProperty('--aspect', post.aspect);
+            el.style.setProperty('--scale', post.scale ?? 0.4);
 
-            // No loading="lazy" — we run our own IntersectionObserver below
-            // with a generous 400px root margin. Combining native lazy-load
-            // with programmatic src assignment occasionally left iframes in
-            // a never-load state (aviary / loops looking blank).
-            card.innerHTML = `
-                <div class="preview">
-                    <iframe tabindex="-1" aria-hidden="true" scrolling="no"></iframe>
-                </div>
-            `;
+            const holder = document.createElement('div');
+            holder.className = 'preview';
+            el.appendChild(holder);
 
-            const iframe = card.querySelector('iframe');
-            const previewUrl = post.preview
-                ? `/${post.slug}/${post.preview}`
-                : `/${post.slug}/`;
-            const io = new IntersectionObserver((entries) => {
-                entries.forEach(e => {
-                    if (e.isIntersecting && !iframe.src) {
-                        iframe.src = previewUrl;
-                        io.disconnect();
-                    }
-                });
-            }, { rootMargin: '400px' });
-            io.observe(card);
+            const card = {
+                el, holder,
+                url: post.preview ? `/${post.slug}/${post.preview}` : `/${post.slug}/`,
+                iframe: null, live: false, queued: false,
+            };
+            cards.push(card);
+            return el;
+        }
 
-            return card;
+        function mount(card) {
+            if (card.live) return;
+            const f = document.createElement('iframe');
+            f.tabIndex = -1;
+            f.setAttribute('aria-hidden', 'true');
+            f.setAttribute('scrolling', 'no');
+            f.src = card.url;
+            card.holder.appendChild(f);
+            card.iframe = f;
+            card.live = true;
+        }
+
+        function unmount(card) {
+            card.queued = false;
+            if (!card.live) return;
+            // Blanking the document first, then dropping the element, is what
+            // actually releases the canvas buffers and stops the rAF loop.
+            card.iframe.src = 'about:blank';
+            card.iframe.remove();
+            card.iframe = null;
+            card.live = false;
+        }
+
+        // ── staggered mounting ──
+        const queue = [];
+        let draining = false;
+
+        function enqueue(card) {
+            if (card.live || card.queued) return;
+            card.queued = true;
+            queue.push(card);
+            if (!draining) {
+                draining = true;
+                tick();
+            }
+        }
+
+        function tick() {
+            // drop anything that drifted out of the window while it waited
+            while (queue.length && !queue[0].queued) queue.shift();
+            const card = queue.shift();
+            if (!card) { draining = false; return; }
+            card.queued = false;
+            mount(card);
+            setTimeout(tick, LOAD_GAP);
+        }
+
+        // ── the window ──
+        // Which cards are near is left to IntersectionObserver rather than
+        // measured by hand: it is the browser's own answer, and it still works
+        // in the cases where window.innerHeight reads 0 (an iframed or
+        // not-yet-laid-out page), where rect arithmetic quietly selects nothing.
+        function observe(margin, key) {
+            const io = new IntersectionObserver(entries => {
+                for (const e of entries) e.target.__card[key] = e.isIntersecting;
+                onViewportChange();
+            }, { rootMargin: margin });
+            for (const card of cards) io.observe(card.el);
+        }
+
+        function sweep() {
+            let cand = cards.filter(c => c.near);
+            // Never leave the feed blank: if nothing reports as near — a viewport
+            // that measures zero, an observer that hasn't fired yet — fall back
+            // to the top of the grid, which is where the reader is anyway.
+            if (!cand.length) cand = cards.slice(0, MAX_LIVE);
+
+            cand.sort((a, b) =>
+                (Number(b.visible) - Number(a.visible)) || (a.index - b.index));
+
+            const keep = new Set(cand.slice(0, MAX_LIVE));
+            for (const card of cards) {
+                if (keep.has(card)) enqueue(card);
+                else unmount(card);
+            }
+        }
+
+        let scheduled = false;
+        function onViewportChange() {
+            if (scheduled) return;
+            scheduled = true;
+            requestAnimationFrame(() => { scheduled = false; sweep(); });
         }
 
         // Newest first
@@ -261,6 +353,13 @@
             .slice()
             .sort((a, b) => b.date.localeCompare(a.date))
             .forEach(post => grid.appendChild(makeCard(post)));
+
+        cards.forEach((c, i) => { c.index = i; c.el.__card = c; });
+        observe(`${Math.round(NEAR * 100)}% 0px`, 'near');
+        observe('0px', 'visible');
+
+        window.addEventListener('resize', onViewportChange);
+        sweep();
     </script>
 </body>
 </html>

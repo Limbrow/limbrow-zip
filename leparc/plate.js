@@ -91,6 +91,12 @@ function angleField(nx, ny, t, w) {
 }
 
 export function createPlate(canvas, opts = {}) {
+
+    // A grid card is a couple of hundred pixels wide and there are two dozen of
+    // them on screen. Capping the draw rate is the cheapest lever there is:
+    // the simulation still advances on real elapsed time, we just stop
+    // repainting it sixty times a second. 0 means "every animation frame".
+    const FRAME_MS = opts.fps ? 1000 / opts.fps : 0;
     const DENSITY     = opts.density ?? 21;    // elements across the short side
     const INTERACTIVE = opts.interactive ?? false;
     const SEED        = opts.seed ?? 0;
@@ -153,8 +159,12 @@ export function createPlate(canvas, opts = {}) {
 
     const w = new Float32Array(4);
     let raf = 0;
+    let lastDraw = 0;
 
     function frame(now) {
+        raf = requestAnimationFrame(frame);
+        if (FRAME_MS && now - lastDraw < FRAME_MS) return;
+        lastDraw = now;
         const W = canvas.clientWidth;
         const H = canvas.clientHeight;
 
@@ -238,7 +248,6 @@ export function createPlate(canvas, opts = {}) {
             }
         }
 
-        raf = requestAnimationFrame(frame);
     }
 
     return {
