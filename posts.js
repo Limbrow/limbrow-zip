@@ -24,6 +24,55 @@
 export const posts = [
 
     {
+        slug: 'mandelbulb',
+        date: '2026-07-30',
+        preview: 'preview.html',  // ray-marched bulb, random palette, slow spin
+        scale: 1.0
+    },
+
+    {
+        slug: 'botanica',
+        date: '2026-07-30',
+        preview: 'preview.html',  // l-system garden growing through the seasons
+        scale: 1.0
+    },
+
+    {
+        slug: 'ripples',
+        date: '2026-07-30',
+        preview: 'preview.html',  // wave tank cycling barriers, the odd stone
+        scale: 1.0
+    },
+
+    {
+        slug: 'voronoi',
+        date: '2026-07-30',
+        preview: 'preview.html',  // leaded glass cycling the four metrics
+        scale: 1.0
+    },
+
+    {
+        slug: 'chladni',
+        date: '2026-07-30',
+        preview: 'preview.html',  // sand rearranging on a vibrating plate
+        scale: 1.0
+    },
+
+    {
+        slug: 'attractors',
+        date: '2026-07-30',
+        preview: 'preview.html',  // long-exposure plate, a fresh attractor every 14s
+        scale: 1.0
+    },
+
+    {
+        slug: 'turing',
+        date: '2026-07-29',
+        preview: 'preview.html',  // gray-scott plate, random regime + glaze per load
+        scale: 1.0
+    },
+
+    {
         slug: 'ascii',
         date: '2026-05-31',
         preview: 'preview.html',  // text-mode toolbox — six classic effects as monospace glyph grids

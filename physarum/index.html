@@ -93,7 +93,10 @@ const dctx = display.getContext('2d');
 
 const isMobile = window.matchMedia('(max-width: 600px)').matches;
 const W = isMobile ? 260 : 420;
-const H = Math.max(140, Math.floor(W * (window.innerHeight / window.innerWidth)));
+// `|| W` guards a 0-width iframe: 0/0 is NaN and the buffer would come out
+// with height 0, which leaves the piece black forever — this size is only
+// ever computed once.
+const H = Math.max(140, Math.floor(W * (window.innerHeight / window.innerWidth))) || W;
 const N = W * H;
 
 const buffer = document.createElement('canvas');

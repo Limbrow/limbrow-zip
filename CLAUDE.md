@@ -14,33 +14,73 @@ else is canvas 2D or SVG.
 
 ## Repo structure
 
+Every post is a folder with `index.html` and usually a `preview.html` for its
+grid card. Posts newest first:
+
 ```
 ~/Projects/ZIP/
 ├── index.html              ← the 3-column grid
 ├── posts.js                ← post registry (slug, date, scale, preview)
 ├── avatar.jpg, favicon.png, apple-touch-icon.png, CNAME
-├── ring/                   ← drone box with neon ring visualizer + cloud sky
-│   ├── index.html
-│   └── preview.html        ← silent orbital ring for the grid card
-├── fractals/               ← Mandelbrot/Julia/Burning Ship/Phoenix/Newton explorer
-│   ├── index.html
-│   └── preview.html        ← random fractal each card load
+├── about/                  ← references & influences (linked from the avatar)
+├── mandelbulb/  + bulb.js  ← ray-marched 3D mandelbrot, drifting exponent
+├── botanica/    + garden.js← l-system night garden, wind + seasons
+├── ripples/     + tank.js  ← wave tank: reflection, diffraction, double slit
+├── voronoi/     + cells.js ← leaded glass, four distance metrics
+├── chladni/     + sand.js  ← sand finding the nodal lines of a square plate
+├── attractors/  + plate.js ← long-exposure plate of strange attractors
+├── turing/      + rd.js    ← gray-scott reaction–diffusion lab
+├── ascii/                  ← live text-mode editor, modules not screens
+├── meltdown/    + melt.js  ← a screen that melts (wax engine)
+├── help/                   ← one track, "I can't get out", confined waveform
+├── singularity/            ← schwarzschild lensing, per-pixel geodesics
+├── moire/                  ← moiré editor, layered line/ring/radial/spiral
+├── physarum/               ← competing slime-mould colonies, feed with cursor
+├── leparc/      + plate.js ← modulation grid, in memory of Julio Le Parc
+├── blocks/                 ← flat-colour rectangles, pixel-wipe transitions
+├── melt/                   ← pixel-sorted glitch, auto-cycling modes
+├── loops/       + curves.js← harmonic curves as 3D wire
+├── chukovski/              ← Repin 1910 relit by a raking lamp (WebGL)
+├── guess/                  ← looping typed opening, "Hola!"
+├── aviary/      + audio/   ← animated sky + flock, auto-singing
+├── ring/                   ← drone box, neon ring visualizer + cloud sky
+├── fractals/               ← Mandelbrot/Julia/Burning Ship/Phoenix/Newton
 ├── house-of-axes/          ← f(x)=1/x research plate (Marc's identity post)
-│   ├── index.html
-│   └── preview.html        ← the animated red/blue hyperbola alone
-├── liserium/               ← Game Boy-styled dub-techno synth
-│   ├── index.html
-│   ├── preview.html        ← LCD oscilloscope + sequencer crop
-│   └── sounds.js
+├── liserium/    + sounds.js← Game Boy-styled dub-techno synth
 ├── game-of-life/           ← Conway's automaton with 50+ patterns
-│   ├── index.html
-│   └── preview.html        ← auto-seeded live simulation
 └── _template-slides/       ← reusable template for slide-format posts
-    ├── index.html
-    └── README.md
 ```
 
 URLs are clean: `limbrow.zip/<slug>/` (no `/p/` prefix anymore).
+
+## Shared engines
+
+Where a post and its card run the same simulation, the engine lives in its own
+ES module in the post folder (`melt.js`, `plate.js`, `rd.js`, `curves.js`) and
+both `index.html` and `preview.html` import it. The HTML then only holds the
+chrome — panel, gestures, credit. Before this, previews were hand-copied
+snapshots of the engine and drifted out of sync with the post.
+
+ES modules need a real origin, so `file://` won't run these. `.claude/serve.mjs`
+is a ~30-line static server for local checks:
+
+```bash
+node .claude/serve.mjs
+```
+
+## Two traps worth remembering
+
+**Never compute a buffer size once from `window.innerWidth`.** A grid card is an
+iframe, and an iframe can report width 0 at parse time. `0/0` is `NaN`, the
+buffer gets allocated with height 0, `createImageData` throws, and the piece is
+black *forever* because that size is never recomputed. `blocks`, `physarum` and
+`melt` were all dead this way. Always end the expression with `|| W`.
+
+**Interpolate and light colour in LINEAR light,** not in sRGB. Blending
+`rgb()` values directly is what makes gradients go chalky and grey through the
+mid-tones. Every engine here converts to linear, works there, and encodes back
+through a LUT — that single change is most of why the newer posts read as
+material (wax, glaze, emulsion) rather than as coloured-in shapes.
 
 ## Post types
 
@@ -50,8 +90,9 @@ Three established "genres" so far:
   often with a control panel
 - **post-research-plate** (House of Axes) — dense editorial poster, intentional
   ALL CAPS labels, mathematical/typographic vibe
-- **post-lab** (Fractals) — explorer tool with formula picker, palette,
-  randomize, smooth/banded coloring
+- **post-lab** (Fractals, Turing, Attractors) — explorer tool with a floating
+  glass panel: regime/map picker, palette chips, reseed, and a live readout of
+  the actual parameters under the cursor
 
 Plus `_template-slides/` for a future fourth genre: vertical-snap slide deck
 (Tinder-style).
@@ -111,7 +152,8 @@ git push
 
 ## Ideas in the backlog
 
-Slime mold (Physarum), reaction-diffusion (Turing patterns), L-systems,
-ASCII camera (mic/webcam), echo chamber (mic + reverb), 3D Mandelbulb via
-ray-marching, granular drone player, glitch box, Voronoi stretch, tile
-generator.
+ASCII camera (mic/webcam), echo chamber (mic + reverb), granular drone player,
+glitch box, tile generator.
+
+Done: slime mold → `physarum`, reaction-diffusion → `turing`, L-systems →
+`botanica`, Mandelbulb → `mandelbulb`, Voronoi → `voronoi`.

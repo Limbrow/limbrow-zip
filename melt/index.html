@@ -123,7 +123,10 @@ const dctx = display.getContext('2d');
 // Working buffer at low res
 const isMobile = window.matchMedia('(max-width: 600px)').matches;
 const W = isMobile ? 260 : 380;
-const H = Math.floor(W * (window.innerHeight / window.innerWidth));
+// `|| W` guards a 0-width iframe: 0/0 is NaN and the buffer would come out
+// with height 0, which leaves the piece black forever — this size is only
+// ever computed once.
+const H = Math.floor(W * (window.innerHeight / window.innerWidth)) || W;
 const buffer = document.createElement('canvas');
 buffer.width = W;
 buffer.height = H;

@@ -98,7 +98,11 @@ const dctx = display.getContext('2d');
 
 const isMobile = window.matchMedia('(max-width: 600px)').matches;
 const W = isMobile ? 240 : 360;
-const H = Math.max(120, Math.floor(W * (window.innerHeight / window.innerWidth)));
+// The `|| W` matters: in a hidden or freshly-created iframe innerWidth can
+// still be 0, 0/0 is NaN, and the buffer would be allocated with height 0 —
+// which throws in createImageData and leaves the piece black forever, since
+// this size is only ever computed once.
+const H = Math.max(120, Math.floor(W * (window.innerHeight / window.innerWidth))) || W;
 
 const buffer = document.createElement('canvas');
 buffer.width = W;

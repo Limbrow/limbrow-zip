@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0">
+<title>mandelbulb · limbrow.zip</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+        background: #06060a;
+        color: #e8e8e8;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+        font-family: ui-monospace, 'JetBrains Mono', monospace;
+        -webkit-user-select: none; user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: none;
+    }
+
+    .back {
+        position: fixed;
+        top: 16px; left: 16px;
+        z-index: 100;
+        width: 36px; height: 36px;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0, 0, 0, 0.4);
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 50%;
+        color: rgba(255,255,255,0.9);
+        text-decoration: none;
+        font-size: 16px; line-height: 1; padding-bottom: 2px;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+    }
+
+    /* The backing store is smaller than the element — the fractal is
+       ray-marched per pixel, so it renders small and is scaled up. */
+    #stage {
+        position: fixed; top: 0; left: 0;
+        width: 100%; height: 100%;
+        display: block;
+        cursor: grab;
+    }
+    #stage:active { cursor: grabbing; }
+
+    .vignette {
+        position: fixed; inset: 0;
+        pointer-events: none;
+        z-index: 4;
+        background: radial-gradient(130% 100% at 50% 45%,
+            rgba(0,0,0,0) 46%, rgba(0,0,0,0.32) 82%, rgba(0,0,0,0.58) 100%);
+    }
+
+    .readout {
+        position: fixed;
+        bottom: max(12px, env(safe-area-inset-bottom));
+        left: 14px;
+        z-index: 10;
+        font-size: 9px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: rgba(255,255,255,0.92);
+        mix-blend-mode: difference;
+        pointer-events: none;
+        white-space: nowrap;
+    }
+
+    .credit {
+        position: fixed;
+        bottom: max(12px, env(safe-area-inset-bottom));
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10;
+        font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.45);
+        mix-blend-mode: difference; pointer-events: none; white-space: nowrap;
+    }
+
+    .chips {
+        position: fixed;
+        top: 18px; right: 16px;
+        z-index: 20;
+        display: flex; gap: 7px;
+    }
+    .chip {
+        width: 22px; height: 22px;
+        border-radius: 50%;
+        border: 1px solid rgba(255,255,255,0.18);
+        cursor: pointer;
+        padding: 0;
+        appearance: none;
+        transition: transform 0.16s ease, box-shadow 0.16s ease;
+    }
+    .chip.on {
+        transform: scale(1.16);
+        box-shadow: 0 0 0 1.5px rgba(255,255,255,0.85);
+    }
+
+    .fallback {
+        position: fixed; inset: 0;
+        display: none;
+        align-items: center; justify-content: center;
+        text-align: center;
+        padding: 24px;
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        line-height: 2;
+        text-transform: uppercase;
+        color: rgba(255,255,255,0.55);
+    }
+</style>
+</head>
+<body>
+
+<a class="back" href="/" aria-label="Back to grid">←</a>
+
+<canvas id="stage"></canvas>
+<div class="vignette"></div>
+
+<div class="chips" id="chips"></div>
+
+<div class="readout" id="readout"></div>
+<div class="credit">white &amp; nylander 2009 · drag to turn it</div>
+
+<div class="fallback" id="fallback">
+    this one needs webgl<br>and this browser hasn't got it
+</div>
+
+<script type="module">
+// ════════════════════════════════════════════════════════════════════════════
+// MANDELBULB — the Mandelbrot set in three dimensions.
+//
+// There is no equation for its surface, so it can't be plotted, only walked up
+// to: every pixel fires a ray and repeatedly asks how far it can move without
+// hitting anything. The exponent drifts between 4 and 12 while you watch and
+// the whole solid reorganises — lobes split, the surface goes to lace, then it
+// packs back into a bulb. Colour is the orbit trap: how close the iteration
+// passed to the origin before giving up.
+//
+// Engine in bulb.js, shared with the card preview.
+// ════════════════════════════════════════════════════════════════════════════
+
+import { createBulb, PALETTES } from './bulb.js';
+
+const canvas = document.getElementById('stage');
+const isMobile = window.matchMedia('(max-width: 600px)').matches;
+
+let bulb = null;
+try {
+    bulb = createBulb(canvas, { scale: isMobile ? 0.42 : 0.55 });
+} catch (e) {
+    bulb = null;
+}
+
+if (!bulb) {
+    canvas.style.display = 'none';
+    document.getElementById('fallback').style.display = 'flex';
+    document.getElementById('chips').style.display = 'none';
+} else {
+    bulb.start();
+
+    const chips = document.getElementById('chips');
+    PALETTES.forEach((p, i) => {
+        const b = document.createElement('button');
+        b.className = 'chip' + (i === 0 ? ' on' : '');
+        const a = p.anchors;
+        b.style.background = `linear-gradient(135deg, rgb(${a[1]}) 0%, rgb(${a[2]}) 55%, rgb(${a[4]}) 100%)`;
+        b.setAttribute('aria-label', p.name);
+        b.addEventListener('click', () => {
+            bulb.setPalette(p.name);
+            chips.querySelectorAll('.chip').forEach(o => o.classList.toggle('on', o === b));
+        });
+        chips.appendChild(b);
+    });
+
+    const readout = document.getElementById('readout');
+    setInterval(() => {
+        readout.textContent = 'power ' + bulb.power.toFixed(2) + ' · ' + bulb.palette;
+    }, 150);
+}
+
+let _lastTouchEnd = 0;
+document.addEventListener('touchend', e => {
+    const now = Date.now();
+    if (now - _lastTouchEnd < 350) e.preventDefault();
+    _lastTouchEnd = now;
+}, { passive: false });
+</script>
+
+</body>
+</html>
