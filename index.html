@@ -216,9 +216,9 @@
         // what made the feed stutter: two dozen simulations competing for one
         // main thread, most of them several screens away.
         //
-        // So the feed keeps a WINDOW. Only cards near the viewport are mounted,
-        // never more than MAX_LIVE at once, and a card that drifts far away has
-        // its iframe destroyed outright — which is the only way to be sure its
+        // So the feed keeps a WINDOW: what is on screen, plus a small halo of
+        // cards just outside it, and a card that drifts further away has its
+        // iframe destroyed outright — which is the only way to be sure its
         // buffers and its animation loop are actually gone.
         //
         // Mounting is also spread out, one iframe every LOAD_GAP. Arriving at
@@ -228,11 +228,16 @@
         import { posts } from './posts.js';
 
         const grid = document.getElementById('grid');
-        const MOBILE = window.matchMedia('(max-width: 600px)').matches;
 
-        const MAX_LIVE = MOBILE ? 6 : 10;   // hard ceiling on running pieces
-        const LOAD_GAP = 130;               // ms between one mount and the next
-        const NEAR = 0.75;                  // viewports of slack around the screen
+        // There is no fixed ceiling on how many pieces run, because a ceiling
+        // is exactly what blanked the feed: three columns of square tiles put
+        // fifteen or more cards on a phone screen at once, so any number small
+        // enough to help performance is smaller than what is actually on
+        // screen. What runs is "everything visible, plus a small warm halo".
+        const HALO = 3;        // off-screen cards kept mounted, ready to appear
+        const FALLBACK = 12;   // when nothing reports as near at all
+        const LOAD_GAP = 70;   // ms between one mount and the next
+        const NEAR = 0.5;      // viewports of slack that counts as halo
 
         const cards = [];
 
@@ -312,40 +317,59 @@
         }
 
         // ── the window ──
-        // Which cards are near is left to IntersectionObserver rather than
-        // measured by hand: it is the browser's own answer, and it still works
-        // in the cases where window.innerHeight reads 0 (an iframed or
-        // not-yet-laid-out page), where rect arithmetic quietly selects nothing.
-        function observe(margin, key) {
-            const io = new IntersectionObserver(entries => {
-                for (const e of entries) e.target.__card[key] = e.isIntersecting;
-                onViewportChange();
-            }, { rootMargin: margin });
-            for (const card of cards) io.observe(card.el);
+        // The viewport, from whichever source will actually answer.
+        function viewportHeight() {
+            return window.innerHeight
+                || document.documentElement.clientHeight
+                || (window.visualViewport && window.visualViewport.height)
+                || 0;
         }
 
         function sweep() {
-            let cand = cards.filter(c => c.near);
-            // Never leave the feed blank: if nothing reports as near — a viewport
-            // that measures zero, an observer that hasn't fired yet — fall back
-            // to the top of the grid, which is where the reader is anyway.
-            if (!cand.length) cand = cards.slice(0, MAX_LIVE);
+            const vh = viewportHeight();
+            const pad = vh * NEAR;
+            const visible = [], halo = [];
 
-            cand.sort((a, b) =>
-                (Number(b.visible) - Number(a.visible)) || (a.index - b.index));
+            if (vh > 0) {
+                for (const card of cards) {
+                    const r = card.el.getBoundingClientRect();
+                    if (r.height <= 0) continue;              // not laid out yet
+                    if (r.bottom > 0 && r.top < vh) visible.push(card);
+                    else if (r.bottom > -pad && r.top < vh + pad) halo.push(card);
+                }
+            }
 
-            const keep = new Set(cand.slice(0, MAX_LIVE));
+            let keep;
+            if (!visible.length && !halo.length) {
+                // The viewport measured zero, or nothing has been laid out yet,
+                // so there is no way to know what is on screen. Show the top of
+                // the grid — which is where the reader is — rather than nothing.
+                keep = new Set(cards.slice(0, FALLBACK));
+            } else {
+                // Everything on screen runs, always. Only the halo is rationed.
+                keep = new Set(visible);
+                const mid = visible.length
+                    ? (visible[0].index + visible[visible.length - 1].index) / 2
+                    : 0;
+                halo.sort((a, b) =>
+                    Math.abs(a.index - mid) - Math.abs(b.index - mid));
+                for (let i = 0; i < halo.length && i < HALO; i++) keep.add(halo[i]);
+            }
+
             for (const card of cards) {
                 if (keep.has(card)) enqueue(card);
                 else unmount(card);
             }
         }
 
-        let scheduled = false;
+        // Debounced with a timer, not requestAnimationFrame. rAF is tied to
+        // rendering, so anywhere the browser throttles it the sweep would stop
+        // running while the page kept scrolling, leaving stale cards mounted
+        // and visible ones blank.
+        let scheduled = 0;
         function onViewportChange() {
             if (scheduled) return;
-            scheduled = true;
-            requestAnimationFrame(() => { scheduled = false; sweep(); });
+            scheduled = setTimeout(() => { scheduled = 0; sweep(); }, 60);
         }
 
         // Newest first
@@ -354,12 +378,33 @@
             .sort((a, b) => b.date.localeCompare(a.date))
             .forEach(post => grid.appendChild(makeCard(post)));
 
-        cards.forEach((c, i) => { c.index = i; c.el.__card = c; });
-        observe(`${Math.round(NEAR * 100)}% 0px`, 'near');
-        observe('0px', 'visible');
+        cards.forEach((c, i) => { c.index = i; });
 
+        window.addEventListener('scroll', onViewportChange, { passive: true });
         window.addEventListener('resize', onViewportChange);
+        window.addEventListener('load', onViewportChange);
+
+        // Safety net. Scroll events are the primary trigger, but they are not
+        // guaranteed: they get coalesced during iOS momentum scrolling, they
+        // don't fire at all in some embedded viewers, and a page restored from
+        // the back/forward cache arrives already scrolled. Twenty-five rect
+        // reads twice a second cost nothing, and only when something actually
+        // moved — without this, a missed event leaves cards blank until the
+        // reader happens to scroll again.
+        let lastY = -1, lastH = -1;
+        setInterval(() => {
+            const y = window.scrollY || window.pageYOffset || 0;
+            const h = viewportHeight();
+            if (y === lastY && h === lastH) return;
+            lastY = y; lastH = h;
+            sweep();
+        }, 500);
+        // Layout, fonts and the grid's own sizing all settle after the module
+        // runs, so re-check a couple of times early rather than trusting the
+        // very first measurement.
         sweep();
+        setTimeout(sweep, 120);
+        setTimeout(sweep, 600);
     </script>
 </body>
 </html>
