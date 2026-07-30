@@ -31,15 +31,15 @@ grid card. Posts newest first:
 ├── attractors/  + plate.js ← long-exposure plate of strange attractors
 ├── turing/      + rd.js    ← gray-scott reaction–diffusion lab
 ├── ascii/                  ← live text-mode editor, modules not screens
-├── meltdown/    + melt.js  ← a screen that melts (wax engine)
+├── meltdown/               ← a screen that melts
 ├── help/                   ← one track, "I can't get out", confined waveform
 ├── singularity/            ← schwarzschild lensing, per-pixel geodesics
 ├── moire/                  ← moiré editor, layered line/ring/radial/spiral
 ├── physarum/               ← competing slime-mould colonies, feed with cursor
-├── leparc/      + plate.js ← modulation grid, in memory of Julio Le Parc
+├── leparc/                 ← modulation grid, in memory of Julio Le Parc
 ├── blocks/                 ← flat-colour rectangles, pixel-wipe transitions
 ├── melt/                   ← pixel-sorted glitch, auto-cycling modes
-├── loops/       + curves.js← harmonic curves as 3D wire
+├── loops/                  ← harmonic curves, marching particles
 ├── chukovski/              ← Repin 1910 relit by a raking lamp (WebGL)
 ├── guess/                  ← looping typed opening, "Hola!"
 ├── aviary/      + audio/   ← animated sky + flock, auto-singing
@@ -56,7 +56,7 @@ URLs are clean: `limbrow.zip/<slug>/` (no `/p/` prefix anymore).
 ## Shared engines
 
 Where a post and its card run the same simulation, the engine lives in its own
-ES module in the post folder (`melt.js`, `plate.js`, `rd.js`, `curves.js`) and
+ES module in the post folder (`sand.js`, `cells.js`, `tank.js`, `rd.js`) and
 both `index.html` and `preview.html` import it. The HTML then only holds the
 chrome — panel, gestures, credit. Before this, previews were hand-copied
 snapshots of the engine and drifted out of sync with the post.
