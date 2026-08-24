@@ -38,17 +38,6 @@
     #gl { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: block; cursor: grab; }
     #gl:active { cursor: grabbing; }
 
-    .credit {
-        position: fixed;
-        bottom: max(14px, env(safe-area-inset-bottom));
-        left: 50%;
-        transform: translateX(-50%);
-        z-index: 10;
-        font-size: 9px; letter-spacing: 0.24em; text-transform: uppercase;
-        color: rgba(255, 255, 255, 0.45);
-        mix-blend-mode: difference; pointer-events: none; white-space: nowrap;
-    }
-    @media (max-width: 420px) { .credit { font-size: 8px; } }
 
     .err {
         position: fixed; inset: 0; display: none;
@@ -62,8 +51,6 @@
 <a class="back" href="/" aria-label="Back to grid">←</a>
 
 <canvas id="gl"></canvas>
-
-<div class="credit">time-reversed schwarzschild · nothing falls in</div>
 
 <div class="err" id="err">
     WebGL is required to view this artwork.<br>
