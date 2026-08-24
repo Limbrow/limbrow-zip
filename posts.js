@@ -24,6 +24,13 @@
 export const posts = [
 
     {
+        slug: 'whitehole',
+        date: '2026-08-24',
+        preview: 'preview.html',  // time-reversed schwarzschild — the shadow develops into light
+        scale: 1.0
+    },
+
+    {
         slug: 'mandelbulb',
         date: '2026-07-30',
         preview: 'preview.html',  // ray-marched bulb, random palette, slow spin
