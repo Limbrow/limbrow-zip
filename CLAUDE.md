@@ -9,8 +9,8 @@ is the link in his bio. Live at https://limbrow.zip.
 
 Vanilla HTML + CSS + ES modules. **No build step, no framework.** Hosted on
 GitHub Pages with a CNAME for the custom domain. Tone.js (CDN) for audio in
-the synth posts. WebGL fragment shaders for the fractal explorer. Everything
-else is canvas 2D or SVG.
+Liserium. WebGL fragment shaders for the two holes. Everything else is
+canvas 2D.
 
 ## Repo structure
 
@@ -18,34 +18,14 @@ Every post is a folder with `index.html` and usually a `preview.html` for its
 grid card. Posts newest first:
 
 ```
-~/Projects/ZIP/
+~/Desktop/Limbrow/ZIP/
 ├── index.html              ← the 3-column grid
-├── posts.js                ← post registry (slug, date, scale, preview)
+├── posts.js                ← post registry (slug, date, scale, preview, href)
 ├── avatar.jpg, favicon.png, apple-touch-icon.png, CNAME
 ├── about/                  ← references & influences (linked from the avatar)
-├── mandelbulb/  + bulb.js  ← ray-marched 3D mandelbrot, drifting exponent
-├── botanica/    + garden.js← l-system night garden, wind + seasons
-├── ripples/     + tank.js  ← wave tank: reflection, diffraction, double slit
-├── voronoi/     + cells.js ← leaded glass, four distance metrics
-├── chladni/     + sand.js  ← sand finding the nodal lines of a square plate
-├── attractors/  + plate.js ← long-exposure plate of strange attractors
-├── turing/      + rd.js    ← gray-scott reaction–diffusion lab
-├── ascii/                  ← live text-mode editor, modules not screens
-├── meltdown/               ← a screen that melts
-├── help/                   ← one track, "I can't get out", confined waveform
+├── arte/                   ← card for arte.zip: the brand piece, links out
+├── whitehole/   + hole.js  ← time-reversed schwarzschild, the shadow develops into light
 ├── singularity/            ← schwarzschild lensing, per-pixel geodesics
-├── moire/                  ← moiré editor, layered line/ring/radial/spiral
-├── physarum/               ← competing slime-mould colonies, feed with cursor
-├── leparc/                 ← modulation grid, in memory of Julio Le Parc
-├── blocks/                 ← flat-colour rectangles, pixel-wipe transitions
-├── melt/                   ← pixel-sorted glitch, auto-cycling modes
-├── loops/                  ← harmonic curves, marching particles
-├── chukovski/              ← Repin 1910 relit by a raking lamp (WebGL)
-├── guess/                  ← looping typed opening, "Hola!"
-├── aviary/      + audio/   ← animated sky + flock, auto-singing
-├── ring/                   ← drone box, neon ring visualizer + cloud sky
-├── fractals/               ← Mandelbrot/Julia/Burning Ship/Phoenix/Newton
-├── house-of-axes/          ← f(x)=1/x research plate (Marc's identity post)
 ├── liserium/    + sounds.js← Game Boy-styled dub-techno synth
 ├── game-of-life/           ← Conway's automaton with 50+ patterns
 └── _template-slides/       ← reusable template for slide-format posts
@@ -53,13 +33,42 @@ grid card. Posts newest first:
 
 URLs are clean: `limbrow.zip/<slug>/` (no `/p/` prefix anymore).
 
+## The clean-up (14-sep-2026)
+
+The feed used to hold 26 pieces. Marc cut it down to the big, consistent
+ones — Liserium, Game of Life, the black hole and the white one — and added
+arte.zip. The 22 retired posts (mandelbulb, botanica, ripples, voronoi,
+chladni, attractors, turing, ascii, meltdown, help, moire, physarum, leparc,
+blocks, melt, loops, chukovski, guess, aviary, ring, fractals, house-of-axes)
+last lived in full at commit `bd4eeab`. To bring one back:
+
+```bash
+git checkout bd4eeab -- fractals && git add fractals   # then re-register it in posts.js
+```
+
+## Posts that live elsewhere
+
+`arte.zip` is Concreto Abstracto's Next.js platform (its own repo, its own
+host). It cannot be iframed — it sends `X-Frame-Options: SAMEORIGIN` on
+purpose — so its folder here only holds a `preview.html` that draws the
+brand piece in canvas, and the registry entry carries `href:
+'https://arte.zip'`, which the grid uses as the card's link instead of
+`/arte/`. `arte/index.html` is a plain redirect for anyone who types the URL.
+
+The piece follows the brand pack in the arte-zip repo
+(`public/branding/pack.html`): seven square plates, each turned 15° from the
+last, joined by a gap in the background colour; on a dark ground the grey
+ramp inverts (light outside, black centre) and the prism colour lives only
+on the edge of the four outer plates. Same numbers as the landing — if the
+pack changes, change the card.
+
 ## Shared engines
 
-Where a post and its card run the same simulation, the engine lives in its own
-ES module in the post folder (`sand.js`, `cells.js`, `tank.js`, `rd.js`) and
-both `index.html` and `preview.html` import it. The HTML then only holds the
-chrome — panel, gestures, credit. Before this, previews were hand-copied
-snapshots of the engine and drifted out of sync with the post.
+Where a post and its card run the same simulation, the engine lives in its
+own ES module in the post folder (`hole.js`) and both `index.html` and
+`preview.html` import it. The HTML then only holds the chrome — panel,
+gestures, credit. Before this, previews were hand-copied snapshots of the
+engine and drifted out of sync with the post.
 
 ES modules need a real origin, so `file://` won't run these. `.claude/serve.mjs`
 is a ~30-line static server for local checks:
@@ -68,24 +77,26 @@ is a ~30-line static server for local checks:
 node .claude/serve.mjs
 ```
 
-## Two traps worth remembering
+## Traps worth remembering
 
 **Never compute a buffer size once from `window.innerWidth`.** A grid card is an
 iframe, and an iframe can report width 0 at parse time. `0/0` is `NaN`, the
 buffer gets allocated with height 0, `createImageData` throws, and the piece is
-black *forever* because that size is never recomputed. `blocks`, `physarum` and
-`melt` were all dead this way. Always end the expression with `|| W`.
+black *forever* because that size is never recomputed. Several retired posts
+were dead this way. Always end the expression with `|| W`, or re-measure every
+paint like the arte card does.
 
-**The feed is 25 live simulations, so it needs a budget.** `index.html` mounts
+**The feed is live simulations, so it needs a budget.** `index.html` mounts
 everything currently on screen plus a `HALO` of 3, and a card that drifts away
 has its iframe *destroyed* — blanking `src` and removing the element is the
 only way to be sure the buffers and the rAF loop are really gone. Mounting is
 staggered one per 70ms, because starting a dozen engines in the same frame is
-what made arriving at the page stutter. Every shared engine takes an `fps`
-option (0 = every animation frame, the default): cards run at 15–20fps, posts
-run uncapped. Where a piece advances one simulation step per drawn frame, the
-preview raises `steps`/`iters` to match, so capping the paint rate doesn't also
-slow the physics.
+what made arriving at the page stutter. Five tiles don't need any of this;
+the scheduler stays because the feed will grow again. Every shared engine
+takes an `fps` option (0 = every animation frame, the default): cards run at
+15–20fps, posts run uncapped. Where a piece advances one simulation step per
+drawn frame, the preview raises `steps`/`iters` to match, so capping the paint
+rate doesn't also slow the physics.
 
 **Never put a fixed ceiling on how many cards may run.** Three columns of
 square tiles put *eighteen* cards on an iPhone screen at once, so any ceiling
@@ -102,30 +113,29 @@ when `scrollY` or the viewport height actually changed.
 
 **Interpolate and light colour in LINEAR light,** not in sRGB. Blending
 `rgb()` values directly is what makes gradients go chalky and grey through the
-mid-tones. Every engine here converts to linear, works there, and encodes back
-through a LUT — that single change is most of why the newer posts read as
-material (wax, glaze, emulsion) rather than as coloured-in shapes.
+mid-tones. The engines here convert to linear, work there, and encode back
+through a LUT — that single change is most of why the pieces read as
+material rather than as coloured-in shapes.
 
 ## Post types
 
-Three established "genres" so far:
+Genres established so far:
 
-- **post-app** (Liserium, Game of Life, Ring) — single-page interactive piece,
-  often with a control panel
-- **post-research-plate** (House of Axes) — dense editorial poster, intentional
-  ALL CAPS labels, mathematical/typographic vibe
-- **post-lab** (Fractals, Turing, Attractors) — explorer tool with a floating
-  glass panel: regime/map picker, palette chips, reseed, and a live readout of
-  the actual parameters under the cursor
+- **post-app** (Liserium, Game of Life, Singularity, Whitehole) — single-page
+  interactive piece, often with a control panel
+- **post-research-plate** — dense editorial poster, intentional ALL CAPS
+  labels, mathematical/typographic vibe (House of Axes, retired)
+- **post-lab** — explorer tool with a floating glass panel: regime/map picker,
+  palette chips, reseed, and a live readout of the actual parameters under
+  the cursor (Fractals, Turing, Attractors, retired)
 
 Plus `_template-slides/` for a future fourth genre: vertical-snap slide deck
 (Tinder-style).
 
-## Design system (Ring + Fractals share it; Liserium intentionally doesn't)
+## Design system (the holes share it; Liserium intentionally doesn't)
 
-Floating glass panel pattern at the bottom of the screen:
+Floating glass panel pattern:
 
-- `position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%)`
 - `background: rgba(8,10,22,0.65); backdrop-filter: blur(20px) saturate(140%)`
 - Title row "● TITLE ▾" — clicking the head toggles `.minimized`
 - Segmented controls for mode selection (not separate buttons)
@@ -134,7 +144,8 @@ Floating glass panel pattern at the bottom of the screen:
 - Mono font, all small-caps labels
 - Mix-blend coords readout in the bottom-left corner
 
-Liserium keeps its own Game Boy chassis as identity.
+Liserium keeps its own Game Boy chassis as identity. The arte card speaks
+arte.zip's language, not this one.
 
 ## Adding a post
 
@@ -145,6 +156,7 @@ $EDITOR my-new-post/index.html
 
 # Register it in posts.js (newest first):
 #   { slug: 'my-new-post', date: 'YYYY-MM-DD', preview: 'preview.html', scale: 1.0 }
+#   add href: 'https://…' if the piece lives on another host
 
 git add my-new-post posts.js
 git commit -m "add my-new-post"
@@ -161,7 +173,7 @@ index, posts, favicon — they would collide with site paths.
 - Wants every post to feel like a piece of art, not a demo
 - Cares deeply about mobile (tests on iPhone first)
 - Likes consistency in the design language but lets each post have its own
-  spirit (Liserium ≠ Ring ≠ House of Axes)
+  spirit (Liserium ≠ the holes ≠ arte)
 
 ## Deploy
 
@@ -178,6 +190,3 @@ git push
 
 ASCII camera (mic/webcam), echo chamber (mic + reverb), granular drone player,
 glitch box, tile generator.
-
-Done: slime mold → `physarum`, reaction-diffusion → `turing`, L-systems →
-`botanica`, Mandelbulb → `mandelbulb`, Voronoi → `voronoi`.

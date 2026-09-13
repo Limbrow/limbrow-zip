@@ -54,12 +54,13 @@ Slugs live in the root namespace alongside `index.html`, `assets`, `favicon.png`
 | `date`   | yes      | ISO `YYYY-MM-DD`. Newest first. |
 | `scale`  | no       | Default `0.4`. Lower = preview shows more of the page (zoomed out). |
 | `preview`| no       | Filename inside `<slug>/` to use as the card preview (e.g. `"preview.html"`). |
+| `href`   | no       | External URL the card links to when the piece lives on another host (e.g. `"https://arte.zip"`). |
 | `span`   | no       | Break the grid: `"2cols"`, `"2rows"`, or `"2x2"`. |
 | `aspect` | no       | Override the square. `1` = square, `1.5` = portrait, `0.6` = wide. |
 
 ## Tech
 
-Vanilla HTML + CSS + ES modules. No build step, no framework. `IntersectionObserver` for lazy-loading iframes. Hosted on GitHub Pages with custom domain via DNS.
+Vanilla HTML + CSS + ES modules. No build step, no framework. Only the cards on screen (plus a small halo) keep their iframes mounted. Hosted on GitHub Pages with custom domain via DNS.
 
 ## License
 

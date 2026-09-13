@@ -1,19 +1,21 @@
 // limbrow.zip — netart archive
 // =============================
 //
-// Each post is a folder under /p/<slug>/ with its own index.html.
+// Each post is a folder under /<slug>/ with its own index.html.
 // To add a new post:
-//   1. Create /p/<slug>/index.html (or any structure inside)
+//   1. Create /<slug>/index.html (or any structure inside)
 //   2. Add an entry below
 //   3. git add . && git commit -m "add <slug>" && git push
 //
 // Fields:
-//   slug    (required) folder name under /p/, lowercase-hyphenated.
+//   slug    (required) folder name in the root, lowercase-hyphenated.
 //   date    (required) YYYY-MM-DD, newest first.
 //   scale   (optional) iframe zoom-out factor in preview. 0.4 = default, lower = sees more.
-//   preview (optional) filename inside /p/<slug>/ to use as the card preview (e.g. "preview.html").
+//   preview (optional) filename inside /<slug>/ to use as the card preview (e.g. "preview.html").
 //                      If omitted, the card shows the post's index.html itself.
 //                      Use a dedicated preview for posts that look better cropped or animated alone.
+//   href    (optional) where the card links when the piece lives on another host
+//                      (e.g. "https://arte.zip"). The folder then only holds the preview.
 //   span    (optional) break the grid: "2cols" | "2rows" | "2x2"
 //   aspect  (optional) override the square. 1 = square (default), 1.5 = portrait, 0.6 = wide.
 //                      Only use this when really needed — uniformity is a feature.
@@ -24,79 +26,17 @@
 export const posts = [
 
     {
+        slug: 'arte',
+        date: '2026-09-14',
+        preview: 'preview.html',  // the arte.zip piece — seven plates turning, light outside, dark centre
+        href: 'https://arte.zip',
+        scale: 1.0
+    },
+
+    {
         slug: 'whitehole',
         date: '2026-08-24',
         preview: 'preview.html',  // time-reversed schwarzschild — the shadow develops into light
-        scale: 1.0
-    },
-
-    {
-        slug: 'mandelbulb',
-        date: '2026-07-30',
-        preview: 'preview.html',  // ray-marched bulb, random palette, slow spin
-        scale: 1.0
-    },
-
-    {
-        slug: 'botanica',
-        date: '2026-07-30',
-        preview: 'preview.html',  // l-system garden growing through the seasons
-        scale: 1.0
-    },
-
-    {
-        slug: 'ripples',
-        date: '2026-07-30',
-        preview: 'preview.html',  // wave tank cycling barriers, the odd stone
-        scale: 1.0
-    },
-
-    {
-        slug: 'voronoi',
-        date: '2026-07-30',
-        preview: 'preview.html',  // leaded glass cycling the four metrics
-        scale: 1.0
-    },
-
-    {
-        slug: 'chladni',
-        date: '2026-07-30',
-        preview: 'preview.html',  // sand rearranging on a vibrating plate
-        scale: 1.0
-    },
-
-    {
-        slug: 'attractors',
-        date: '2026-07-30',
-        preview: 'preview.html',  // long-exposure plate, a fresh attractor every 14s
-        scale: 1.0
-    },
-
-    {
-        slug: 'turing',
-        date: '2026-07-29',
-        preview: 'preview.html',  // gray-scott plate, random regime + glaze per load
-        scale: 1.0
-    },
-
-    {
-        slug: 'ascii',
-        date: '2026-05-31',
-        preview: 'preview.html',  // text-mode toolbox — six classic effects as monospace glyph grids
-        scale: 1.0
-    },
-
-    {
-        slug: 'meltdown',
-        date: '2026-05-31',
-        preview: 'preview.html',  // generative colour field melting downward in ragged drips
-        scale: 1.0
-    },
-
-    {
-        slug: 'help',
-        date: '2026-05-31',
-        preview: 'preview.html',  // single track — "I can't get out", confined-waveform player
         scale: 1.0
     },
 
@@ -105,90 +45,6 @@ export const posts = [
         date: '2026-05-17',
         preview: 'preview.html',  // schwarzschild black hole, real per-pixel geodesic lensing
         scale: 1.0
-    },
-
-    {
-        slug: 'moire',
-        date: '2026-05-17',
-        preview: 'preview.html',  // moiré editor — layered line/ring/radial/spiral patterns
-        scale: 1.0
-    },
-
-    {
-        slug: 'physarum',
-        date: '2026-05-17',
-        preview: 'preview.html',  // competing slime-mould colonies — feed it with the cursor
-        scale: 1.0
-    },
-
-    {
-        slug: 'leparc',
-        date: '2026-05-17',
-        preview: 'preview.html',  // modulation grid of rotating lines — in memory of julio le parc
-        scale: 1.0
-    },
-
-    {
-        slug: 'blocks',
-        date: '2026-05-17',
-        preview: 'preview.html',  // flat-color rectangles, pixel-wipe transitions in 8 directions
-        scale: 1.0
-    },
-
-    {
-        slug: 'melt',
-        date: '2026-05-17',
-        preview: 'preview.html',  // pixel-sorted glitch, auto-cycling through modes
-        scale: 1.0
-    },
-
-    {
-        slug: 'loops',
-        date: '2026-05-17',
-        preview: 'preview.html',  // grid of Lissajous patterns auto-cycling through modes
-        scale: 1.0
-    },
-
-    {
-        slug: 'chukovski',
-        date: '2026-05-16',
-        preview: 'preview.html',  // breathing crop of the Repin painting
-        scale: 1.0
-    },
-
-    {
-        slug: 'guess',
-        date: '2026-05-15',
-        preview: 'preview.html',  // looping opening — "Hola!"
-        scale: 1.0
-    },
-
-    {
-        slug: 'aviary',
-        date: '2026-05-14',
-        preview: 'preview.html',  // animated sky + flock auto-singing
-        scale: 1.0
-    },
-
-    {
-        slug: 'ring',
-        date: '2026-05-14',
-        preview: 'preview.html',  // silent orbital ring with cloud sky
-        scale: 1.0
-    },
-
-    {
-        slug: 'fractals',
-        date: '2026-05-13',
-        preview: 'preview.html',  // auto-zooming Mandelbrot — a deep dive on loop
-        scale: 1.0                // fullscreen card, no zoom-out
-    },
-
-    {
-        slug: 'house-of-axes',
-        date: '2026-05-11',
-        preview: 'preview.html',  // dedicated card preview — just the animated graph
-        scale: 0.55               // less zoom-out, the graph fills the card better
     },
 
     {
