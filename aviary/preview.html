@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>aviary · preview</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+        background: #04050a;
+        width: 100%;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+    }
+    #sky {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        display: block;
+    }
+</style>
+</head>
+<body>
+
+<canvas id="sky"></canvas>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+// AVIARY PREVIEW — silent. Same painting language as the live post:
+// gradient sky, sun/moon, soft drifting clouds. Auto-cycles through
+// dawn / day / dusk / night so the grid card reads as a complete piece.
+// ════════════════════════════════════════════════════════════════════════════
+
+const canvas = document.getElementById('sky');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const r = canvas.getBoundingClientRect();
+    canvas.width = Math.floor(r.width * dpr);
+    canvas.height = Math.floor(r.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// Sun arc: low-east (dawn) → high-centre (day) → low-west (dusk) → moon high-east (night)
+const PALETTES = {
+    dawn:  { sky:[[0,'#f9d18a'],[0.42,'#f1907c'],[0.78,'#a87aa0'],[1,'#4a4470']], cloud:[255,220,200], cloudOpacity:0.55, sun:{x:0.12,y:0.78,r:0.075,core:'#ffe6c0',halo:'rgba(255,200,140,0.55)'}, stars:0,    moon:0 },
+    day:   { sky:[[0,'#5cb3e6'],[0.55,'#9fd4f0'],[1,'#dff0f5']],                  cloud:[255,255,255], cloudOpacity:0.75, sun:{x:0.50,y:0.14,r:0.065,core:'#fffbe0',halo:'rgba(255,250,200,0.55)'}, stars:0,    moon:0 },
+    dusk:  { sky:[[0,'#1d1647'],[0.35,'#7a356a'],[0.7,'#e25a3b'],[1,'#f3a04c']],  cloud:[255,165,120], cloudOpacity:0.50, sun:{x:0.90,y:0.78,r:0.085,core:'#ffc888',halo:'rgba(255,130,80,0.55)'},  stars:0.18, moon:0 },
+    night: { sky:[[0,'#02030d'],[0.55,'#080e2a'],[1,'#171b40']],                  cloud:[110,120,160], cloudOpacity:0.18, sun:{x:0.20,y:0.22,r:0.060,core:'#e8eef8',halo:'rgba(200,215,250,0.32)'}, stars:1.0,  moon:1.0 },
+};
+const CYCLE = ['day', 'dusk', 'night', 'dawn'];
+const CYCLE_MS = 7500;
+const FADE_MS  = 1800;
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+function applyGrad(g, stops) { for (const [p, c] of stops) g.addColorStop(p, c); }
+
+function parseRgba(c) {
+    if (c.startsWith('#')) {
+        const h = c.slice(1);
+        return h.length === 3
+            ? [parseInt(h[0]+h[0],16), parseInt(h[1]+h[1],16), parseInt(h[2]+h[2],16), 1]
+            : [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16), 1];
+    }
+    const m = c.match(/rgba?\(([^)]+)\)/);
+    if (!m) return null;
+    const parts = m[1].split(',').map(s => parseFloat(s));
+    return [parts[0], parts[1], parts[2], parts[3] != null ? parts[3] : 1];
+}
+function mixColor(c1, c2, t, alphaScale) {
+    const p1 = parseRgba(c1), p2 = parseRgba(c2);
+    if (!p1 || !p2) return c2;
+    const r = lerp(p1[0], p2[0], t);
+    const g = lerp(p1[1], p2[1], t);
+    const b = lerp(p1[2], p2[2], t);
+    let a = lerp(p1[3], p2[3], t);
+    if (alphaScale != null) a *= alphaScale;
+    return `rgba(${r|0}, ${g|0}, ${b|0}, ${a.toFixed(3)})`;
+}
+
+// ─── Clouds ─────────────────────────────────────────────────────────────────
+class Cloud {
+    constructor(layer, w, h) {
+        this.layer = layer;
+        const baseSize = layer === 0 ? 0.25 : 0.40;
+        this.size = baseSize * Math.min(w, h) * (0.75 + Math.random() * 0.7);
+        this.x = Math.random() * (w + this.size * 2) - this.size;
+        this.y = h * (0.08 + Math.random() * 0.55);
+        this.speed = (layer === 0 ? 4 : 10) * (0.7 + Math.random() * 0.7);
+        this.alpha = layer === 0 ? 0.45 : 0.75;
+        this.aspectY = 0.45 + Math.random() * 0.25;
+    }
+    update(dt, w) {
+        this.x += (this.speed * dt) / 1000;
+        if (this.x - this.size > w) this.x = -this.size * 2;
+    }
+}
+
+let clouds = [];
+function rebuildClouds() {
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    clouds = [];
+    for (let i = 0; i < 6; i++) clouds.push(new Cloud(0, w, h));
+    for (let i = 0; i < 5; i++) clouds.push(new Cloud(1, w, h));
+}
+rebuildClouds();
+window.addEventListener('resize', rebuildClouds);
+
+function drawClouds(w, h, pPrev, pCurr, blend) {
+    const tintR = lerp(pPrev.cloud[0], pCurr.cloud[0], blend);
+    const tintG = lerp(pPrev.cloud[1], pCurr.cloud[1], blend);
+    const tintB = lerp(pPrev.cloud[2], pCurr.cloud[2], blend);
+    const op = lerp(pPrev.cloudOpacity, pCurr.cloudOpacity, blend);
+    if (op < 0.005) return;
+    for (const c of clouds) {
+        const rx = c.size;
+        const grad = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, rx);
+        grad.addColorStop(0,    `rgba(${tintR|0},${tintG|0},${tintB|0},${c.alpha * op})`);
+        grad.addColorStop(0.55, `rgba(${tintR|0},${tintG|0},${tintB|0},${c.alpha * op * 0.5})`);
+        grad.addColorStop(1,    `rgba(${tintR|0},${tintG|0},${tintB|0},0)`);
+        ctx.save();
+        ctx.translate(c.x, c.y);
+        ctx.scale(1, c.aspectY);
+        ctx.translate(-c.x, -c.y);
+        ctx.fillStyle = grad;
+        ctx.fillRect(c.x - rx, c.y - rx, rx * 2, rx * 2);
+        ctx.restore();
+    }
+}
+
+// ─── Sun / Moon ────────────────────────────────────────────────────────────
+function drawSunOrMoon(w, h, pPrev, pCurr, blend) {
+    const sPrev = pPrev.sun, sCurr = pCurr.sun;
+    const x = lerp(sPrev.x, sCurr.x, blend) * w;
+    const y = lerp(sPrev.y, sCurr.y, blend) * h;
+    const R = lerp(sPrev.r, sCurr.r, blend) * Math.min(w, h);
+
+    const halo = ctx.createRadialGradient(x, y, R * 0.6, x, y, R * 6);
+    halo.addColorStop(0, mixColor(sPrev.halo, sCurr.halo, blend));
+    halo.addColorStop(0.55, mixColor(sPrev.halo, sCurr.halo, blend, 0.18));
+    halo.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = halo;
+    ctx.fillRect(x - R * 6, y - R * 6, R * 12, R * 12);
+
+    const disc = ctx.createRadialGradient(x, y, 0, x, y, R);
+    const core = mixColor(sPrev.core, sCurr.core, blend);
+    const edge = mixColor(sPrev.halo, sCurr.halo, blend, 0.7);
+    disc.addColorStop(0,    core);
+    disc.addColorStop(0.65, core);
+    disc.addColorStop(0.95, edge);
+    disc.addColorStop(1,    mixColor(sPrev.halo, sCurr.halo, blend, 0));
+    ctx.fillStyle = disc;
+    ctx.beginPath();
+    ctx.arc(x, y, R * 1.1, 0, Math.PI * 2);
+    ctx.fill();
+
+    const moonAmt = lerp(pPrev.moon, pCurr.moon, blend);
+    if (moonAmt > 0.05) {
+        ctx.save();
+        ctx.globalAlpha = moonAmt * 0.35;
+        ctx.fillStyle = 'rgba(80,90,120,1)';
+        ctx.beginPath();
+        ctx.arc(x + R * 0.32, y - R * 0.08, R * 0.92, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+// ─── Stars ─────────────────────────────────────────────────────────────────
+const _stars = (() => {
+    const out = []; let s = 1337;
+    const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+    for (let i = 0; i < 240; i++) {
+        out.push({ x: rnd(), y: rnd() * 0.78, r: 0.4 + rnd() * 1.6, phase: rnd() * Math.PI * 2, speed: 0.0008 + rnd() * 0.002 });
+    }
+    return out;
+})();
+
+function drawStars(w, h, alpha, t) {
+    if (alpha <= 0) return;
+    ctx.save();
+    for (const s of _stars) {
+        const tw = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(t * s.speed + s.phase));
+        ctx.globalAlpha = alpha * tw;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(s.x * w, s.y * h, s.r, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+}
+
+// ─── LOOP ──────────────────────────────────────────────────────────────────
+let t = 0;
+let lastTime = performance.now();
+
+function loop(now) {
+    const dt = now - lastTime;
+    lastTime = now;
+    t += dt;
+
+    const idx = Math.floor(t / CYCLE_MS) % CYCLE.length;
+    const into = t % CYCLE_MS;
+    const prevKey = CYCLE[(idx - 1 + CYCLE.length) % CYCLE.length];
+    const currKey = CYCLE[idx];
+    const blend = Math.min(1, into / FADE_MS);
+    const pPrev = PALETTES[prevKey];
+    const pCurr = PALETTES[currKey];
+
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+
+    let g = ctx.createLinearGradient(0, 0, 0, h);
+    applyGrad(g, pPrev.sky);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+
+    g = ctx.createLinearGradient(0, 0, 0, h);
+    applyGrad(g, pCurr.sky);
+    ctx.globalAlpha = blend;
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalAlpha = 1;
+
+    const starAlpha = lerp(pPrev.stars, pCurr.stars, blend);
+    drawStars(w, h, starAlpha, t);
+    drawSunOrMoon(w, h, pPrev, pCurr, blend);
+    for (const c of clouds) c.update(dt, w);
+    drawClouds(w, h, pPrev, pCurr, blend);
+
+    requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+
+</body>
+</html>

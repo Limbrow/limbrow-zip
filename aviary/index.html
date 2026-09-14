@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0">
+<title>aviary · limbrow.zip</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+        background: #04050a;
+        color: #e8e8e8;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+        font-family: ui-monospace, 'JetBrains Mono', monospace;
+        -webkit-user-select: none; user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: none;
+    }
+
+    .back {
+        position: fixed;
+        top: 16px; left: 16px;
+        z-index: 100;
+        width: 36px; height: 36px;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0, 0, 0, 0.18);
+        backdrop-filter: blur(14px) saturate(120%);
+        -webkit-backdrop-filter: blur(14px) saturate(120%);
+        border: 1px solid rgba(255,255,255,0.10);
+        border-radius: 50%;
+        color: #fff;
+        text-decoration: none;
+        font-size: 16px;
+        line-height: 1;
+        padding-bottom: 2px;
+    }
+
+    #sky {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        display: block;
+        z-index: 1;
+    }
+
+    /* ─── Floating segmented control (the entire UI) ─── */
+    .seg {
+        position: fixed;
+        bottom: max(16px, env(safe-area-inset-bottom));
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10;
+        display: flex;
+        gap: 0;
+        background: rgba(0, 0, 0, 0.18);
+        backdrop-filter: blur(16px) saturate(120%);
+        -webkit-backdrop-filter: blur(16px) saturate(120%);
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        border-radius: 999px;
+        padding: 4px;
+    }
+    .seg button {
+        background: transparent;
+        border: 0;
+        color: rgba(255, 255, 255, 0.55);
+        padding: 9px 14px;
+        font-family: inherit;
+        font-size: 9px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        font-weight: 500;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+    .seg button:hover { color: rgba(255, 255, 255, 0.85); }
+    .seg button.active {
+        background: rgba(255, 255, 255, 0.14);
+        color: #fff;
+    }
+</style>
+</head>
+<body>
+
+<a class="back" href="/" aria-label="Back to grid">←</a>
+
+<canvas id="sky"></canvas>
+
+<!-- One looped track per mode. They crossfade on mode change.
+     All four tracks are CC0 / public domain, downloaded from archive.org:
+       dawn.m4a  → various-bird-sounds / dawn-chorus-18265
+       day.m4a   → birdsounds_202001 / just birds 3 min
+       dusk.m4a  → nightingale-bird-sounds / nightingale-denmark-24282
+       night.m4a → frogs-toads-spring-peepers-crickets-sound-effects / frogs-at-night-52041
+     Re-encoded to mono AAC via afconvert to keep total payload ~6 MB.
+-->
+<audio id="aud-dawn"  src="audio/dawn.m4a"  loop preload="auto" playsinline></audio>
+<audio id="aud-day"   src="audio/day.m4a"   loop preload="auto" playsinline></audio>
+<audio id="aud-dusk"  src="audio/dusk.m4a"  loop preload="auto" playsinline></audio>
+<audio id="aud-night" src="audio/night.m4a" loop preload="auto" playsinline></audio>
+
+<div class="seg" id="mode-seg">
+    <button data-mode="dawn">Dawn</button>
+    <button class="active" data-mode="day">Day</button>
+    <button data-mode="dusk">Dusk</button>
+    <button data-mode="night">Night</button>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+// AVIARY — ambient sky. Sun/moon + soft drifting clouds. One bird-song
+// loop per mode (dawn / day / dusk / night). Audio plays automatically;
+// crossfades on mode change.
+// ════════════════════════════════════════════════════════════════════════════
+
+const canvas = document.getElementById('sky');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const r = canvas.getBoundingClientRect();
+    canvas.width = Math.floor(r.width * dpr);
+    canvas.height = Math.floor(r.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ─── PALETTES ──────────────────────────────────────────────────────────────
+// Sun follows a natural arc east → south → west across the modes:
+//   dawn  → low-east  (rising)
+//   day   → high-south (zenith, near top centre)
+//   dusk  → low-west  (setting)
+//   night → moon high on the opposite (eastern) side, having risen
+const PALETTES = {
+    dawn: {
+        sky:  [[0,'#f9d18a'], [0.42,'#f1907c'], [0.78,'#a87aa0'], [1,'#4a4470']],
+        cloud:[255, 220, 200], cloudOpacity: 0.55,
+        sun:  { x: 0.12, y: 0.78, r: 0.075, core: '#ffe6c0', halo: 'rgba(255, 200, 140, 0.55)' },
+        stars: 0, moon: 0,
+    },
+    day: {
+        sky:  [[0,'#5cb3e6'], [0.55,'#9fd4f0'], [1,'#dff0f5']],
+        cloud:[255, 255, 255], cloudOpacity: 0.75,
+        sun:  { x: 0.50, y: 0.14, r: 0.065, core: '#fffbe0', halo: 'rgba(255, 250, 200, 0.55)' },
+        stars: 0, moon: 0,
+    },
+    dusk: {
+        sky:  [[0,'#1d1647'], [0.35,'#7a356a'], [0.7,'#e25a3b'], [1,'#f3a04c']],
+        cloud:[255, 165, 120], cloudOpacity: 0.50,
+        sun:  { x: 0.90, y: 0.78, r: 0.085, core: '#ffc888', halo: 'rgba(255, 130, 80, 0.55)' },
+        stars: 0.18, moon: 0,
+    },
+    night: {
+        sky:  [[0,'#02030d'], [0.55,'#080e2a'], [1,'#171b40']],
+        cloud:[110, 120, 160], cloudOpacity: 0.18,
+        sun:  { x: 0.20, y: 0.22, r: 0.060, core: '#e8eef8', halo: 'rgba(200, 215, 250, 0.32)' },
+        stars: 1.0, moon: 1.0,
+    },
+};
+
+const state = {
+    mode: 'day',
+    paletteCurr: PALETTES.day,
+    palettePrev: PALETTES.day,
+    paletteT: 1,
+    t: 0,
+};
+
+// ─── AUDIO ─────────────────────────────────────────────────────────────────
+// Volume is fixed at 1.0 — no slider. Crossfade is equal-power.
+const AUD = {
+    dawn:  document.getElementById('aud-dawn'),
+    day:   document.getElementById('aud-day'),
+    dusk:  document.getElementById('aud-dusk'),
+    night: document.getElementById('aud-night'),
+};
+for (const k in AUD) {
+    AUD[k].volume = 0;
+    AUD[k].addEventListener('error', () => {}, { once: true });
+}
+
+let activeKey = null;
+let crossfadeFrom = null;
+let crossfadeStart = 0;
+const CROSSFADE_MS = 1500;
+
+function setAudioMode(key) {
+    if (key === activeKey) return;
+    crossfadeFrom = activeKey;
+    activeKey = key;
+    crossfadeStart = state.t;
+    const target = AUD[key];
+    if (!target) return;
+    target.play().catch(() => {});
+}
+
+function updateAudioGains() {
+    if (!activeKey) return;
+    const elapsed = state.t - crossfadeStart;
+    const t = Math.min(1, elapsed / CROSSFADE_MS);
+    const gOut = Math.cos((t * Math.PI) / 2);
+    const gIn  = Math.sin((t * Math.PI) / 2);
+    if (AUD[activeKey]) AUD[activeKey].volume = gIn;
+    if (crossfadeFrom && AUD[crossfadeFrom]) {
+        AUD[crossfadeFrom].volume = gOut;
+        if (t >= 1) {
+            AUD[crossfadeFrom].pause();
+            crossfadeFrom = null;
+        }
+    }
+}
+
+// ─── CLOUDS ────────────────────────────────────────────────────────────────
+class Cloud {
+    constructor(layer, w, h) {
+        this.layer = layer;
+        const baseSize = layer === 0 ? 0.25 : 0.40;
+        this.size = baseSize * Math.min(w, h) * (0.75 + Math.random() * 0.7);
+        this.x = Math.random() * (w + this.size * 2) - this.size;
+        this.y = h * (0.08 + Math.random() * 0.55);
+        this.speed = (layer === 0 ? 18 : 40) * (0.7 + Math.random() * 0.7);
+        this.alpha = layer === 0 ? 0.45 : 0.75;
+        this.aspectY = 0.45 + Math.random() * 0.25;
+    }
+    update(dt, w) {
+        this.x += (this.speed * dt) / 1000;
+        if (this.x - this.size > w) this.x = -this.size * 2;
+    }
+}
+let clouds = [];
+
+function rebuildClouds() {
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    clouds = [];
+    for (let i = 0; i < 6; i++) clouds.push(new Cloud(0, w, h));
+    for (let i = 0; i < 5; i++) clouds.push(new Cloud(1, w, h));
+}
+rebuildClouds();
+window.addEventListener('resize', rebuildClouds);
+
+function drawClouds(w, h, pPrev, pCurr, blend) {
+    const tintR = lerp(pPrev.cloud[0], pCurr.cloud[0], blend);
+    const tintG = lerp(pPrev.cloud[1], pCurr.cloud[1], blend);
+    const tintB = lerp(pPrev.cloud[2], pCurr.cloud[2], blend);
+    const op = lerp(pPrev.cloudOpacity, pCurr.cloudOpacity, blend);
+    if (op < 0.005) return;
+    ctx.save();
+    for (const c of clouds) {
+        const rx = c.size;
+        const grad = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, rx);
+        grad.addColorStop(0,    `rgba(${tintR|0}, ${tintG|0}, ${tintB|0}, ${c.alpha * op})`);
+        grad.addColorStop(0.55, `rgba(${tintR|0}, ${tintG|0}, ${tintB|0}, ${c.alpha * op * 0.5})`);
+        grad.addColorStop(1,    `rgba(${tintR|0}, ${tintG|0}, ${tintB|0}, 0)`);
+        ctx.save();
+        ctx.translate(c.x, c.y);
+        ctx.scale(1, c.aspectY);
+        ctx.translate(-c.x, -c.y);
+        ctx.fillStyle = grad;
+        ctx.fillRect(c.x - rx, c.y - rx, rx * 2, rx * 2);
+        ctx.restore();
+    }
+    ctx.restore();
+}
+
+// ─── SUN / MOON ────────────────────────────────────────────────────────────
+function drawSunOrMoon(w, h, pPrev, pCurr, blend) {
+    const sPrev = pPrev.sun, sCurr = pCurr.sun;
+    const x = lerp(sPrev.x, sCurr.x, blend) * w;
+    const y = lerp(sPrev.y, sCurr.y, blend) * h;
+    const R = lerp(sPrev.r, sCurr.r, blend) * Math.min(w, h);
+
+    const halo = ctx.createRadialGradient(x, y, R * 0.6, x, y, R * 6);
+    halo.addColorStop(0, mixColor(sPrev.halo, sCurr.halo, blend));
+    halo.addColorStop(0.55, mixColor(sPrev.halo, sCurr.halo, blend, 0.18));
+    halo.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = halo;
+    ctx.fillRect(x - R * 6, y - R * 6, R * 12, R * 12);
+
+    const disc = ctx.createRadialGradient(x, y, 0, x, y, R);
+    const core = mixColor(sPrev.core, sCurr.core, blend);
+    const edge = mixColor(sPrev.halo, sCurr.halo, blend, 0.7);
+    disc.addColorStop(0,    core);
+    disc.addColorStop(0.65, core);
+    disc.addColorStop(0.95, edge);
+    disc.addColorStop(1,    mixColor(sPrev.halo, sCurr.halo, blend, 0));
+    ctx.fillStyle = disc;
+    ctx.beginPath();
+    ctx.arc(x, y, R * 1.1, 0, Math.PI * 2);
+    ctx.fill();
+
+    const moonAmt = lerp(pPrev.moon, pCurr.moon, blend);
+    if (moonAmt > 0.05) {
+        ctx.save();
+        ctx.globalAlpha = moonAmt * 0.35;
+        ctx.fillStyle = 'rgba(80, 90, 120, 1)';
+        ctx.beginPath();
+        ctx.arc(x + R * 0.32, y - R * 0.08, R * 0.92, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+// ─── STARS ─────────────────────────────────────────────────────────────────
+const _stars = (() => {
+    const out = []; let s = 1337;
+    const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+    for (let i = 0; i < 240; i++) {
+        out.push({
+            x: rnd(), y: rnd() * 0.78,
+            r: 0.4 + rnd() * 1.6,
+            phase: rnd() * Math.PI * 2,
+            speed: 0.0008 + rnd() * 0.002,
+        });
+    }
+    return out;
+})();
+
+function drawStars(w, h, alpha) {
+    if (alpha <= 0) return;
+    ctx.save();
+    for (const s of _stars) {
+        const tw = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(state.t * s.speed + s.phase));
+        ctx.globalAlpha = alpha * tw;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(s.x * w, s.y * h, s.r, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+}
+
+// ─── DRAW ──────────────────────────────────────────────────────────────────
+function applyGrad(grad, stops) { for (const [p, c] of stops) grad.addColorStop(p, c); }
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function mixColor(c1, c2, t, alphaScale) {
+    const p1 = parseRgba(c1);
+    const p2 = parseRgba(c2);
+    if (!p1 || !p2) return c2;
+    const r = lerp(p1[0], p2[0], t);
+    const g = lerp(p1[1], p2[1], t);
+    const b = lerp(p1[2], p2[2], t);
+    let a = lerp(p1[3], p2[3], t);
+    if (alphaScale != null) a *= alphaScale;
+    return `rgba(${r|0}, ${g|0}, ${b|0}, ${a.toFixed(3)})`;
+}
+function parseRgba(c) {
+    if (c.startsWith('#')) {
+        const h = c.slice(1);
+        const v = h.length === 3
+            ? [parseInt(h[0]+h[0],16), parseInt(h[1]+h[1],16), parseInt(h[2]+h[2],16), 1]
+            : [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16), 1];
+        return v;
+    }
+    const m = c.match(/rgba?\(([^)]+)\)/);
+    if (!m) return null;
+    const parts = m[1].split(',').map(s => parseFloat(s));
+    return [parts[0], parts[1], parts[2], parts[3] != null ? parts[3] : 1];
+}
+
+function drawSky() {
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    const pPrev = state.palettePrev, pCurr = state.paletteCurr;
+    const blend = state.paletteT;
+
+    let g = ctx.createLinearGradient(0, 0, 0, h);
+    applyGrad(g, pPrev.sky);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+
+    g = ctx.createLinearGradient(0, 0, 0, h);
+    applyGrad(g, pCurr.sky);
+    ctx.globalAlpha = blend;
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalAlpha = 1;
+
+    const starAlpha = lerp(pPrev.stars, pCurr.stars, blend);
+    drawStars(w, h, starAlpha);
+    drawSunOrMoon(w, h, pPrev, pCurr, blend);
+    drawClouds(w, h, pPrev, pCurr, blend);
+}
+
+// ─── MODE SWITCH ───────────────────────────────────────────────────────────
+function setMode(mode) {
+    if (mode === state.mode && state.paletteT >= 1) return;
+    state.palettePrev = state.paletteCurr;
+    state.paletteCurr = PALETTES[mode];
+    state.paletteT = 0;
+    state.mode = mode;
+    document.querySelectorAll('[data-mode]').forEach(b => {
+        b.classList.toggle('active', b.dataset.mode === mode);
+    });
+    setAudioMode(mode);
+}
+
+document.querySelectorAll('[data-mode]').forEach(b => {
+    b.addEventListener('click', () => setMode(b.dataset.mode));
+});
+
+// ─── AUTO-PLAY (with first-tap fallback) ───────────────────────────────────
+// Try to start audio right away. Most browsers will let it if the user has
+// previously interacted with the site (revisits); on a cold load they
+// require a user gesture, so we listen for the first tap as fallback.
+//
+// We can't go through setAudioMode for the retry — it short-circuits when
+// the key hasn't changed, so a blocked first play() would never be retried.
+// Instead, hit play() directly on the active element and reset the crossfade
+// timer so the volume ramps up from silence at the moment of the gesture.
+function kickAudio() {
+    if (!activeKey) {
+        activeKey = state.mode;
+        crossfadeFrom = null;
+    }
+    const el = AUD[activeKey];
+    if (!el) return;
+    if (el.paused) {
+        crossfadeStart = state.t;
+        el.volume = 0;
+        el.play().catch(() => {});
+    }
+}
+window.addEventListener('load', kickAudio);
+kickAudio(); // try synchronously too
+// Don't use { once: true } — if the first gesture happens while the iframe
+// is still warming up the audio can fail to start; every subsequent click
+// gets a chance to recover.
+['pointerdown', 'touchstart', 'keydown', 'click'].forEach(ev => {
+    window.addEventListener(ev, kickAudio, { passive: true });
+});
+
+// When the tab / iframe becomes visible again after being hidden, retry
+// audio. Browsers commonly pause inactive iframes and won't auto-resume.
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+        kickAudio();
+        // Reset the loop clock so the dt jump while hidden doesn't compound.
+        lastTime = performance.now();
+    }
+});
+
+// ─── LOOP ──────────────────────────────────────────────────────────────────
+let lastTime = performance.now();
+function loop(now) {
+    const dt = now - lastTime;
+    lastTime = now;
+    state.t += dt;
+
+    if (state.paletteT < 1) state.paletteT = Math.min(1, state.paletteT + dt / 1800);
+    for (const c of clouds) c.update(dt, canvas.clientWidth);
+
+    drawSky();
+    updateAudioGains();
+
+    requestAnimationFrame(loop);
+}
+// Seed state.mode's palette and kick the first audio after one frame
+setMode('day');
+state.paletteT = 1;
+requestAnimationFrame(loop);
+
+let _lastTouchEnd = 0;
+document.addEventListener('touchend', e => {
+    const now = Date.now();
+    if (now - _lastTouchEnd < 350) e.preventDefault();
+    _lastTouchEnd = now;
+}, { passive: false });
+</script>
+
+</body>
+</html>

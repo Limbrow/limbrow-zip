@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ascii · preview</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { background: #050505; width: 100%; height: 100vh; height: 100dvh; overflow: hidden;
+        font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
+    #screen { position: fixed; inset: 0; margin: 0; white-space: pre; overflow: hidden;
+        color: #cfcfcf; font-variant-ligatures: none; }
+</style>
+</head>
+<body>
+
+<pre id="screen"></pre>
+
+<script>
+// ASCII preview — always the code rain: columns of source-ish glyphs falling,
+// bright heads, fading tails. Matches the text-mode editor's monospace look.
+const screen = document.getElementById('screen');
+let cols = 0, rows = 0, charW = 8, charH = 14;
+let buf = [];
+let drops = null;
+
+// A code-flavoured glyph set (letters, digits, operators, brackets)
+const GLY = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789' +
+            '{}[]()<>=+-*/%!?;:.,&|^~$#@';
+
+function measure() {
+    const fs = window.innerWidth < 420 ? 10 : 12;
+    screen.style.fontSize = fs + 'px';
+    screen.style.lineHeight = (fs + 2) + 'px';
+    const probe = document.createElement('span');
+    probe.style.cssText = `position:absolute;visibility:hidden;font-family:${getComputedStyle(screen).fontFamily};font-size:${fs}px;`;
+    probe.textContent = '0'.repeat(80);
+    document.body.appendChild(probe);
+    charW = probe.getBoundingClientRect().width / 80;
+    document.body.removeChild(probe);
+    charH = fs + 2;
+    cols = Math.max(8, Math.ceil(window.innerWidth / charW) + 1);
+    rows = Math.max(8, Math.ceil(window.innerHeight / charH) + 1);
+    buf = new Array(cols * rows).fill(' ');
+    drops = [];
+    for (let x = 0; x < cols; x++)
+        drops.push({ y: Math.random() * rows, sp: 7 + Math.random() * 24, len: 8 + (Math.random() * 22 | 0) });
+}
+window.addEventListener('resize', measure);
+measure();
+
+const gn = GLY.length;
+const t0 = performance.now();
+let lastT = t0;
+function frame(now) {
+    const dt = Math.min(64, now - lastT); lastT = now;
+    const dts = dt / 1000;
+    const tf = ((now - t0) * 0.012) | 0;
+
+    for (let i = 0; i < buf.length; i++) buf[i] = ' ';
+
+    for (let x = 0; x < cols; x++) {
+        const d = drops[x];
+        d.y += d.sp * dts;
+        if (d.y - d.len > rows) {
+            d.y = -(Math.random() * 8);
+            d.sp = 7 + Math.random() * 24;
+            d.len = 8 + (Math.random() * 22 | 0);
+        }
+        const head = d.y | 0;
+        for (let k = 0; k < d.len; k++) {
+            const yy = head - k;
+            if (yy < 0 || yy >= rows) continue;
+            const lit = 1 - k / d.len;
+            let ch;
+            if (k === 0)        ch = GLY[((tf + x * 3) % gn + gn) % gn];          // bright head
+            else if (lit > 0.45) ch = GLY[((x * 7 + yy * 13 + tf) % gn + gn) % gn]; // body glyphs
+            else if (lit > 0.18) ch = (((x + yy) & 1) ? ':' : '.');               // faint tail
+            else                 ch = '.';
+            buf[yy * cols + x] = ch;
+        }
+    }
+
+    let out = '';
+    for (let y = 0; y < rows; y++) out += buf.slice(y * cols, y * cols + cols).join('') + '\n';
+    screen.textContent = out;
+    requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+
+</body>
+</html>

@@ -9,8 +9,8 @@ is the link in his bio. Live at https://limbrow.zip.
 
 Vanilla HTML + CSS + ES modules. **No build step, no framework.** Hosted on
 GitHub Pages with a CNAME for the custom domain. Tone.js (CDN) for audio in
-Liserium. WebGL fragment shaders for the two holes. Everything else is
-canvas 2D.
+Liserium; Aviary ships its own audio files. WebGL fragment shaders for the
+two holes. Everything else is canvas 2D, SVG or plain DOM.
 
 ## Repo structure
 
@@ -25,7 +25,12 @@ grid card. Posts newest first:
 ├── about/                  ← references & influences (linked from the avatar)
 ├── arte/                   ← card for arte.zip: the brand piece, links out
 ├── whitehole/   + hole.js  ← time-reversed schwarzschild, the shadow develops into light
+├── ascii/                  ← live text-mode editor, modules not screens
+├── meltdown/               ← a screen that melts
 ├── singularity/            ← schwarzschild lensing, per-pixel geodesics
+├── chukovski/              ← Repin 1910, the painting itself on a blurred backdrop
+├── aviary/      + audio/   ← animated sky + flock, auto-singing
+├── house-of-axes/          ← f(x)=1/x research plate (Marc's identity post)
 ├── liserium/    + sounds.js← Game Boy-styled dub-techno synth
 ├── game-of-life/           ← Conway's automaton with 50+ patterns
 └── _template-slides/       ← reusable template for slide-format posts
@@ -36,15 +41,22 @@ URLs are clean: `limbrow.zip/<slug>/` (no `/p/` prefix anymore).
 ## The clean-up (14-sep-2026)
 
 The feed used to hold 26 pieces. Marc cut it down to the big, consistent
-ones — Liserium, Game of Life, the black hole and the white one — and added
-arte.zip. The 22 retired posts (mandelbulb, botanica, ripples, voronoi,
-chladni, attractors, turing, ascii, meltdown, help, moire, physarum, leparc,
-blocks, melt, loops, chukovski, guess, aviary, ring, fractals, house-of-axes)
-last lived in full at commit `bd4eeab`. To bring one back:
+ones — Liserium, Game of Life, the black hole and the white one — added
+arte.zip, and the same night brought five back: house-of-axes, aviary, ascii,
+meltdown and chukovski. The 17 retired posts (mandelbulb, botanica, ripples,
+voronoi, chladni, attractors, turing, help, moire, physarum, leparc, blocks,
+melt, loops, guess, ring, fractals) last lived in full at commit `bd4eeab`.
+To bring one back:
 
 ```bash
 git checkout bd4eeab -- fractals && git add fractals   # then re-register it in posts.js
 ```
+
+**Chukovski came back in its original form** (`fb0ee62`): the painting as a
+plain `<img>` on a blurred backdrop. The WebGL raking-light relief it was
+given in `8a76ebb` — a commit whose message never mentioned it — was dropped,
+the same way the meltdown, leparc and loops reworks were reverted in
+`623d408`. Marc keeps the originals; don't re-dress an existing post.
 
 ## Posts that live elsewhere
 
@@ -123,8 +135,8 @@ Genres established so far:
 
 - **post-app** (Liserium, Game of Life, Singularity, Whitehole) — single-page
   interactive piece, often with a control panel
-- **post-research-plate** — dense editorial poster, intentional ALL CAPS
-  labels, mathematical/typographic vibe (House of Axes, retired)
+- **post-research-plate** (House of Axes) — dense editorial poster,
+  intentional ALL CAPS labels, mathematical/typographic vibe
 - **post-lab** — explorer tool with a floating glass panel: regime/map picker,
   palette chips, reseed, and a live readout of the actual parameters under
   the cursor (Fractals, Turing, Attractors, retired)
@@ -174,6 +186,8 @@ index, posts, favicon — they would collide with site paths.
 - Cares deeply about mobile (tests on iPhone first)
 - Likes consistency in the design language but lets each post have its own
   spirit (Liserium ≠ the holes ≠ arte)
+- Prefers a post's original version to a later redesign — three reworks were
+  reverted in July and Chukovski's in September
 
 ## Deploy
 

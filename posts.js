@@ -41,10 +41,45 @@ export const posts = [
     },
 
     {
+        slug: 'ascii',
+        date: '2026-05-31',
+        preview: 'preview.html',  // text-mode toolbox — six classic effects as monospace glyph grids
+        scale: 1.0
+    },
+
+    {
+        slug: 'meltdown',
+        date: '2026-05-31',
+        preview: 'preview.html',  // generative colour field melting downward in ragged drips
+        scale: 1.0
+    },
+
+    {
         slug: 'singularity',
         date: '2026-05-17',
         preview: 'preview.html',  // schwarzschild black hole, real per-pixel geodesic lensing
         scale: 1.0
+    },
+
+    {
+        slug: 'chukovski',
+        date: '2026-05-16',
+        preview: 'preview.html',  // breathing crop of the Repin painting
+        scale: 1.0
+    },
+
+    {
+        slug: 'aviary',
+        date: '2026-05-14',
+        preview: 'preview.html',  // animated sky + flock auto-singing
+        scale: 1.0
+    },
+
+    {
+        slug: 'house-of-axes',
+        date: '2026-05-11',
+        preview: 'preview.html',  // dedicated card preview — just the animated graph
+        scale: 0.55               // less zoom-out, the graph fills the card better
     },
 
     {

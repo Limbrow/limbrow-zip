@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0">
+<title>ascii · limbrow.zip</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+        background: #050505;
+        color: #d8d8d8;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+        font-family: ui-monospace, 'SF Mono', Menlo, 'JetBrains Mono', monospace;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-text-size-adjust: 100%;
+    }
+
+    .back {
+        position: fixed;
+        top: 16px; left: 16px;
+        z-index: 100;
+        width: 36px; height: 36px;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0, 0, 0, 0.4);
+        border: 1px solid rgba(255,255,255,0.14);
+        border-radius: 50%;
+        color: rgba(255,255,255,0.9);
+        text-decoration: none;
+        font-size: 16px; line-height: 1; padding-bottom: 2px;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+    }
+
+    #screen {
+        position: fixed;
+        inset: 0;
+        margin: 0;
+        z-index: 1;
+        white-space: pre;
+        overflow: hidden;
+        color: #cfcfcf;
+        font-family: inherit;
+        font-variant-ligatures: none;
+        letter-spacing: 0;
+        user-select: none;
+        pointer-events: none;
+    }
+
+    /* ─── EDITOR PANEL (floating, minimizable — shared design language) ─── */
+    .panel {
+        position: fixed;
+        bottom: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10;
+        width: min(640px, calc(100vw - 24px));
+        background: rgba(8, 9, 14, 0.78);
+        backdrop-filter: blur(20px) saturate(130%);
+        -webkit-backdrop-filter: blur(20px) saturate(130%);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 14px;
+        padding: 12px;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.55);
+        transition: transform 0.32s cubic-bezier(0.4,0,0.2,1), border-radius 0.32s ease;
+    }
+    .panel.minimized {
+        transform: translateX(-50%) translateY(calc(100% - 40px));
+        border-radius: 16px 16px 0 0;
+    }
+
+    .panel-head {
+        display: flex; align-items: center; justify-content: space-between;
+        padding-bottom: 10px; margin-bottom: 10px;
+        border-bottom: 1px solid rgba(255,255,255,0.07);
+        cursor: pointer;
+    }
+    .panel.minimized .panel-head { padding-bottom: 0; margin-bottom: 0; border-bottom: none; }
+    .panel-title {
+        font-size: 9px; letter-spacing: 0.26em; text-transform: uppercase;
+        color: rgba(255,255,255,0.72);
+        display: flex; align-items: center; gap: 7px;
+    }
+    .panel-title::before { content:''; width:6px; height:6px; border-radius:50%; background:#cfcfcf; }
+    .toggle-btn {
+        background: none; border: 0; color: rgba(255,255,255,0.6);
+        font-size: 14px; cursor: pointer; padding: 4px 8px; margin: -4px -8px;
+        font-family: inherit; transition: transform 0.32s;
+    }
+    .panel.minimized .toggle-btn { transform: rotate(180deg); }
+
+    .panel-body { transition: opacity 0.2s, max-height 0.32s ease; max-height: 60vh; overflow: hidden; }
+    .panel.minimized .panel-body { opacity: 0; max-height: 0; pointer-events: none; }
+
+    /* module chips */
+    .modules { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+    .chip {
+        padding: 6px 11px; border-radius: 7px;
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.09);
+        color: rgba(255,255,255,0.6);
+        font-family: inherit; font-size: 9px; letter-spacing: 0.14em;
+        text-transform: uppercase; cursor: pointer; transition: all 0.15s;
+    }
+    .chip:hover { color: #fff; }
+    .chip.active { color: #fff; border-color: rgba(255,255,255,0.45); background: rgba(255,255,255,0.10); }
+
+    /* code editor */
+    textarea#code {
+        width: 100%;
+        height: clamp(120px, 26vh, 220px);
+        resize: none;
+        background: rgba(0,0,0,0.4);
+        border: 1px solid rgba(255,255,255,0.10);
+        border-radius: 8px;
+        color: #e6e6e6;
+        font-family: inherit;
+        font-size: 12px;
+        line-height: 1.55;
+        padding: 10px 12px;
+        outline: none;
+        tab-size: 2;
+        -webkit-user-select: text; user-select: text;
+        white-space: pre;
+        overflow: auto;
+    }
+    textarea#code:focus { border-color: rgba(255,255,255,0.28); }
+
+    .foot {
+        display: flex; align-items: center; justify-content: space-between;
+        margin-top: 8px; gap: 10px;
+    }
+    .err {
+        font-size: 10px; letter-spacing: 0.02em; line-height: 1.4;
+        color: #ff6b6b; flex: 1; min-width: 0;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .err.ok { color: rgba(255,255,255,0.4); }
+    .hint {
+        font-size: 9px; letter-spacing: 0.1em; color: rgba(255,255,255,0.35);
+        flex-shrink: 0; text-transform: uppercase;
+    }
+</style>
+</head>
+<body>
+
+<a class="back" href="/" aria-label="Back to grid">←</a>
+
+<pre id="screen" aria-hidden="true"></pre>
+
+<div class="panel" id="panel">
+    <div class="panel-head" id="panel-head">
+        <div class="panel-title">ascii · live</div>
+        <button class="toggle-btn" id="toggle" aria-label="Minimize">▾</button>
+    </div>
+    <div class="panel-body">
+        <div class="modules" id="modules"></div>
+        <textarea id="code" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea>
+        <div class="foot">
+            <div class="err ok" id="err">runs live — return 0..1 or a character</div>
+            <div class="hint">f(x, y, t, cols, rows, aspect)</div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+// ASCII — a live text-mode editor.
+//
+// You write the body of a function  f(x, y, t, cols, rows)  that is called for
+// every character cell, every frame. Return a number 0..1 (mapped to a density
+// ramp) or a single character string. The grid is rebuilt and written to a
+// <pre> each frame — the cheap, faithful way text-mode art is drawn (in the
+// tradition of ertdfgcvb.xyz / the demoscene). Math functions (sin, cos, sqrt,
+// hypot, atan2, …), PI and TAU are in scope. Edit any module or write your own;
+// it evaluates live.
+// ════════════════════════════════════════════════════════════════════════════
+
+const screen = document.getElementById('screen');
+const RAMP = ' .\'`^",:;Il!i~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@';
+const RN = RAMP.length - 1;
+
+let cols = 0, rows = 0, charW = 8, charH = 14;
+
+function measure() {
+    const fs = window.innerWidth < 520 ? 11 : 13;
+    screen.style.fontSize = fs + 'px';
+    screen.style.lineHeight = (fs + 2) + 'px';
+    const probe = document.createElement('span');
+    probe.style.cssText = `position:absolute;visibility:hidden;font-family:${getComputedStyle(screen).fontFamily};font-size:${fs}px;`;
+    probe.textContent = '0'.repeat(80);
+    document.body.appendChild(probe);
+    charW = probe.getBoundingClientRect().width / 80;
+    document.body.removeChild(probe);
+    charH = fs + 2;
+    cols = Math.max(8, Math.ceil(window.innerWidth / charW) + 1);
+    rows = Math.max(8, Math.ceil(window.innerHeight / charH) + 1);
+}
+window.addEventListener('resize', measure);
+measure();
+
+// ─── MODULES — editable starter programs ─────────────────────────────────────
+const MODULES = [
+    { name: 'plasma', code:
+`// plasma — summed sine field. edit me!
+const cx = cols/2, cy = rows/2;
+const dx = (x - cx) * aspect, dy = (y - cy);
+const r  = hypot(dx, dy);
+let v =
+  sin(x*0.12 + t*1.3) +
+  cos(y*0.16 - t) +
+  sin((x + y)*0.05 + t*1.6) +
+  sin(r*0.22 - t*2.0);
+return 0.5 + v * 0.13;` },
+
+    { name: 'clouds', code:
+`// fractal noise — domain-warped fbm
+const q  = fbm(x*0.05 + t*0.10, y*0.06 - t*0.04);
+const q2 = fbm(x*0.05 + 4.0*q, y*0.06 + 4.0*q + t*0.05);
+const f  = fbm(x*0.05 + 4.0*q2, y*0.06 + 4.0*q2);
+return smoothstep(0.15, 0.95, f * 1.4);` },
+
+    { name: 'flow', code:
+`// curl-ish flow: warp coords by noise, sample again
+const a = fbm(x*0.04 + t*0.07, y*0.05) * TAU;
+const ux = x + cos(a) * 8.0;
+const uy = y + sin(a) * 8.0;
+const v  = fbm(ux*0.05, uy*0.06 - t*0.10);
+return smoothstep(0.25, 0.85, v + 0.15*sin(t));` },
+
+    { name: 'mandelbrot', code:
+`// mandelbrot — slow breathing zoom
+const zoom = 0.55 + 0.42*sin(t*0.18);
+const px = (x/cols - 0.5) * 3.0 / zoom * (cols/rows) * aspect;
+const py = (y/rows - 0.5) * 3.0 / zoom;
+const cRe = px - 0.745, cIm = py + 0.112;
+let zr = 0, zi = 0, i = 0;
+const M = 64;
+while (i < M && zr*zr + zi*zi < 4) {
+  const r = zr*zr - zi*zi + cRe;
+  zi = 2*zr*zi + cIm; zr = r; i++;
+}
+if (i >= M) return 0;
+// smooth escape colouring
+const sm = i + 1 - log(log(zr*zr + zi*zi) / 2) / log(2);
+return 0.12 + fract(sm * 0.06) * 0.88;` },
+
+    { name: 'julia', code:
+`// julia set — the constant orbits with time
+const px = (x/cols - 0.5) * 3.2 * (cols/rows) * aspect;
+const py = (y/rows - 0.5) * 3.2;
+const cr = 0.7885 * cos(t*0.3);
+const ci = 0.7885 * sin(t*0.3);
+let zr = px, zi = py, i = 0;
+const M = 56;
+while (i < M && zr*zr + zi*zi < 4) {
+  const r = zr*zr - zi*zi + cr;
+  zi = 2*zr*zi + ci; zr = r; i++;
+}
+return i >= M ? 0 : 0.1 + (i / M) * 0.9;` },
+
+    { name: 'metaballs', code:
+`// metaballs — inverse-square blobs that merge
+let v = 0;
+for (let i = 0; i < 5; i++) {
+  const bx = cols * (0.5 + 0.36*sin(t*0.6 + i*1.7));
+  const by = rows * (0.5 + 0.36*cos(t*0.5 + i*2.3));
+  const dx = (x - bx) * aspect, dy = (y - by);
+  v += 70 / (dx*dx + dy*dy + 1);
+}
+return smoothstep(0.7, 1.5, v);` },
+
+    { name: 'sphere', code:
+`// a lit, rotating wire sphere
+const R  = min(cols, rows/aspect) * 0.42;
+const dx = (x - cols/2);
+const dy = (y - rows/2) / aspect;
+const r2 = dx*dx + dy*dy;
+if (r2 > R*R) return 0;
+const z  = sqrt(R*R - r2);
+const nx = dx/R, ny = dy/R, nz = z/R;
+const lon = atan2(nx, nz) + t;          // spin
+const lat = asin(clamp(ny, -1, 1));
+const grid = (0.5 + 0.5*sin(lon*9)) * (0.5 + 0.5*sin(lat*9));
+const light = clamp(nx*0.4 - ny*0.5 + nz*0.85, 0, 1);
+return clamp(light*0.65 + grid*0.45, 0, 1);` },
+
+    { name: 'moire', code:
+`// interference of two rotating gratings
+const a1 =  t*0.20, a2 = -t*0.13;
+const u1 = (x*cos(a1) + (y/aspect)*sin(a1)) * 0.42;
+const u2 = (x*cos(a2) + (y/aspect)*sin(a2)) * 0.47;
+const m  = sin(u1) * sin(u2);
+return 0.5 + 0.5 * m;` },
+
+    { name: 'chars', code:
+`// return a character directly, not a number
+const v = sin(x*0.2 + t) + cos(y*0.2 - t)
+        + 0.6*sin((x+y)*0.1 + t*1.7);
+return v >  1.2 ? '@'
+     : v >  0.4 ? '#'
+     : v > -0.4 ? '+'
+     : v > -1.2 ? ':' : ' ';` },
+];
+
+const codeEl = document.getElementById('code');
+const errEl = document.getElementById('err');
+const modulesEl = document.getElementById('modules');
+let activeModule = 0;
+
+MODULES.forEach((m, i) => {
+    const chip = document.createElement('button');
+    chip.className = 'chip' + (i === 0 ? ' active' : '');
+    chip.textContent = m.name;
+    chip.addEventListener('click', () => loadModule(i));
+    modulesEl.appendChild(chip);
+});
+const chipEls = modulesEl.querySelectorAll('.chip');
+
+function loadModule(i) {
+    activeModule = i;
+    codeEl.value = MODULES[i].code;
+    chipEls.forEach((c, k) => c.classList.toggle('active', k === i));
+    compile();
+}
+
+// ─── COMPILE user code into a per-cell function ──────────────────────────────
+let fn = null;
+// Prelude exposed to every program: Math fns + a small graphics toolkit
+// (value noise, fbm, smoothstep, clamp, mix, …) so the modules can get dense.
+const PRELUDE = [
+    'const {sin,cos,tan,asin,acos,atan,atan2,sqrt,cbrt,abs,floor,ceil,round,sign,hypot,min,max,pow,exp,log}=Math;',
+    'const PI=Math.PI, TAU=Math.PI*2;',
+    'const fract=v=>v-Math.floor(v);',
+    'const clamp=(v,a,b)=>v<a?a:(v>b?b:v);',
+    'const mix=(a,b,k)=>a+(b-a)*k;',
+    'const stepf=(e,v)=>v<e?0:1;',
+    'const smoothstep=(e0,e1,v)=>{const k=clamp((v-e0)/(e1-e0),0,1);return k*k*(3-2*k);};',
+    'function hash(px,py){let h=Math.sin(px*127.1+py*311.7)*43758.5453;return h-Math.floor(h);}',
+    'function noise(px,py){const ix=Math.floor(px),iy=Math.floor(py),fx=px-ix,fy=py-iy;const ux=fx*fx*(3-2*fx),uy=fy*fy*(3-2*fy);const a=hash(ix,iy),b=hash(ix+1,iy),c=hash(ix,iy+1),d=hash(ix+1,iy+1);return a+(b-a)*ux+(c-a)*uy+(a-b-c+d)*ux*uy;}',
+    'function fbm(px,py){let v=0,amp=0.5,f=1;for(let o=0;o<5;o++){v+=amp*noise(px*f,py*f);f*=2;amp*=0.5;}return v;}',
+].join('\n');
+
+function compile() {
+    const body = codeEl.value;
+    try {
+        const candidate = new Function('x', 'y', 't', 'cols', 'rows', 'aspect', PRELUDE + '\n' + body);
+        const test = candidate(0, 0, 0, cols, rows, charW / charH);   // smoke-test
+        if (test === undefined) throw new Error('nothing returned — add a `return`');
+        fn = candidate;
+        errEl.textContent = 'ok';
+        errEl.classList.add('ok');
+    } catch (e) {
+        errEl.textContent = String(e.message || e);
+        errEl.classList.remove('ok');
+        // keep the last working fn so the canvas doesn't go blank
+    }
+}
+
+let debounce = null;
+codeEl.addEventListener('input', () => {
+    clearTimeout(debounce);
+    debounce = setTimeout(compile, 140);
+    // typing a custom program de-selects the module chips
+    chipEls.forEach(c => c.classList.remove('active'));
+});
+
+loadModule(0);
+
+// ─── RENDER LOOP ─────────────────────────────────────────────────────────────
+const t0 = performance.now();
+function frame(now) {
+    const t = (now - t0) * 0.001;
+    const ar = charW / charH;
+    let out = '';
+    if (fn) {
+        for (let y = 0; y < rows; y++) {
+            let row = '';
+            for (let x = 0; x < cols; x++) {
+                let r;
+                try { r = fn(x, y, t, cols, rows, ar); } catch (e) { r = 0; }
+                if (typeof r === 'string') {
+                    row += r.length ? r[0] : ' ';
+                } else {
+                    let v = +r;
+                    if (!isFinite(v)) v = 0;
+                    let idx = (v * RN) | 0;
+                    if (idx < 0) idx = 0; else if (idx > RN) idx = RN;
+                    row += RAMP[idx];
+                }
+            }
+            out += row + '\n';
+        }
+    }
+    screen.textContent = out;
+    requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ─── PANEL MINIMIZE ──────────────────────────────────────────────────────────
+const panel = document.getElementById('panel');
+document.getElementById('panel-head').addEventListener('click', (e) => {
+    // Don't toggle when interacting with the textarea/chips
+    if (e.target.closest('textarea') || e.target.closest('.chip')) return;
+    panel.classList.toggle('minimized');
+});
+
+// Allow Tab to insert two spaces in the editor instead of leaving it
+codeEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab') {
+        e.preventDefault();
+        const s = codeEl.selectionStart, en = codeEl.selectionEnd;
+        codeEl.value = codeEl.value.slice(0, s) + '  ' + codeEl.value.slice(en);
+        codeEl.selectionStart = codeEl.selectionEnd = s + 2;
+        clearTimeout(debounce); debounce = setTimeout(compile, 140);
+    }
+});
+</script>
+
+</body>
+</html>
