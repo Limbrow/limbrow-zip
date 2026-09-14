@@ -6,126 +6,36 @@
 <title>arte.zip · preview</title>
 <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { background: #0e0e0e; width: 100%; height: 100vh; height: 100dvh; overflow: hidden; }
-    #pieza { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: block; }
+    html, body { background: #000; width: 100%; height: 100vh; height: 100dvh; overflow: hidden; }
+    /* A square stage, centred, as big as the shorter side. In the grid the
+       card is square so this is the whole tile. */
+    body { display: grid; place-items: center; }
+    #cremallera { width: min(100vw, 100vh); width: min(100dvw, 100dvh); aspect-ratio: 1; display: block; }
 </style>
+<!-- three.js and the engine are the same files as arte-zip/public/branding:
+     copied verbatim, so keeping them in sync is a plain `cp`. -->
+<script type="importmap">
+{"imports":{"three":"./vendor/three/three.module.min.js","three/addons/":"./vendor/three/addons/"}}
+</script>
 </head>
 <body>
 
-<canvas id="pieza" role="img"
-        aria-label="Siete placas cuadradas girando sobre el mismo centro, de la luz exterior al negro del centro, con el filo refractado en color."></canvas>
+<canvas id="cremallera" role="img"
+        aria-label="La cremallera de arte.zip: la estructura metálica de una cremallera, sin cinta, que se abre y se cierra."></canvas>
 
-<script>
-(function () {
-  'use strict';
-
-  /* La pieza de arte.zip.
-     La regla del isotipo de Concreto Abstracto —siete placas cuadradas, cada
-     una girada 15° respecto a la anterior, separadas por una junta del color
-     del fondo— tal y como la usa la landing de arte.zip. Aquí va sobre sala
-     (#0E0E0E), y sobre negro la rampa se invierte: luz fuera, negro dentro.
-     El color solo vive en el filo de las cuatro placas exteriores, como la
-     luz que atraviesa un prisma. Mismos números que el pack de marca. */
-
-  var REGLA  = { capas: 7, ladoFuera: 70.67, ladoDentro: 37.57, junta: 4.86, radio: 0.132, giro: -15 };
-  var SALA   = '#0e0e0e';
-  var LUZ    = ['#ffffff', '#dde2e6', '#bcc4ca', '#7d878f', '#3d464e', '#1a2026', '#020610'];
-  var PRISMA = ['#7aa8ff', '#ff94cd', '#ffd696', '#87ebbe', '#7aa8ff'];
-  var FILO   = { capas: 4, alfa: 0.55, caida: 0.1, grosor: 0.9 };
-
-  /* Card budget: paint at 20fps. The clock is continuous, so capping the
-     paint rate never slows the piece down. */
-  var FPS = 20;
-
-  var cv = document.getElementById('pieza');
-  var ctx = cv.getContext('2d');
-  var quieto = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  var W = 0, H = 0;
-
-  /* Never trust one early measurement: a grid card is an iframe and can
-     report 0 at parse time. Measure every paint and skip while it is 0. */
-  function medir() {
-    var caja = cv.getBoundingClientRect();
-    if (!caja.width || !caja.height) return false;
-    var dpr = Math.min(devicePixelRatio || 1, 2);
-    var w = Math.round(caja.width * dpr), h = Math.round(caja.height * dpr);
-    if (w !== W || h !== H) { W = cv.width = w; H = cv.height = h; }
-    return true;
-  }
-
-  function cuadro(x, y, l, r) {
-    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(x, y, l, l, r); return; }
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + l, y, x + l, y + l, r);
-    ctx.arcTo(x + l, y + l, x, y + l, r);
-    ctx.arcTo(x, y + l, x, y, r);
-    ctx.arcTo(x, y, x + l, y, r);
-    ctx.closePath();
-  }
-
-  function pintar(t) {
-    if (!medir()) return;
-    var lado = Math.min(W, H);
-    var cx = W / 2, cy = H / 2;
-    var escala = lado / 100;               /* la regla vive en un lienzo de 100 */
-
-    ctx.fillStyle = SALA;
-    ctx.fillRect(0, 0, W, H);
-
-    for (var i = 0; i < REGLA.capas; i++) {
-      var p = i / (REGLA.capas - 1);
-      var l = (REGLA.ladoFuera + (REGLA.ladoDentro - REGLA.ladoFuera) * p) * escala;
-      /* giro de la regla + una respiración muy lenta, distinta en cada placa */
-      var ang = (i * REGLA.giro + t * 1.4 + Math.sin(t * 0.16 + i * 0.7) * 3.2) * Math.PI / 180;
-
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(ang);
-      cuadro(-l / 2, -l / 2, l, l * REGLA.radio);
-
-      /* la junta: un trazo del fondo que separa la placa de la anterior */
-      ctx.lineWidth = REGLA.junta * escala;
-      ctx.strokeStyle = SALA;
-      ctx.stroke();
-
-      ctx.fillStyle = LUZ[i];
-      ctx.fill();
-
-      /* el filo prismático: la luz entra por el canto de las placas exteriores */
-      if (i < FILO.capas) {
-        var g = ctx.createLinearGradient(-l / 2, -l / 2, l / 2, l / 2);
-        var giroLuz = (t * 0.05) % 1;
-        for (var k = 0; k < PRISMA.length; k++) {
-          g.addColorStop((k / (PRISMA.length - 1) + giroLuz) % 1, PRISMA[k]);
-        }
-        g.addColorStop(0, PRISMA[0]);
-        ctx.globalAlpha = FILO.alfa - i * FILO.caida;
-        ctx.lineWidth = Math.max(1, FILO.grosor * escala);
-        ctx.strokeStyle = g;
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-      }
-      ctx.restore();
-    }
-  }
-
-  var t0 = 0, ultimo = -1e9;
-  function latir(ms) {
-    requestAnimationFrame(latir);
-    if (!t0) t0 = ms;
-    if (ms - ultimo < 1000 / FPS) return;
-    ultimo = ms;
-    pintar((ms - t0) / 1000);
-  }
-
-  pintar(0);                               /* el cuadro fijo, desde el primer instante */
-  if (quieto) {
-    addEventListener('resize', function () { pintar(0); }, { passive: true });
-  } else {
-    requestAnimationFrame(latir);
-  }
-})();
+<script type="module">
+  // The arte.zip logo in 3D — the zipper from the macOS .zip icon: no cloth
+  // tape, only the metal, opening and closing on a 4 s loop. Options as
+  // chosen in the lab (/branding/lab-cremallera.html in the arte-zip repo).
+  import { montar } from './cremallera.js';
+  montar(document.getElementById('cremallera'), {
+    tiradorReposo: 'abajo',
+    vista: 'frontal',
+    angulo: 21,
+    sigma: 0.1,
+    n: 16,
+    orbita: false,
+  });
 </script>
 </body>
 </html>

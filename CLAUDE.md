@@ -10,7 +10,8 @@ is the link in his bio. Live at https://limbrow.zip.
 Vanilla HTML + CSS + ES modules. **No build step, no framework.** Hosted on
 GitHub Pages with a CNAME for the custom domain. Tone.js (CDN) for audio in
 Liserium; Aviary ships its own audio files. WebGL fragment shaders for the
-two holes. Everything else is canvas 2D, SVG or plain DOM.
+two holes; three.js (vendored) for the arte.zip zipper. Everything else is
+canvas 2D, SVG or plain DOM.
 
 ## Repo structure
 
@@ -23,7 +24,7 @@ grid card. Posts newest first:
 ├── posts.js                ← post registry (slug, date, scale, preview, href)
 ├── avatar.jpg, favicon.png, apple-touch-icon.png, CNAME
 ├── about/                  ← references & influences (linked from the avatar)
-├── arte/                   ← card for arte.zip: the brand piece, links out
+├── arte/                   ← card for arte.zip: the cremallera in 3D, links out
 ├── whitehole/   + hole.js  ← time-reversed schwarzschild, the shadow develops into light
 ├── ascii/                  ← live text-mode editor, modules not screens
 ├── meltdown/               ← a screen that melts
@@ -63,16 +64,20 @@ the same way the meltdown, leparc and loops reworks were reverted in
 `arte.zip` is Concreto Abstracto's Next.js platform (its own repo, its own
 host). It cannot be iframed — it sends `X-Frame-Options: SAMEORIGIN` on
 purpose — so its folder here only holds a `preview.html` that draws the
-brand piece in canvas, and the registry entry carries `href:
-'https://arte.zip'`, which the grid uses as the card's link instead of
-`/arte/`. `arte/index.html` is a plain redirect for anyone who types the URL.
+logo, and the registry entry carries `href: 'https://arte.zip'`, which the
+grid uses as the card's link instead of `/arte/`. `arte/index.html` is a
+plain redirect for anyone who types the URL.
 
-The piece follows the brand pack in the arte-zip repo
-(`public/branding/pack.html`): seven square plates, each turned 15° from the
-last, joined by a gap in the background colour; on a dark ground the grey
-ramp inverts (light outside, black centre) and the prism colour lives only
-on the edge of the four outer plates. Same numbers as the landing — if the
-pack changes, change the card.
+The logo is **the cremallera**: the zipper from the macOS .zip icon in 3D,
+no cloth tape, only the metal, opening and closing on a 4 s loop. The engine
+is `arte/cremallera.js`, a byte-for-byte copy of
+`arte-zip/public/branding/cremallera.js` (Three.js, ES module), with the
+vendored three.js modules and the studio HDRI (`arte/vendor/`, ~1 MB in
+total) copied from the same place — so syncing after a change over there is
+a plain `cp`, never an edit here. The card's options (`tiradorReposo:
+'abajo'`, `vista: 'frontal'`, `angulo: 21`, `sigma: 0.1`, `n: 16`,
+`orbita: false`) were chosen in the lab, `/branding/lab-cremallera.html`.
+The same model goes on white for the artz.zip landing.
 
 ## Shared engines
 
