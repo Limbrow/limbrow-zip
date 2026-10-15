@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>opus.zip · preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500&family=EB+Garamond:ital@0;1&display=swap" rel="stylesheet">
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { background: #171513; width: 100%; height: 100vh; height: 100dvh; overflow: hidden; }
+    #c { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: block; }
+</style>
+</head>
+<body>
+
+<canvas id="c" role="img"
+        aria-label="Dos cuerpos que bailan en órbita al compás del Preludio en do mayor de Bach, BWV 846, con las fórmulas de la gravedad entre ellos."></canvas>
+
+<script type="module">
+// opus.zip, the card. Two bodies on music paper, bound by gravity, dancing
+// to Bach's Prelude in C (BWV 846). The score drives the orbit: one turn per
+// bar with the closest approach on the downbeat, the bass line turns the
+// whole floor (15° per semitone, so the piece comes home after one full
+// turn), and the dissonance of each chord sets how eccentric the bar is.
+// Every note that sounds leaves a ring in the rubric — opus.zip's only
+// colour, kept for what sounds — and the ring shakes the staff as it passes.
+// The formula on the rod between them changes every bar.
+//
+// Speaks opus.zip's language at night (its globals.css dark tokens): paper,
+// ink, one rubric, Cormorant for the mark and EB Garamond for the maths.
+// Silent on purpose: the card links out to opus.zip, where the music is.
+
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+const FPS = 20;   // card budget; the score runs on the clock, not on frames
+
+// ── Colour, in linear light ─────────────────────────────────────────────
+const PAPER = '#171513';
+const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
+const toLin = c => c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+const toSrgb = l => {
+    l = Math.min(1, Math.max(0, l));
+    return Math.round((l <= 0.0031308 ? l * 12.92 : 1.055 * l ** (1 / 2.4) - 0.055) * 255);
+};
+const lin = h => hex(h).map(toLin);
+const C = {
+    paper: lin(PAPER), ink: lin('#ece4d3'), inkHi: lin('#fff8ea'), ink2: lin('#cfc5b2'),
+    ink3: lin('#a39a88'), ink4: lin('#8a8171'), ink5: lin('#6b6356'), pauta: lin('#57503f'),
+    rubrica: lin('#d4705e'),
+};
+const lerp = (a, b, t) => [0, 1, 2].map(i => a[i] + (b[i] - a[i]) * t);
+const css = c => `rgb(${toSrgb(c[0])},${toSrgb(c[1])},${toSrgb(c[2])})`;
+const mix = (a, b, t) => css(lerp(a, b, Math.min(1, Math.max(0, t))));
+
+const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+const wrapPi = x => x - 2 * Math.PI * Math.round(x / (2 * Math.PI));
+
+// ── The score ───────────────────────────────────────────────────────────
+// Bars 1–32 are one figure over a new chord each bar: the chord's five
+// notes played 0 1 2 3 4 2 3 4, twice. The first two are the left hand
+// (body A, the heavy one), the other three the right hand (body B).
+const CHORDS = [
+    [60, 64, 67, 72, 76], [60, 62, 69, 74, 77], [59, 62, 67, 74, 77], [60, 64, 67, 72, 76],
+    [60, 64, 69, 76, 81], [60, 62, 66, 69, 74], [59, 62, 67, 74, 79], [59, 60, 64, 67, 72],
+    [57, 60, 64, 67, 72], [50, 57, 62, 66, 72], [55, 59, 62, 67, 71], [55, 58, 64, 67, 73],
+    [53, 57, 62, 69, 74], [53, 56, 62, 65, 71], [52, 55, 60, 67, 72], [52, 53, 57, 60, 65],
+    [50, 53, 57, 60, 65], [43, 50, 55, 59, 65], [48, 52, 55, 60, 64], [48, 55, 58, 60, 64],
+    [41, 53, 57, 60, 64], [42, 48, 57, 60, 63], [44, 53, 59, 60, 62], [43, 53, 55, 59, 62],
+    [43, 52, 55, 60, 64], [43, 50, 55, 60, 65], [43, 50, 55, 59, 65], [43, 51, 57, 60, 66],
+    [43, 52, 55, 60, 67], [43, 50, 55, 60, 65], [43, 50, 55, 59, 65], [36, 48, 55, 58, 64],
+];
+const FIGURE = [0, 1, 2, 3, 4, 2, 3, 4, 0, 1, 2, 3, 4, 2, 3, 4];
+const hand = i => i < 2 ? 0 : 1;
+const BARS = CHORDS.map(c => FIGURE.map(i => [[c[i], hand(i)]]));
+// Bars 33–34 leave the figure; 35 is the closing chord, then a bar of rest
+// in which nothing sounds and the dance settles into a circle.
+const free = ns => ns.map((m, i) => [[m, hand(i)]]);
+BARS.push(free([36, 48, 53, 57, 60, 65, 60, 57, 60, 57, 53, 57, 53, 50, 53, 50]));
+BARS.push(free([36, 47, 67, 71, 74, 77, 74, 71, 74, 71, 67, 71, 62, 65, 64, 62]));
+BARS.push([[[36, 0], [48, 0], [64, 1], [67, 1], [72, 1]], ...Array.from({ length: 15 }, () => [])]);
+BARS.push(Array.from({ length: 16 }, () => []));
+
+const BAR = 3.5;           // seconds per bar, ♩ ≈ 69
+const STEP = BAR / 16;
+
+// How much a chord grinds: semitones, tritones, whole tones between its
+// pitch classes. A plain triad gives 0 and a near-circular bar.
+function tension(ms) {
+    const pcs = [...new Set(ms.map(m => m % 12))];
+    let t = 0;
+    for (let i = 0; i < pcs.length; i++) for (let j = i + 1; j < pcs.length; j++) {
+        const d = (pcs[j] - pcs[i] + 12) % 12, ic = Math.min(d, 12 - d);
+        t += ic === 1 ? 3 : ic === 6 ? 2.5 : ic === 2 ? 1.2 : 0;
+    }
+    return t;
+}
+let lastBass = 60;
+const PARAMS = BARS.map(steps => {
+    const ms = steps.flat().map(n => n[0]);
+    if (!ms.length) return { e: 0.03, w: (60 - lastBass) * Math.PI / 12 };
+    lastBass = Math.min(...ms);
+    return { e: 0.06 + 0.36 * Math.min(1, tension(ms) / 7), w: (60 - lastBass) * Math.PI / 12 };
+});
+
+const NAMES = ['do', 'do♯', 're', 'mi♭', 'mi', 'fa', 'fa♯', 'sol', 'la♭', 'la', 'si♭', 'si'];
+const hz = m => 440 * 2 ** ((m - 69) / 12);
+
+// ── The maths on the rod ────────────────────────────────────────────────
+const FORMULAS = [
+    'F = G\\frac{m_1 m_2}{r^2}',
+    'M = E - e\\sin E',
+    'r = \\frac{a(1 - e^2)}{1 + e\\cos\\nu}',
+    'T^2 = \\frac{4\\pi^2}{G(m_1 + m_2)}\\,a^3',
+    'f = 440\\cdot 2^{(n - 69)/12}',
+    '\\mu = \\frac{m_1 m_2}{m_1 + m_2}',
+    'v^2 = \\frac{2GM}{r} - \\frac{GM}{a}',
+    '\\Phi = -\\frac{Gm_1}{|x - x_1|} - \\frac{Gm_2}{|x - x_2|}',
+];
+
+// A pocket TeX: letters italic, digits and functions roman, \frac, ^, _,
+// a few Greek letters. Laid out once at 100px and drawn under a scale.
+const GREEK = { pi: 'π', theta: 'θ', mu: 'μ', nu: 'ν', omega: 'ω', Phi: 'Φ', Sigma: 'Σ' };
+function parse(s) {
+    let i = 0;
+    const out = [];
+    const group = () => {
+        let depth = 0, j = i;
+        do { if (s[j] === '{') depth++; else if (s[j] === '}') depth--; j++; } while (depth && j < s.length);
+        const inner = s.slice(i + 1, j - 1);
+        i = j;
+        return parse(inner);
+    };
+    const arg = () => {
+        while (s[i] === ' ') i++;
+        if (s[i] === '{') return group();
+        if (s[i] === '\\') { const m = /^\\[a-zA-Z]+/.exec(s.slice(i)); i += m[0].length; return parse(m[0]); }
+        return parse(s[i++]);
+    };
+    while (i < s.length) {
+        const ch = s[i];
+        if (ch === ' ') { i++; continue; }
+        if (ch === '{') { out.push(...group()); continue; }
+        if (ch === '^' || ch === '_') { i++; out.push({ k: ch === '^' ? 'sup' : 'sub', c: arg() }); continue; }
+        if (ch === '\\') {
+            const m = /^\\([a-zA-Z]+|.)/.exec(s.slice(i));
+            i += m[0].length;
+            const name = m[1];
+            if (name === 'frac') { const n = arg(), d = arg(); out.push({ k: 'frac', n, d }); }
+            else if (name === 'text') {
+                const end = s.indexOf('}', i);
+                out.push({ k: 't', s: s.slice(i + 1, end), it: false });
+                i = end + 1;
+            }
+            else if (name === ',') out.push({ k: 'sp', w: 0.17 });
+            else if (name === 'cdot') out.push({ k: 'op', s: '·' });
+            else if (name === 'sin' || name === 'cos') out.push({ k: 't', s: name, it: false, fn: true });
+            else if (GREEK[name]) out.push({ k: 't', s: GREEK[name], it: name[0] === name[0].toLowerCase() });
+            continue;
+        }
+        if (/[0-9]/.test(ch)) { const m = /^[0-9]+([.,][0-9]+)?/.exec(s.slice(i)); i += m[0].length; out.push({ k: 't', s: m[0], it: false }); continue; }
+        if (/[a-zA-Z]/.test(ch)) { i++; out.push({ k: 't', s: ch, it: true }); continue; }
+        if ('=+-'.includes(ch)) { i++; out.push({ k: 'op', s: ch === '-' ? '−' : ch }); continue; }
+        i++;
+        out.push({ k: 't', s: ch, it: false });
+    }
+    return out;
+}
+
+const MATH = '"EB Garamond", Garamond, Georgia, serif';
+const fnt = (px, it) => `${it ? 'italic ' : ''}${px}px ${MATH}`;
+
+function layout(nodes, size) {
+    const ops = [];
+    let x = 0, a = size * 0.7, d = size * 0.22, prev = null;
+    const put = (o, dx, dy) => ops.push(o.bar ? { ...o, x: o.x + dx, y: o.y + dy } : { ...o, x: o.x + dx, y: o.y + dy });
+    for (const n of nodes) {
+        if (n.k === 'sp') x += n.w * size;
+        else if (n.k === 'op') {
+            const unary = !prev || prev.k === 'op';
+            const pad = unary ? 0 : size * 0.24;
+            ctx.font = fnt(size, false);
+            x += pad;
+            ops.push({ t: n.s, x, y: 0, size, it: false });
+            x += ctx.measureText(n.s).width + (unary ? size * 0.04 : pad);
+        } else if (n.k === 't') {
+            if (n.fn && prev && prev.k === 't') x += size * 0.12;
+            ctx.font = fnt(size, n.it);
+            ops.push({ t: n.s, x, y: 0, size, it: n.it });
+            x += ctx.measureText(n.s).width + (n.fn ? size * 0.12 : 0);
+        } else if (n.k === 'sup' || n.k === 'sub') {
+            const box = layout(n.c, size * 0.68);
+            const dy = n.k === 'sup' ? -size * 0.4 : size * 0.2;
+            const kern = n.k === 'sup' && prev && prev.it ? size * 0.06 : size * 0.02;
+            for (const o of box.ops) put(o, x + kern, dy);
+            a = Math.max(a, box.a - dy);
+            d = Math.max(d, box.d + dy);
+            x += box.w + kern + size * 0.03;
+        } else if (n.k === 'frac') {
+            const nb = layout(n.n, size * 0.86), db = layout(n.d, size * 0.86);
+            const w = Math.max(nb.w, db.w) + size * 0.16;
+            const axis = -size * 0.26, gap = size * 0.12, th = size * 0.05;
+            x += size * 0.06;
+            const ny = axis - th / 2 - gap - nb.d, dy = axis + th / 2 + gap + db.a;
+            for (const o of nb.ops) put(o, x + (w - nb.w) / 2, ny);
+            for (const o of db.ops) put(o, x + (w - db.w) / 2, dy);
+            ops.push({ bar: true, x, y: axis, w, th });
+            a = Math.max(a, nb.a - ny);
+            d = Math.max(d, dy + db.d);
+            x += w + size * 0.06;
+        }
+        prev = n;
+    }
+    return { w: x, a, d, ops };
+}
+
+const boxes = new Map();
+function box(src) {
+    let b = boxes.get(src);
+    if (!b) {
+        if (boxes.size > 160) boxes.clear();
+        b = layout(parse(src), 100);
+        boxes.set(src, b);
+    }
+    return b;
+}
+
+// Draw a laid-out formula at scale k, left end at x, baseline at y, with a
+// paper halo so the staff and the rings never run through the glyphs.
+function drawBox(b, k, x, y, color, alpha) {
+    if (alpha <= 0.01) return;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(k, k);
+    ctx.globalAlpha = alpha;
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = PAPER;
+    const halo = 24;
+    for (const o of b.ops) {
+        if (o.bar) {
+            ctx.lineWidth = o.th + halo;
+            ctx.beginPath(); ctx.moveTo(o.x, o.y); ctx.lineTo(o.x + o.w, o.y); ctx.stroke();
+        } else {
+            ctx.lineWidth = halo;
+            ctx.font = fnt(o.size, o.it);
+            ctx.strokeText(o.t, o.x, o.y);
+        }
+    }
+    ctx.fillStyle = color;
+    for (const o of b.ops) {
+        if (o.bar) ctx.fillRect(o.x, o.y - o.th / 2, o.w, o.th);
+        else { ctx.font = fnt(o.size, o.it); ctx.fillText(o.t, o.x, o.y); }
+    }
+    ctx.restore();
+}
+
+Promise.all([
+    document.fonts.load('500 20px "Cormorant Garamond"', 'opus.zip'),
+    document.fonts.load('20px "EB Garamond"', 'c0123456789·−+=|()/,Hz'),
+    document.fonts.load('italic 20px "EB Garamond"', 'abcdefghijklmnopqrstuvwxyzEFGMT'),
+    document.fonts.load('italic 20px "EB Garamond"', 'πθμνΦ'),
+]).catch(() => {}).then(() => boxes.clear());
+
+// ── The two bodies ──────────────────────────────────────────────────────
+// Lengths are in units of the card's short side, origin at the centre of
+// mass, y up. A is the heavy partner, B the light one.
+const M1 = 1, M2 = 0.6, MT = M1 + M2;
+const A_AXIS = 0.43;
+const BODY = [
+    { m: M1, R: 0.066, lever: -M2 / MT },
+    { m: M2, R: 0.05, lever: M1 / MT },
+];
+for (const b of BODY) { b.eps2 = (1.5 * b.R) ** 2; b.K = 0.85 * b.eps2 * b.m; b.x = 0; b.y = 0; b.hit = -9; }
+
+// Kepler's equation, M = E − e sin E, by Newton.
+function eccentric(M, e) {
+    let E = M + e * Math.sin(M);
+    for (let i = 0; i < 6; i++) E -= (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+    return E;
+}
+
+const st = { e: PARAMS[0].e, w: PARAMS[0].w, bar: 0, step: -1, f: 0, fPrev: 0, fT: -9, note: null, noteT: -9 };
+const rings = [];
+const SPEED = 0.3;        // ring speed, card sides per second
+
+// ── Grain, the same near-invisible paper as opus.zip ────────────────────
+const grain = (() => {
+    const g = document.createElement('canvas');
+    g.width = g.height = 128;
+    const gx = g.getContext('2d');
+    const img = gx.createImageData(128, 128);
+    for (let i = 0; i < img.data.length; i += 4) {
+        const v = Math.random(), light = v > 0.5;
+        img.data[i] = light ? 236 : 0; img.data[i + 1] = light ? 228 : 0; img.data[i + 2] = light ? 211 : 0;
+        img.data[i + 3] = Math.abs(v - 0.5) * 2 * 13;
+    }
+    gx.putImageData(img, 0, 0);
+    return ctx.createPattern(g, 'repeat');
+})();
+
+let t0 = null, last = 0;
+
+function frame(now) {
+    requestAnimationFrame(frame);
+    if (t0 === null) t0 = now;
+    if (now - last < 1000 / FPS - 2) return;
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    const T = (now - t0) / 1000;
+
+    // ── the clock ──
+    const stepNow = Math.floor(T / STEP);
+    const bar = Math.floor(stepNow / 16) % BARS.length;
+    const P = PARAMS[bar];
+    const ease = 1 - Math.exp(-dt / 0.55);
+    st.e += (P.e - st.e) * ease;
+    st.w += wrapPi(P.w - st.w) * ease;
+    if (bar !== st.bar) { st.fPrev = st.f; st.f = bar % FORMULAS.length; st.fT = T; st.bar = bar; }
+
+    // ── the orbit: one turn per bar, periastron on the downbeat ──
+    const Mean = 2 * Math.PI * ((T / BAR) % 1);
+    const e = st.e, E = eccentric(Mean, e);
+    const px = A_AXIS * (Math.cos(E) - e), py = A_AXIS * Math.sqrt(1 - e * e) * Math.sin(E);
+    const cw0 = Math.cos(st.w), sw0 = Math.sin(st.w);
+    const rx = px * cw0 - py * sw0, ry = px * sw0 + py * cw0;
+    for (const b of BODY) { b.x = rx * b.lever; b.y = ry * b.lever; }
+
+    // ── what sounds: every step since the last frame ──
+    if (stepNow - st.step > 6) st.step = stepNow - 1;    // back from a hidden tab: don't burst
+    for (let s = st.step + 1; s <= stepNow; s++) {
+        const notes = BARS[Math.floor(s / 16) % BARS.length][s % 16];
+        for (const [m, h] of notes) {
+            const b = BODY[h];
+            b.hit = T;
+            rings.push({ x: b.x, y: b.y, R0: b.R, t: T, h, life: h ? 1.5 : 2.3, amp: h ? 0.005 : 0.008 });
+            st.note = m; st.noteT = T;
+        }
+    }
+    st.step = stepNow;
+    for (let i = rings.length - 1; i >= 0; i--) if (T - rings[i].t > rings[i].life) rings.splice(i, 1);
+    for (const r of rings) {
+        const age = T - r.t;
+        r.R = r.R0 + SPEED * age;
+        r.fade = (1 - age / r.life) ** 2;
+    }
+
+    // ── canvas size, measured every paint (an iframe can report 0 at parse) ──
+    const cw = cv.clientWidth || innerWidth || 300;
+    const ch = cv.clientHeight || innerHeight || cw;
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    const bw = Math.max(1, Math.round(cw * dpr)), bh = Math.max(1, Math.round(ch * dpr));
+    if (cv.width !== bw || cv.height !== bh) { cv.width = bw; cv.height = bh; }
+    const S = Math.min(cw, ch), cx = cw / 2, cy = ch / 2;
+    const X = x => cx + x * S, Y = y => cy - y * S;
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = PAPER;
+    ctx.fillRect(0, 0, cw, ch);
+
+    const flash = BODY.map(b => Math.exp(-(T - b.hit) / 0.22));
+
+    // ── glow of whoever is sounding ──
+    ctx.globalCompositeOperation = 'lighten';
+    BODY.forEach((b, i) => {
+        if (flash[i] < 0.02) return;
+        const R1 = b.R * S * 2.8;
+        const g = ctx.createRadialGradient(X(b.x), Y(b.y), b.R * S * 0.8, X(b.x), Y(b.y), R1);
+        for (let k = 0; k <= 8; k++) g.addColorStop(k / 8, mix(C.paper, C.rubrica, flash[i] * 0.42 * (1 - k / 8) ** 2));
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(X(b.x), Y(b.y), R1, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.globalCompositeOperation = 'source-over';
+
+    // ── the staff, bent by both masses and shaken by the rings ──
+    const halfW = cw / (2 * S), halfH = ch / (2 * S);
+    const SP = 0.024, PERIOD = 0.21, N = 64, RW = 0.022;
+    ctx.strokeStyle = mix(C.paper, C.pauta, 0.85);
+    ctx.lineWidth = Math.max(0.6, S * 0.0022);
+    ctx.beginPath();
+    const kmax = Math.ceil(halfH / PERIOD) + 1;
+    for (let k = -kmax; k <= kmax; k++) for (let l = -2; l <= 2; l++) {
+        const y0 = k * PERIOD + l * SP;
+        if (Math.abs(y0) > halfH + 0.06) continue;
+        for (let j = 0; j <= N; j++) {
+            const x = -halfW - 0.02 + (2 * halfW + 0.04) * j / N;
+            let dx = 0, dy = 0;
+            for (const b of BODY) {
+                const ax = b.x - x, ay = b.y - y0, q = b.K / (ax * ax + ay * ay + b.eps2);
+                dx += ax * q; dy += ay * q;
+            }
+            for (const r of rings) {
+                const ax = x - r.x, ay = y0 - r.y, dd = Math.hypot(ax, ay) + 1e-6, g = (dd - r.R) / RW;
+                if (g * g > 9) continue;
+                const amp = r.amp * r.fade * Math.exp(-g * g) / dd;
+                dx += ax * amp; dy += ay * amp;
+            }
+            if (j === 0) ctx.moveTo(X(x + dx), Y(y0 + dy)); else ctx.lineTo(X(x + dx), Y(y0 + dy));
+        }
+    }
+    ctx.stroke();
+
+    // ── the two ellipses, the line of apsides, the centre of mass ──
+    const b0 = A_AXIS * Math.sqrt(1 - e * e);
+    ctx.strokeStyle = mix(C.paper, C.ink5, 0.75);
+    ctx.lineWidth = Math.max(0.5, S * 0.002);
+    ctx.setLineDash([S * 0.004, S * 0.01]);
+    for (const b of BODY) {
+        const s = Math.abs(b.lever), sign = Math.sign(b.lever);
+        const ex = -A_AXIS * e * cw0 * sign * s, ey = -A_AXIS * e * sw0 * sign * s;
+        ctx.beginPath();
+        ctx.ellipse(X(ex), Y(ey), A_AXIS * s * S, b0 * s * S, -st.w, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.strokeStyle = mix(C.paper, C.ink4, 0.8);
+    const cm = S * 0.011;
+    ctx.beginPath();
+    ctx.moveTo(cx - cm, cy); ctx.lineTo(cx + cm, cy);
+    ctx.moveTo(cx, cy - cm); ctx.lineTo(cx, cy + cm);
+    ctx.stroke();
+
+    // ── the rings: what sounds, in the rubric ──
+    ctx.globalCompositeOperation = 'lighten';
+    for (const r of rings) {
+        ctx.strokeStyle = mix(C.paper, C.rubrica, r.fade * (r.h ? 0.75 : 0.95));
+        ctx.lineWidth = Math.max(0.6, S * (r.h ? 0.0026 : 0.004));
+        ctx.beginPath(); ctx.arc(X(r.x), Y(r.y), r.R * S, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+
+    // ── the rod between them, edge to edge, like a dimension line ──
+    const [A, B] = BODY;
+    const ax = X(A.x), ay = Y(A.y), bx = X(B.x), by = Y(B.y);
+    const dist = Math.hypot(bx - ax, by - ay) || 1;
+    const ux = (bx - ax) / dist, uy = (by - ay) / dist;
+    const pA = [ax + ux * A.R * S * 1.25, ay + uy * A.R * S * 1.25];
+    const pB = [bx - ux * B.R * S * 1.25, by - uy * B.R * S * 1.25];
+    const tick = S * 0.014;
+    ctx.strokeStyle = mix(C.paper, C.ink3, 0.75);
+    ctx.lineWidth = Math.max(0.6, S * 0.0026);
+    ctx.beginPath();
+    ctx.moveTo(pA[0], pA[1]); ctx.lineTo(pB[0], pB[1]);
+    for (const p of [pA, pB]) { ctx.moveTo(p[0] - uy * tick, p[1] + ux * tick); ctx.lineTo(p[0] + uy * tick, p[1] - ux * tick); }
+    ctx.stroke();
+
+    // ── the bodies, lit from the upper left ──
+    BODY.forEach((b, i) => {
+        const x = X(b.x), y = Y(b.y), R = b.R * S * (1 + 0.04 * flash[i]);
+        const g = ctx.createRadialGradient(x - R * 0.38, y - R * 0.42, R * 0.04, x, y, R);
+        const hi = lerp(C.inkHi, C.rubrica, flash[i] * 0.18), lo = lerp(C.ink, C.paper, 0.72);
+        for (let k = 0; k <= 8; k++) g.addColorStop(k / 8, css(lerp(lo, hi, (1 - k / 8) ** 1.1)));
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = css(lerp(C.ink5, C.rubrica, flash[i]));
+        ctx.lineWidth = Math.max(0.6, S * 0.003);
+        ctx.stroke();
+    });
+
+    // ── the formula on the rod, upright, sized to the gap it has ──
+    const gap = dist - (A.R + B.R) * S * 1.25;
+    const mx = (pA[0] + pB[0]) / 2, my = (pA[1] + pB[1]) / 2;
+    const psi = Math.atan2(uy, ux);
+    const phi = Math.cos(psi) < 0 ? psi + Math.PI : psi;
+    // Text that keeps itself upright has to flip as the rod passes vertical:
+    // it bows out on the way in and comes back the right way up.
+    const upright = smooth(0.12, 0.3, Math.abs(Math.cos(psi)));
+    const off = S * 0.016;
+    ctx.save();
+    ctx.translate(mx, my);
+    ctx.rotate(phi);
+    const fIn = smooth(0, 0.45, T - st.fT);
+    for (const [idx, w] of [[st.fPrev, 1 - fIn], [st.f, fIn]]) {
+        if (w <= 0.01) continue;
+        const fb = box(FORMULAS[idx]);
+        const fs = Math.min(S * 0.05, (gap - S * 0.02) / (fb.w / 100));
+        const k = fs / 100;
+        drawBox(fb, k, -fb.w * k / 2, -(off + fb.d * k), mix(C.paper, C.ink2, 1), w * upright * smooth(S * 0.015, S * 0.024, fs));
+    }
+    if (st.note !== null) {
+        const nb = box(`\\text{${NAMES[st.note % 12]}}\\,\\cdot\\,${hz(st.note).toFixed(1).replace('.', ',')}\\,\\text{Hz}`);
+        const fs = Math.min(S * 0.034, (gap - S * 0.02) / (nb.w / 100));
+        const k = fs / 100;
+        const a = upright * smooth(S * 0.012, S * 0.018, fs) * (0.35 + 0.65 * Math.exp(-(T - st.noteT) / 0.5));
+        drawBox(nb, k, -nb.w * k / 2, off + nb.a * k, mix(C.paper, C.rubrica, 1), a);
+    }
+    ctx.restore();
+
+    // ── the margins: the mark, the piece, the bar ──
+    const m = S * 0.05;
+    const label = Math.max(6.5, S * 0.032);
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = label * 0.3;
+    ctx.strokeStyle = PAPER;
+    ctx.textBaseline = 'alphabetic';
+    ctx.font = `500 ${Math.max(9, S * 0.062)}px "Cormorant Garamond", Garamond, Georgia, serif`;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = mix(C.paper, C.ink, 0.95);
+    ctx.strokeText('opus.zip', m, m + Math.max(9, S * 0.062) * 0.7);
+    ctx.fillText('opus.zip', m, m + Math.max(9, S * 0.062) * 0.7);
+    ctx.font = `italic ${label}px ${MATH}`;
+    ctx.fillStyle = mix(C.paper, C.ink4, 1);
+    ctx.strokeText('Bach · BWV 846', m, ch - m);
+    ctx.fillText('Bach · BWV 846', m, ch - m);
+    ctx.textAlign = 'right';
+    ctx.font = `${label}px ${MATH}`;
+    const cText = `c. ${Math.min(bar + 1, 35)}`;
+    ctx.strokeText(cText, cw - m, ch - m);
+    ctx.fillText(cText, cw - m, ch - m);
+    ctx.textAlign = 'left';
+
+    // ── paper grain over everything, in device pixels ──
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = grain;
+    ctx.fillRect(0, 0, bw, bh);
+}
+
+requestAnimationFrame(frame);
+</script>
+
+</body>
+</html>

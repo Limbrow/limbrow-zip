@@ -26,6 +26,14 @@
 export const posts = [
 
     {
+        slug: 'opus',
+        date: '2026-10-16',
+        preview: 'preview.html',  // the opus.zip piece — two bodies dancing to Bach's BWV 846, the formulas between them
+        href: 'https://opus.zip',
+        scale: 1.0
+    },
+
+    {
         slug: 'arte',
         date: '2026-09-14',
         preview: 'preview.html',  // the arte.zip piece — seven plates turning, light outside, dark centre
