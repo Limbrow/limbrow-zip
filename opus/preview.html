@@ -4,57 +4,38 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>opus.zip · preview</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500&family=EB+Garamond:ital@0;1&display=swap" rel="stylesheet">
 <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { background: #171513; width: 100%; height: 100vh; height: 100dvh; overflow: hidden; }
-    #c { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: block; }
+    html, body { background: #000; width: 100%; height: 100vh; height: 100dvh; overflow: hidden; }
+    #gl { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: block; }
 </style>
 </head>
 <body>
 
-<canvas id="c" role="img"
-        aria-label="Dos cuerpos que bailan en órbita al compás del Preludio en do mayor de Bach, BWV 846, con las fórmulas de la gravedad entre ellos."></canvas>
+<canvas id="gl" role="img"
+        aria-label="Dos cuerpos que bailan en órbita al compás del Preludio en do mayor de Bach; las ondas que suelta cada nota se cruzan entre ellos."></canvas>
 
 <script type="module">
-// opus.zip, the card. Two bodies on music paper, bound by gravity, dancing
-// to Bach's Prelude in C (BWV 846). The score drives the orbit: one turn per
+// opus.zip, the card. Two bodies in deep space, bound by gravity, dancing to
+// Bach's Prelude in C (BWV 846). The score drives the orbit: one turn per
 // bar with the closest approach on the downbeat, the bass line turns the
 // whole floor (15° per semitone, so the piece comes home after one full
 // turn), and the dissonance of each chord sets how eccentric the bar is.
-// Every note that sounds leaves a ring in the rubric — opus.zip's only
-// colour, kept for what sounds — and the ring shakes the staff as it passes.
-// The formula on the rod between them changes every bar.
 //
-// Speaks opus.zip's language at night (its globals.css dark tokens): paper,
-// ink, one rubric, Cormorant for the mark and EB Garamond for the maths.
+// Every note sends out a wave train from the body that plays it — left hand
+// from the heavy one, right hand from the light one — with a wavelength set
+// by its pitch. The trains are summed as real waves, so where two crests meet
+// they brighten and where a crest meets a trough they cancel: the chord shows
+// up as interference between the two. The waves also ripple the starlight,
+// and each body bends the stars behind it.
+//
 // Silent on purpose: the card links out to opus.zip, where the music is.
 
-const cv = document.getElementById('c');
-const ctx = cv.getContext('2d');
+const cv = document.getElementById('gl');
+const gl = cv.getContext('webgl', { antialias: false, alpha: false, powerPreference: 'low-power' });
 const FPS = 20;   // card budget; the score runs on the clock, not on frames
+const MAXW = 24;  // wave trains alive at once
 
-// ── Colour, in linear light ─────────────────────────────────────────────
-const PAPER = '#171513';
-const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
-const toLin = c => c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-const toSrgb = l => {
-    l = Math.min(1, Math.max(0, l));
-    return Math.round((l <= 0.0031308 ? l * 12.92 : 1.055 * l ** (1 / 2.4) - 0.055) * 255);
-};
-const lin = h => hex(h).map(toLin);
-const C = {
-    paper: lin(PAPER), ink: lin('#ece4d3'), inkHi: lin('#fff8ea'), ink2: lin('#cfc5b2'),
-    ink3: lin('#a39a88'), ink4: lin('#8a8171'), ink5: lin('#6b6356'), pauta: lin('#57503f'),
-    rubrica: lin('#d4705e'),
-};
-const lerp = (a, b, t) => [0, 1, 2].map(i => a[i] + (b[i] - a[i]) * t);
-const css = c => `rgb(${toSrgb(c[0])},${toSrgb(c[1])},${toSrgb(c[2])})`;
-const mix = (a, b, t) => css(lerp(a, b, Math.min(1, Math.max(0, t))));
-
-const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const wrapPi = x => x - 2 * Math.PI * Math.round(x / (2 * Math.PI));
 
 // ── The score ───────────────────────────────────────────────────────────
@@ -104,163 +85,9 @@ const PARAMS = BARS.map(steps => {
     return { e: 0.06 + 0.36 * Math.min(1, tension(ms) / 7), w: (60 - lastBass) * Math.PI / 12 };
 });
 
-const NAMES = ['do', 'do♯', 're', 'mi♭', 'mi', 'fa', 'fa♯', 'sol', 'la♭', 'la', 'si♭', 'si'];
-const hz = m => 440 * 2 ** ((m - 69) / 12);
-
-// ── The maths on the rod ────────────────────────────────────────────────
-const FORMULAS = [
-    'F = G\\frac{m_1 m_2}{r^2}',
-    'M = E - e\\sin E',
-    'r = \\frac{a(1 - e^2)}{1 + e\\cos\\nu}',
-    'T^2 = \\frac{4\\pi^2}{G(m_1 + m_2)}\\,a^3',
-    'f = 440\\cdot 2^{(n - 69)/12}',
-    '\\mu = \\frac{m_1 m_2}{m_1 + m_2}',
-    'v^2 = \\frac{2GM}{r} - \\frac{GM}{a}',
-    '\\Phi = -\\frac{Gm_1}{|x - x_1|} - \\frac{Gm_2}{|x - x_2|}',
-];
-
-// A pocket TeX: letters italic, digits and functions roman, \frac, ^, _,
-// a few Greek letters. Laid out once at 100px and drawn under a scale.
-const GREEK = { pi: 'π', theta: 'θ', mu: 'μ', nu: 'ν', omega: 'ω', Phi: 'Φ', Sigma: 'Σ' };
-function parse(s) {
-    let i = 0;
-    const out = [];
-    const group = () => {
-        let depth = 0, j = i;
-        do { if (s[j] === '{') depth++; else if (s[j] === '}') depth--; j++; } while (depth && j < s.length);
-        const inner = s.slice(i + 1, j - 1);
-        i = j;
-        return parse(inner);
-    };
-    const arg = () => {
-        while (s[i] === ' ') i++;
-        if (s[i] === '{') return group();
-        if (s[i] === '\\') { const m = /^\\[a-zA-Z]+/.exec(s.slice(i)); i += m[0].length; return parse(m[0]); }
-        return parse(s[i++]);
-    };
-    while (i < s.length) {
-        const ch = s[i];
-        if (ch === ' ') { i++; continue; }
-        if (ch === '{') { out.push(...group()); continue; }
-        if (ch === '^' || ch === '_') { i++; out.push({ k: ch === '^' ? 'sup' : 'sub', c: arg() }); continue; }
-        if (ch === '\\') {
-            const m = /^\\([a-zA-Z]+|.)/.exec(s.slice(i));
-            i += m[0].length;
-            const name = m[1];
-            if (name === 'frac') { const n = arg(), d = arg(); out.push({ k: 'frac', n, d }); }
-            else if (name === 'text') {
-                const end = s.indexOf('}', i);
-                out.push({ k: 't', s: s.slice(i + 1, end), it: false });
-                i = end + 1;
-            }
-            else if (name === ',') out.push({ k: 'sp', w: 0.17 });
-            else if (name === 'cdot') out.push({ k: 'op', s: '·' });
-            else if (name === 'sin' || name === 'cos') out.push({ k: 't', s: name, it: false, fn: true });
-            else if (GREEK[name]) out.push({ k: 't', s: GREEK[name], it: name[0] === name[0].toLowerCase() });
-            continue;
-        }
-        if (/[0-9]/.test(ch)) { const m = /^[0-9]+([.,][0-9]+)?/.exec(s.slice(i)); i += m[0].length; out.push({ k: 't', s: m[0], it: false }); continue; }
-        if (/[a-zA-Z]/.test(ch)) { i++; out.push({ k: 't', s: ch, it: true }); continue; }
-        if ('=+-'.includes(ch)) { i++; out.push({ k: 'op', s: ch === '-' ? '−' : ch }); continue; }
-        i++;
-        out.push({ k: 't', s: ch, it: false });
-    }
-    return out;
-}
-
-const MATH = '"EB Garamond", Garamond, Georgia, serif';
-const fnt = (px, it) => `${it ? 'italic ' : ''}${px}px ${MATH}`;
-
-function layout(nodes, size) {
-    const ops = [];
-    let x = 0, a = size * 0.7, d = size * 0.22, prev = null;
-    const put = (o, dx, dy) => ops.push(o.bar ? { ...o, x: o.x + dx, y: o.y + dy } : { ...o, x: o.x + dx, y: o.y + dy });
-    for (const n of nodes) {
-        if (n.k === 'sp') x += n.w * size;
-        else if (n.k === 'op') {
-            const unary = !prev || prev.k === 'op';
-            const pad = unary ? 0 : size * 0.24;
-            ctx.font = fnt(size, false);
-            x += pad;
-            ops.push({ t: n.s, x, y: 0, size, it: false });
-            x += ctx.measureText(n.s).width + (unary ? size * 0.04 : pad);
-        } else if (n.k === 't') {
-            if (n.fn && prev && prev.k === 't') x += size * 0.12;
-            ctx.font = fnt(size, n.it);
-            ops.push({ t: n.s, x, y: 0, size, it: n.it });
-            x += ctx.measureText(n.s).width + (n.fn ? size * 0.12 : 0);
-        } else if (n.k === 'sup' || n.k === 'sub') {
-            const box = layout(n.c, size * 0.68);
-            const dy = n.k === 'sup' ? -size * 0.4 : size * 0.2;
-            const kern = n.k === 'sup' && prev && prev.it ? size * 0.06 : size * 0.02;
-            for (const o of box.ops) put(o, x + kern, dy);
-            a = Math.max(a, box.a - dy);
-            d = Math.max(d, box.d + dy);
-            x += box.w + kern + size * 0.03;
-        } else if (n.k === 'frac') {
-            const nb = layout(n.n, size * 0.86), db = layout(n.d, size * 0.86);
-            const w = Math.max(nb.w, db.w) + size * 0.16;
-            const axis = -size * 0.26, gap = size * 0.12, th = size * 0.05;
-            x += size * 0.06;
-            const ny = axis - th / 2 - gap - nb.d, dy = axis + th / 2 + gap + db.a;
-            for (const o of nb.ops) put(o, x + (w - nb.w) / 2, ny);
-            for (const o of db.ops) put(o, x + (w - db.w) / 2, dy);
-            ops.push({ bar: true, x, y: axis, w, th });
-            a = Math.max(a, nb.a - ny);
-            d = Math.max(d, dy + db.d);
-            x += w + size * 0.06;
-        }
-        prev = n;
-    }
-    return { w: x, a, d, ops };
-}
-
-const boxes = new Map();
-function box(src) {
-    let b = boxes.get(src);
-    if (!b) {
-        if (boxes.size > 160) boxes.clear();
-        b = layout(parse(src), 100);
-        boxes.set(src, b);
-    }
-    return b;
-}
-
-// Draw a laid-out formula at scale k, left end at x, baseline at y, with a
-// paper halo so the staff and the rings never run through the glyphs.
-function drawBox(b, k, x, y, color, alpha) {
-    if (alpha <= 0.01) return;
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.scale(k, k);
-    ctx.globalAlpha = alpha;
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = PAPER;
-    const halo = 24;
-    for (const o of b.ops) {
-        if (o.bar) {
-            ctx.lineWidth = o.th + halo;
-            ctx.beginPath(); ctx.moveTo(o.x, o.y); ctx.lineTo(o.x + o.w, o.y); ctx.stroke();
-        } else {
-            ctx.lineWidth = halo;
-            ctx.font = fnt(o.size, o.it);
-            ctx.strokeText(o.t, o.x, o.y);
-        }
-    }
-    ctx.fillStyle = color;
-    for (const o of b.ops) {
-        if (o.bar) ctx.fillRect(o.x, o.y - o.th / 2, o.w, o.th);
-        else { ctx.font = fnt(o.size, o.it); ctx.fillText(o.t, o.x, o.y); }
-    }
-    ctx.restore();
-}
-
-Promise.all([
-    document.fonts.load('500 20px "Cormorant Garamond"', 'opus.zip'),
-    document.fonts.load('20px "EB Garamond"', 'c0123456789·−+=|()/,Hz'),
-    document.fonts.load('italic 20px "EB Garamond"', 'abcdefghijklmnopqrstuvwxyzEFGMT'),
-    document.fonts.load('italic 20px "EB Garamond"', 'πθμνΦ'),
-]).catch(() => {}).then(() => boxes.clear());
+// Wavelength from pitch, in card sides: an octave up shortens it by √2, so
+// the bass rolls out in long swells and the treble in fine ripples.
+const wavelength = m => 0.038 * 2 ** ((60 - m) / 24);
 
 // ── The two bodies ──────────────────────────────────────────────────────
 // Lengths are in units of the card's short side, origin at the centre of
@@ -268,10 +95,9 @@ Promise.all([
 const M1 = 1, M2 = 0.6, MT = M1 + M2;
 const A_AXIS = 0.43;
 const BODY = [
-    { m: M1, R: 0.066, lever: -M2 / MT },
-    { m: M2, R: 0.05, lever: M1 / MT },
+    { R: 0.066, lever: -M2 / MT, x: 0, y: 0 },
+    { R: 0.05, lever: M1 / MT, x: 0, y: 0 },
 ];
-for (const b of BODY) { b.eps2 = (1.5 * b.R) ** 2; b.K = 0.85 * b.eps2 * b.m; b.x = 0; b.y = 0; b.hit = -9; }
 
 // Kepler's equation, M = E − e sin E, by Newton.
 function eccentric(M, e) {
@@ -280,244 +106,216 @@ function eccentric(M, e) {
     return E;
 }
 
-const st = { e: PARAMS[0].e, w: PARAMS[0].w, bar: 0, step: -1, f: 0, fPrev: 0, fT: -9, note: null, noteT: -9 };
-const rings = [];
-const SPEED = 0.3;        // ring speed, card sides per second
+// ── The shader ──────────────────────────────────────────────────────────
+// Everything is lit and summed in linear light, tone-mapped, then encoded
+// to sRGB with a dither so the dark sky doesn't band.
+const FRAG = `
+precision highp float;
+uniform vec2 u_res;
+uniform float u_S, u_px, u_time;
+uniform vec4 u_body[2];        // x, y, radius, Einstein radius (px)
+uniform vec4 u_wave[${MAXW}];  // x, y, front radius (px), amplitude
+uniform vec4 u_wk[${MAXW}];    // wavenumber, envelope width, wavelength (px)
+uniform int u_n;
 
-// ── Grain, the same near-invisible paper as opus.zip ────────────────────
-const grain = (() => {
-    const g = document.createElement('canvas');
-    g.width = g.height = 128;
-    const gx = g.getContext('2d');
-    const img = gx.createImageData(128, 128);
-    for (let i = 0; i < img.data.length; i += 4) {
-        const v = Math.random(), light = v > 0.5;
-        img.data[i] = light ? 236 : 0; img.data[i + 1] = light ? 228 : 0; img.data[i + 2] = light ? 211 : 0;
-        img.data[i + 3] = Math.abs(v - 0.5) * 2 * 13;
-    }
-    gx.putImageData(img, 0, 0);
-    return ctx.createPattern(g, 'repeat');
-})();
-
-let t0 = null, last = 0;
-
-function frame(now) {
-    requestAnimationFrame(frame);
-    if (t0 === null) t0 = now;
-    if (now - last < 1000 / FPS - 2) return;
-    const dt = Math.min(0.1, (now - last) / 1000);
-    last = now;
-    const T = (now - t0) / 1000;
-
-    // ── the clock ──
-    const stepNow = Math.floor(T / STEP);
-    const bar = Math.floor(stepNow / 16) % BARS.length;
-    const P = PARAMS[bar];
-    const ease = 1 - Math.exp(-dt / 0.55);
-    st.e += (P.e - st.e) * ease;
-    st.w += wrapPi(P.w - st.w) * ease;
-    if (bar !== st.bar) { st.fPrev = st.f; st.f = bar % FORMULAS.length; st.fT = T; st.bar = bar; }
-
-    // ── the orbit: one turn per bar, periastron on the downbeat ──
-    const Mean = 2 * Math.PI * ((T / BAR) % 1);
-    const e = st.e, E = eccentric(Mean, e);
-    const px = A_AXIS * (Math.cos(E) - e), py = A_AXIS * Math.sqrt(1 - e * e) * Math.sin(E);
-    const cw0 = Math.cos(st.w), sw0 = Math.sin(st.w);
-    const rx = px * cw0 - py * sw0, ry = px * sw0 + py * cw0;
-    for (const b of BODY) { b.x = rx * b.lever; b.y = ry * b.lever; }
-
-    // ── what sounds: every step since the last frame ──
-    if (stepNow - st.step > 6) st.step = stepNow - 1;    // back from a hidden tab: don't burst
-    for (let s = st.step + 1; s <= stepNow; s++) {
-        const notes = BARS[Math.floor(s / 16) % BARS.length][s % 16];
-        for (const [m, h] of notes) {
-            const b = BODY[h];
-            b.hit = T;
-            rings.push({ x: b.x, y: b.y, R0: b.R, t: T, h, life: h ? 1.5 : 2.3, amp: h ? 0.005 : 0.008 });
-            st.note = m; st.noteT = T;
-        }
-    }
-    st.step = stepNow;
-    for (let i = rings.length - 1; i >= 0; i--) if (T - rings[i].t > rings[i].life) rings.splice(i, 1);
-    for (const r of rings) {
-        const age = T - r.t;
-        r.R = r.R0 + SPEED * age;
-        r.fade = (1 - age / r.life) ** 2;
-    }
-
-    // ── canvas size, measured every paint (an iframe can report 0 at parse) ──
-    const cw = cv.clientWidth || innerWidth || 300;
-    const ch = cv.clientHeight || innerHeight || cw;
-    const dpr = Math.min(devicePixelRatio || 1, 2);
-    const bw = Math.max(1, Math.round(cw * dpr)), bh = Math.max(1, Math.round(ch * dpr));
-    if (cv.width !== bw || cv.height !== bh) { cv.width = bw; cv.height = bh; }
-    const S = Math.min(cw, ch), cx = cw / 2, cy = ch / 2;
-    const X = x => cx + x * S, Y = y => cy - y * S;
-
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = PAPER;
-    ctx.fillRect(0, 0, cw, ch);
-
-    const flash = BODY.map(b => Math.exp(-(T - b.hit) / 0.22));
-
-    // ── glow of whoever is sounding ──
-    ctx.globalCompositeOperation = 'lighten';
-    BODY.forEach((b, i) => {
-        if (flash[i] < 0.02) return;
-        const R1 = b.R * S * 2.8;
-        const g = ctx.createRadialGradient(X(b.x), Y(b.y), b.R * S * 0.8, X(b.x), Y(b.y), R1);
-        for (let k = 0; k <= 8; k++) g.addColorStop(k / 8, mix(C.paper, C.rubrica, flash[i] * 0.42 * (1 - k / 8) ** 2));
-        ctx.fillStyle = g;
-        ctx.beginPath(); ctx.arc(X(b.x), Y(b.y), R1, 0, Math.PI * 2); ctx.fill();
-    });
-    ctx.globalCompositeOperation = 'source-over';
-
-    // ── the staff, bent by both masses and shaken by the rings ──
-    const halfW = cw / (2 * S), halfH = ch / (2 * S);
-    const SP = 0.024, PERIOD = 0.21, N = 64, RW = 0.022;
-    ctx.strokeStyle = mix(C.paper, C.pauta, 0.85);
-    ctx.lineWidth = Math.max(0.6, S * 0.0022);
-    ctx.beginPath();
-    const kmax = Math.ceil(halfH / PERIOD) + 1;
-    for (let k = -kmax; k <= kmax; k++) for (let l = -2; l <= 2; l++) {
-        const y0 = k * PERIOD + l * SP;
-        if (Math.abs(y0) > halfH + 0.06) continue;
-        for (let j = 0; j <= N; j++) {
-            const x = -halfW - 0.02 + (2 * halfW + 0.04) * j / N;
-            let dx = 0, dy = 0;
-            for (const b of BODY) {
-                const ax = b.x - x, ay = b.y - y0, q = b.K / (ax * ax + ay * ay + b.eps2);
-                dx += ax * q; dy += ay * q;
-            }
-            for (const r of rings) {
-                const ax = x - r.x, ay = y0 - r.y, dd = Math.hypot(ax, ay) + 1e-6, g = (dd - r.R) / RW;
-                if (g * g > 9) continue;
-                const amp = r.amp * r.fade * Math.exp(-g * g) / dd;
-                dx += ax * amp; dy += ay * amp;
-            }
-            if (j === 0) ctx.moveTo(X(x + dx), Y(y0 + dy)); else ctx.lineTo(X(x + dx), Y(y0 + dy));
-        }
-    }
-    ctx.stroke();
-
-    // ── the two ellipses, the line of apsides, the centre of mass ──
-    const b0 = A_AXIS * Math.sqrt(1 - e * e);
-    ctx.strokeStyle = mix(C.paper, C.ink5, 0.75);
-    ctx.lineWidth = Math.max(0.5, S * 0.002);
-    ctx.setLineDash([S * 0.004, S * 0.01]);
-    for (const b of BODY) {
-        const s = Math.abs(b.lever), sign = Math.sign(b.lever);
-        const ex = -A_AXIS * e * cw0 * sign * s, ey = -A_AXIS * e * sw0 * sign * s;
-        ctx.beginPath();
-        ctx.ellipse(X(ex), Y(ey), A_AXIS * s * S, b0 * s * S, -st.w, 0, Math.PI * 2);
-        ctx.stroke();
-    }
-    ctx.setLineDash([]);
-    ctx.strokeStyle = mix(C.paper, C.ink4, 0.8);
-    const cm = S * 0.011;
-    ctx.beginPath();
-    ctx.moveTo(cx - cm, cy); ctx.lineTo(cx + cm, cy);
-    ctx.moveTo(cx, cy - cm); ctx.lineTo(cx, cy + cm);
-    ctx.stroke();
-
-    // ── the rings: what sounds, in the rubric ──
-    ctx.globalCompositeOperation = 'lighten';
-    for (const r of rings) {
-        ctx.strokeStyle = mix(C.paper, C.rubrica, r.fade * (r.h ? 0.75 : 0.95));
-        ctx.lineWidth = Math.max(0.6, S * (r.h ? 0.0026 : 0.004));
-        ctx.beginPath(); ctx.arc(X(r.x), Y(r.y), r.R * S, 0, Math.PI * 2); ctx.stroke();
-    }
-    ctx.globalCompositeOperation = 'source-over';
-
-    // ── the rod between them, edge to edge, like a dimension line ──
-    const [A, B] = BODY;
-    const ax = X(A.x), ay = Y(A.y), bx = X(B.x), by = Y(B.y);
-    const dist = Math.hypot(bx - ax, by - ay) || 1;
-    const ux = (bx - ax) / dist, uy = (by - ay) / dist;
-    const pA = [ax + ux * A.R * S * 1.25, ay + uy * A.R * S * 1.25];
-    const pB = [bx - ux * B.R * S * 1.25, by - uy * B.R * S * 1.25];
-    const tick = S * 0.014;
-    ctx.strokeStyle = mix(C.paper, C.ink3, 0.75);
-    ctx.lineWidth = Math.max(0.6, S * 0.0026);
-    ctx.beginPath();
-    ctx.moveTo(pA[0], pA[1]); ctx.lineTo(pB[0], pB[1]);
-    for (const p of [pA, pB]) { ctx.moveTo(p[0] - uy * tick, p[1] + ux * tick); ctx.lineTo(p[0] + uy * tick, p[1] - ux * tick); }
-    ctx.stroke();
-
-    // ── the bodies, lit from the upper left ──
-    BODY.forEach((b, i) => {
-        const x = X(b.x), y = Y(b.y), R = b.R * S * (1 + 0.04 * flash[i]);
-        const g = ctx.createRadialGradient(x - R * 0.38, y - R * 0.42, R * 0.04, x, y, R);
-        const hi = lerp(C.inkHi, C.rubrica, flash[i] * 0.18), lo = lerp(C.ink, C.paper, 0.72);
-        for (let k = 0; k <= 8; k++) g.addColorStop(k / 8, css(lerp(lo, hi, (1 - k / 8) ** 1.1)));
-        ctx.fillStyle = g;
-        ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.fill();
-        ctx.strokeStyle = css(lerp(C.ink5, C.rubrica, flash[i]));
-        ctx.lineWidth = Math.max(0.6, S * 0.003);
-        ctx.stroke();
-    });
-
-    // ── the formula on the rod, upright, sized to the gap it has ──
-    const gap = dist - (A.R + B.R) * S * 1.25;
-    const mx = (pA[0] + pB[0]) / 2, my = (pA[1] + pB[1]) / 2;
-    const psi = Math.atan2(uy, ux);
-    const phi = Math.cos(psi) < 0 ? psi + Math.PI : psi;
-    // Text that keeps itself upright has to flip as the rod passes vertical:
-    // it bows out on the way in and comes back the right way up.
-    const upright = smooth(0.12, 0.3, Math.abs(Math.cos(psi)));
-    const off = S * 0.016;
-    ctx.save();
-    ctx.translate(mx, my);
-    ctx.rotate(phi);
-    const fIn = smooth(0, 0.45, T - st.fT);
-    for (const [idx, w] of [[st.fPrev, 1 - fIn], [st.f, fIn]]) {
-        if (w <= 0.01) continue;
-        const fb = box(FORMULAS[idx]);
-        const fs = Math.min(S * 0.05, (gap - S * 0.02) / (fb.w / 100));
-        const k = fs / 100;
-        drawBox(fb, k, -fb.w * k / 2, -(off + fb.d * k), mix(C.paper, C.ink2, 1), w * upright * smooth(S * 0.015, S * 0.024, fs));
-    }
-    if (st.note !== null) {
-        const nb = box(`\\text{${NAMES[st.note % 12]}}\\,\\cdot\\,${hz(st.note).toFixed(1).replace('.', ',')}\\,\\text{Hz}`);
-        const fs = Math.min(S * 0.034, (gap - S * 0.02) / (nb.w / 100));
-        const k = fs / 100;
-        const a = upright * smooth(S * 0.012, S * 0.018, fs) * (0.35 + 0.65 * Math.exp(-(T - st.noteT) / 0.5));
-        drawBox(nb, k, -nb.w * k / 2, off + nb.a * k, mix(C.paper, C.rubrica, 1), a);
-    }
-    ctx.restore();
-
-    // ── the margins: the mark, the piece, the bar ──
-    const m = S * 0.05;
-    const label = Math.max(6.5, S * 0.032);
-    ctx.lineJoin = 'round';
-    ctx.lineWidth = label * 0.3;
-    ctx.strokeStyle = PAPER;
-    ctx.textBaseline = 'alphabetic';
-    ctx.font = `500 ${Math.max(9, S * 0.062)}px "Cormorant Garamond", Garamond, Georgia, serif`;
-    ctx.textAlign = 'left';
-    ctx.fillStyle = mix(C.paper, C.ink, 0.95);
-    ctx.strokeText('opus.zip', m, m + Math.max(9, S * 0.062) * 0.7);
-    ctx.fillText('opus.zip', m, m + Math.max(9, S * 0.062) * 0.7);
-    ctx.font = `italic ${label}px ${MATH}`;
-    ctx.fillStyle = mix(C.paper, C.ink4, 1);
-    ctx.strokeText('Bach · BWV 846', m, ch - m);
-    ctx.fillText('Bach · BWV 846', m, ch - m);
-    ctx.textAlign = 'right';
-    ctx.font = `${label}px ${MATH}`;
-    const cText = `c. ${Math.min(bar + 1, 35)}`;
-    ctx.strokeText(cText, cw - m, ch - m);
-    ctx.fillText(cText, cw - m, ch - m);
-    ctx.textAlign = 'left';
-
-    // ── paper grain over everything, in device pixels ──
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = grain;
-    ctx.fillRect(0, 0, bw, bh);
+float hash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+float vnoise(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y);
+}
+float fbm(vec2 p) {
+    float s = 0.0, a = 0.5;
+    for (int i = 0; i < 4; i++) { s += a * vnoise(p); p = p * 2.03 + 11.7; a *= 0.5; }
+    return s;
 }
 
-requestAnimationFrame(frame);
+// One star per cell at most, kept off the cell edges so none is cut.
+vec3 stars(vec2 p, float cell, float density, float seed) {
+    vec2 c = floor(p / cell);
+    float h = hash(c + seed);
+    if (h > density) return vec3(0.0);
+    vec2 o = 0.2 + 0.6 * vec2(hash(c + seed + 1.3), hash(c + seed + 2.7));
+    float d = length(p - (c + o) * cell);
+    float b = pow(hash(c + seed + 3.1), 6.0);
+    float r = (0.5 + 0.9 * b) * u_px;
+    float tw = 0.8 + 0.2 * sin(u_time * (0.7 + 2.5 * hash(c + seed + 9.0)) + 6.28 * h);
+    vec3 tint = mix(vec3(0.70, 0.80, 1.0), vec3(1.0, 0.82, 0.62), hash(c + seed + 5.3));
+    return tint * (0.04 + 1.8 * b) * tw * exp(-d * d / (r * r));
+}
+
+vec3 toSrgb(vec3 c) {
+    c = clamp(c, 0.0, 1.0);
+    return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c));
+}
+
+void main() {
+    vec2 p = gl_FragCoord.xy;
+
+    // the wave field: every train summed with its sign
+    float h = 0.0;
+    vec2 disp = vec2(0.0);
+    for (int i = 0; i < ${MAXW}; i++) {
+        if (i >= u_n) break;
+        vec4 w = u_wave[i];
+        vec4 k = u_wk[i];
+        vec2 dv = p - w.xy;
+        float d = length(dv) + 1e-3;
+        float u = d - w.z;
+        float g = exp(-(u * u) / (k.y * k.y));
+        if (g < 0.002) continue;
+        h += w.w * g * cos(k.x * u);
+        disp += (dv / d) * (w.w * g * sin(k.x * u) * k.z * 0.12);
+    }
+
+    // where the starlight comes from: rippled by the waves, bent by the masses
+    vec2 q = p + disp;
+    for (int j = 0; j < 2; j++) {
+        vec2 dv = p - u_body[j].xy;
+        float te = u_body[j].w, R = u_body[j].z;
+        q -= te * te * dv / (dot(dv, dv) + 0.09 * R * R);
+    }
+
+    vec3 col = vec3(0.0010, 0.0012, 0.0024);
+    float n = fbm(q / (u_S * 0.5) + vec2(3.1, 7.7));
+    float m = fbm(q / (u_S * 0.21) + vec2(-5.2, 1.4));
+    col += vec3(0.006, 0.007, 0.018) * pow(n, 4.0) * 2.4 + vec3(0.010, 0.004, 0.008) * pow(n * m, 3.0) * 2.0;
+    col += stars(q, 9.0 * u_px, 0.30, 1.0);
+    col += stars(q, 17.0 * u_px, 0.45, 7.0);
+    col += stars(q, 33.0 * u_px, 0.55, 13.0);
+
+    // the waves, in the rubric: thin crests, troughs only a breath. The sum
+    // is signed, so crossing crests stack (and the power makes them flare)
+    // while a crest over a trough goes dark.
+    vec3 rub = vec3(0.658, 0.162, 0.111);
+    col += rub * (pow(max(h, 0.0), 2.2) * 1.0 + max(-h, 0.0) * 0.05);
+
+    col = 1.0 - exp(-col * 1.15);
+
+    // the two bodies, lit from the upper left, never lit by the music
+    vec3 L = normalize(vec3(-0.45, 0.5, 0.74));
+    vec3 alb = vec3(0.80, 0.76, 0.65);
+    for (int j = 0; j < 2; j++) {
+        vec2 dv = p - u_body[j].xy;
+        float R = u_body[j].z;
+        float a = clamp((R - length(dv)) / u_px + 0.5, 0.0, 1.0);
+        if (a <= 0.0) continue;
+        vec2 s = dv / R;
+        vec3 nrm = vec3(s, sqrt(max(0.0, 1.0 - dot(s, s))));
+        float dif = max(dot(nrm, L), 0.0);
+        float spec = pow(max(dot(reflect(-L, nrm), vec3(0.0, 0.0, 1.0)), 0.0), 24.0);
+        vec3 bc = alb * (0.07 + 0.93 * pow(dif, 0.85)) + vec3(0.05) * spec;
+        col = mix(col, 1.0 - exp(-bc * 1.15), a);
+    }
+
+    gl_FragColor = vec4(toSrgb(col) + (hash(p + fract(u_time * 7.0)) - 0.5) / 255.0, 1.0);
+}`;
+
+const VERT = 'attribute vec2 a; void main() { gl_Position = vec4(a, 0.0, 1.0); }';
+
+function program() {
+    const sh = (type, src) => {
+        const s = gl.createShader(type);
+        gl.shaderSource(s, src);
+        gl.compileShader(s);
+        if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+        return s;
+    };
+    const pr = gl.createProgram();
+    gl.attachShader(pr, sh(gl.VERTEX_SHADER, VERT));
+    gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FRAG));
+    gl.linkProgram(pr);
+    if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr));
+    return pr;
+}
+
+if (gl) {
+    const pr = program();
+    gl.useProgram(pr);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(pr, 'a');
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    const U = {};
+    for (const n of ['u_res', 'u_S', 'u_px', 'u_time', 'u_body', 'u_wave', 'u_wk', 'u_n']) U[n] = gl.getUniformLocation(pr, n);
+
+    const bodyBuf = new Float32Array(8), waveBuf = new Float32Array(4 * MAXW), wkBuf = new Float32Array(4 * MAXW);
+    const st = { e: PARAMS[0].e, w: PARAMS[0].w, step: -1 };
+    const waves = [];
+    const SPEED = 0.3;        // card sides per second
+
+    let t0 = null, last = 0;
+
+    const frame = now => {
+        requestAnimationFrame(frame);
+        if (t0 === null) t0 = now;
+        if (now - last < 1000 / FPS - 2) return;
+        const dt = Math.min(0.1, (now - last) / 1000);
+        last = now;
+        const T = (now - t0) / 1000;
+
+        // ── the clock ──
+        const stepNow = Math.floor(T / STEP);
+        const P = PARAMS[Math.floor(stepNow / 16) % BARS.length];
+        const ease = 1 - Math.exp(-dt / 0.55);
+        st.e += (P.e - st.e) * ease;
+        st.w += wrapPi(P.w - st.w) * ease;
+
+        // ── the orbit: one turn per bar, periastron on the downbeat ──
+        const e = st.e, E = eccentric(2 * Math.PI * ((T / BAR) % 1), e);
+        const px = A_AXIS * (Math.cos(E) - e), py = A_AXIS * Math.sqrt(1 - e * e) * Math.sin(E);
+        const c = Math.cos(st.w), s = Math.sin(st.w);
+        const rx = px * c - py * s, ry = px * s + py * c;
+        for (const b of BODY) { b.x = rx * b.lever; b.y = ry * b.lever; }
+
+        // ── what sounds: every step since the last frame ──
+        if (stepNow - st.step > 6) st.step = stepNow - 1;    // back from a hidden tab: don't burst
+        for (let k = st.step + 1; k <= stepNow; k++) {
+            for (const [m, h] of BARS[Math.floor(k / 16) % BARS.length][k % 16]) {
+                const b = BODY[h];
+                waves.push({ x: b.x, y: b.y, R0: b.R, t: T, lam: wavelength(m), life: h ? 1.6 : 2.4, amp: h ? 0.7 : 1 });
+            }
+        }
+        st.step = stepNow;
+        for (let i = waves.length - 1; i >= 0; i--) if (T - waves[i].t > waves[i].life) waves.splice(i, 1);
+        if (waves.length > MAXW) waves.splice(0, waves.length - MAXW);
+
+        // ── canvas size, measured every paint (an iframe can report 0 at parse) ──
+        const cw = cv.clientWidth || innerWidth || 300;
+        const ch = cv.clientHeight || innerHeight || cw;
+        const dpr = Math.min(devicePixelRatio || 1, 1.5);
+        const bw = Math.max(1, Math.round(cw * dpr)), bh = Math.max(1, Math.round(ch * dpr));
+        if (cv.width !== bw || cv.height !== bh) { cv.width = bw; cv.height = bh; }
+        gl.viewport(0, 0, bw, bh);
+        const S = Math.min(bw, bh), cx = bw / 2, cy = bh / 2;
+
+        BODY.forEach((b, i) => {
+            bodyBuf.set([cx + b.x * S, cy + b.y * S, b.R * S, 1.25 * b.R * S], i * 4);
+        });
+        waves.forEach((w, i) => {
+            const age = T - w.t;
+            const lam = Math.max(w.lam * S, 4.5 * dpr);     // never finer than the pixels can carry
+            // Born faint and only grown once clear of the body: a crest
+            // hugging the rim would read as the ball lighting up.
+            const rise = Math.min(1, age / 0.3), amp = w.amp * rise * rise * (3 - 2 * rise) * (1 - age / w.life) ** 2;
+            waveBuf.set([cx + w.x * S, cy + w.y * S, (w.R0 + SPEED * age) * S, amp], i * 4);
+            wkBuf.set([2 * Math.PI / lam, lam, lam, 0], i * 4);
+        });
+
+        gl.uniform2f(U.u_res, bw, bh);
+        gl.uniform1f(U.u_S, S);
+        gl.uniform1f(U.u_px, dpr);
+        gl.uniform1f(U.u_time, T);
+        gl.uniform4fv(U.u_body, bodyBuf);
+        gl.uniform4fv(U.u_wave, waveBuf);
+        gl.uniform4fv(U.u_wk, wkBuf);
+        gl.uniform1i(U.u_n, waves.length);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+    };
+
+    requestAnimationFrame(frame);
+}
 </script>
 
 </body>

@@ -28,7 +28,7 @@ export const posts = [
     {
         slug: 'opus',
         date: '2026-10-16',
-        preview: 'preview.html',  // the opus.zip piece — two bodies dancing to Bach's BWV 846, the formulas between them
+        preview: 'preview.html',  // the opus.zip piece — two bodies orbiting to Bach's BWV 846, their waves interfering
         href: 'https://opus.zip',
         scale: 1.0
     },

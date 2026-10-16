@@ -24,7 +24,7 @@ grid card. Posts newest first:
 ├── posts.js                ← post registry (slug, date, scale, preview, href)
 ├── avatar.jpg, favicon.png, apple-touch-icon.png, CNAME
 ├── about/                  ← references & influences (linked from the avatar)
-├── opus/                   ← card for opus.zip: two bodies dancing to BWV 846, links out
+├── opus/                   ← card for opus.zip: two bodies orbiting to BWV 846, their waves interfering, links out
 ├── arte/                   ← card for arte.zip: the cremallera in 3D, links out
 ├── whitehole/   + hole.js  ← time-reversed schwarzschild, the shadow develops into light
 ├── ascii/                  ← live text-mode editor, modules not screens
@@ -83,15 +83,19 @@ The same model goes on white for the artz.zip landing.
 `opus.zip` (the classical-music sibling, also its own Next.js repo and host)
 works the same way: `opus/index.html` redirects and the entry carries
 `href: 'https://opus.zip'`. Its card, `opus/preview.html`, is one
-self-contained canvas file in opus.zip's night tokens — paper, ink, the
-rubric only for what sounds, Cormorant for the mark and EB Garamond for the
-maths. It is silent on purpose: Bach's Prelude in C (BWV 846) is written into
-the file as notes and drives a two-body Kepler orbit — one turn per bar with
-periastron on the downbeat, the bass line turning the line of apsides 15° per
-semitone (the piece comes home after one full turn), the chord's dissonance
-setting the eccentricity. Each note leaves a rubric ring that shakes the
-staff; the formula on the rod between the bodies changes every bar and is set
-by a pocket TeX in the same file.
+self-contained WebGL file: two bodies in deep space, no text. It is silent on
+purpose: Bach's Prelude in C (BWV 846) is written into the file as notes and
+drives a two-body Kepler orbit — one turn per bar with periastron on the
+downbeat, the bass line turning the line of apsides 15° per semitone (the
+piece comes home after one full turn), the chord's dissonance setting the
+eccentricity. Each note sends a wave train from the body that plays it (left
+hand from the heavy one), its wavelength set by pitch, and the trains are
+summed signed in the shader so the waves of the two interfere; they also
+ripple the starlight, and each body lenses the stars behind it. The waves
+keep opus.zip's rubric. The bodies never light up with the music (Marc,
+16-oct-2026), which is why a train is born faint and only grows once clear
+of the rim. The first version — staff paper, formulas on a rod between the
+bodies — is at `5feb572`.
 
 ## Shared engines
 
